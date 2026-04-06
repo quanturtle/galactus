@@ -6,7 +6,7 @@ from pathlib import Path
 from the_scraper.html_cleaner import HtmlCleaner
 from the_scraper.scrapers.api import ApiScraper as _ApiScraper
 from the_scraper.scrapers.bfs import BfsScraper as _BfsScraper
-from noticias.storage import PsycopgApiStorage, PsycopgSnapshotStorage
+from the_scraper.storage import PsycopgApiStorage, PsycopgSnapshotStorage
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config" / "scrapers"
 

@@ -1,63 +1,82 @@
 import argparse
 import asyncio
 import logging
-import sys
 
 from the_scraper import db
-from supermercados.scrapers import ALL_SCRAPERS
+from supermercados.scrapers import SCRAPERS
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger(__name__)
 
 
-async def scrape(stores: list[str]):
+async def cmd_scrape(sources: list[str]):
     tasks = []
-    for name in stores:
-        cls = ALL_SCRAPERS[name]
+    for name in sources:
+        cls = SCRAPERS[name]
         scraper = cls()
         tasks.append(scraper.run())
 
     await asyncio.gather(*tasks)
 
 
-async def main():
-    parser = argparse.ArgumentParser(description="Supermarket HTML snapshot crawler - Paraguay")
-    sub = parser.add_subparsers(dest="command")
+async def cmd_transform(sources: list[str] | None):
+    from supermercados.transforms.bronze_to_silver import run
 
-    sp = sub.add_parser("scrape", help="Crawl sites and store HTML snapshots")
-    sp.add_argument(
-        "--store",
-        choices=[*ALL_SCRAPERS.keys(), "all"],
-        default="all",
-        help="Which store to scrape (default: all)",
+    if sources:
+        for source in sources:
+            await run(source)
+    else:
+        await run()
+
+
+async def cmd_run_all(sources: list[str]):
+    await cmd_scrape(sources)
+    await cmd_transform(sources)
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="Paraguay supermarket scraper")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_scrape = sub.add_parser("scrape", help="Crawl sites and store raw data into bronze")
+    p_scrape.add_argument(
+        "--source",
+        choices=list(SCRAPERS.keys()),
+        nargs="+",
+        default=list(SCRAPERS.keys()),
+        help="Sources to scrape (default: all)",
     )
 
-    tp = sub.add_parser("transform", help="Parse bronze raw data → silver products")
-    tp.add_argument(
+    p_transform = sub.add_parser("transform", help="Parse bronze raw data -> silver products")
+    p_transform.add_argument(
         "--source",
-        choices=[*ALL_SCRAPERS.keys(), "all"],
-        default="all",
+        choices=list(SCRAPERS.keys()),
+        nargs="+",
+        default=None,
+        help="Sources to transform (default: all unparsed)",
+    )
+
+    p_all = sub.add_parser("run-all", help="Scrape + transform")
+    p_all.add_argument(
+        "--source",
+        choices=list(SCRAPERS.keys()),
+        nargs="+",
+        default=list(SCRAPERS.keys()),
     )
 
     args = parser.parse_args()
 
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
-
     await db.init()
     try:
         if args.command == "scrape":
-            stores = list(ALL_SCRAPERS.keys()) if args.store == "all" else [args.store]
-            await scrape(stores)
+            await cmd_scrape(args.source)
         elif args.command == "transform":
-            from supermercados.transforms.bronze_to_silver import run
-            source = None if args.source == "all" else args.source
-            await run(source)
+            await cmd_transform(args.source)
+        elif args.command == "run-all":
+            await cmd_run_all(args.source)
     finally:
         await db.close()
 

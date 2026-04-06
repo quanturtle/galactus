@@ -23,4 +23,4 @@ def _discover_scrapers() -> dict[str, type]:
     return scrapers
 
 
-ALL_SCRAPERS = _discover_scrapers()
+SCRAPERS = _discover_scrapers()
