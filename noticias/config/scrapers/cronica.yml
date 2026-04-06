@@ -1,0 +1,10 @@
+source: cronica
+home_url: https://www.cronica.com.py
+scrape_pattern: "/\\d{4}/\\d{2}/\\d{2}/"
+max_pages: 50000
+ignore_patterns:
+  - /wp-admin
+  - /wp-login
+  - /author/
+  - /tag/
+  - "\\?(s|search)="

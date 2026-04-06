@@ -1,0 +1,27 @@
+source: superseis
+home_url: https://www.superseis.com.py
+scrape_pattern: "/product/"
+max_pages: 40000
+ignore_patterns:
+  - /login
+  - /cart
+  - /account
+  - /checkout
+  - /register
+  - /information/
+  - /noticias
+  - /ofertas$
+  - /marcas$
+  - /sucursales$
+  - \?.*brands=
+  - \?.*discounts=
+
+strip_tags:
+  - style
+  - noscript
+  - svg
+  - iframe
+  - link
+  - nav
+  - header
+  - footer

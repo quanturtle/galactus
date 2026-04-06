@@ -1,0 +1,12 @@
+source: ultimahora
+home_url: https://www.ultimahora.com
+scrape_pattern: "ultimahora\\.com/[^/]+-[^/]+-[^/]+-[^/]+"
+max_pages: 50000
+ignore_patterns:
+  - /anuario-
+  - /brand-
+  - /podcast-uh
+  - /editorial-uh
+  - /redaccion-uh
+  - /contacto-uh
+  - /codigo-etico

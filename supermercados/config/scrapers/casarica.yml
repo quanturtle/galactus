@@ -1,0 +1,25 @@
+source: casarica
+home_url: https://casarica.com.py
+scrape_pattern: "-p\\d+"
+max_pages: 40000
+ignore_patterns:
+  - /login
+  - /cart
+  - /account
+  - /checkout
+  - /register
+
+strip_tags:
+  - style
+  - noscript
+  - svg
+  - iframe
+  - link
+  - nav
+  - header
+  - footer
+strip_classes:
+  - banners-simple
+  - tm-related-products-carousel
+strip_path_prefixes:
+  - /catalogo/

@@ -1,0 +1,5 @@
+source: npy
+home_url: https://www.npy.com.py
+scrape_pattern: "npy\\.com\\.py/[^/]+-[^/]+-[^/]+-[^/]+"
+max_pages: 50000
+ignore_patterns: []

@@ -1,0 +1,15 @@
+[project]
+name = "the_scraper"
+version = "0.1.0"
+description = "Reusable async web scraper framework with BFS crawling and API pagination"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx",
+    "beautifulsoup4",
+    "lxml",
+    "pyyaml",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

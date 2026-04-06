@@ -1,0 +1,7 @@
+source: elnacional
+home_url: https://elnacional.com.py
+scrape_pattern: "-n\\d+$"
+max_pages: 50000
+ignore_patterns:
+  - /tags/
+  - /autor/

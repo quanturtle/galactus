@@ -1,0 +1,5 @@
+source: megacadena
+base_url: https://megacadena.com.py
+api_endpoint: /wp-json/wp/v2/posts
+page_size: 100
+max_pages: 50000

@@ -1,0 +1,4 @@
+source: grutter
+base_url: https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1
+api_endpoint: /products
+page_size: 100
