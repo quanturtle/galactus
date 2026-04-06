@@ -47,6 +47,10 @@ class PsycopgSnapshotStorage:
     async def store_snapshot(
         self, source: str, url: str, html_blob: bytes, content_hash: str | None = None,
     ) -> bool:
+        if content_hash:
+            existing = await self.get_content_hashes(source, [url])
+            if existing.get(url) == content_hash:
+                return False
         row = {"source": source, "url": url, "html_blob": html_blob}
         if content_hash:
             row["content_hash"] = content_hash
@@ -54,7 +58,17 @@ class PsycopgSnapshotStorage:
         return True
 
     async def get_content_hashes(self, source: str, urls: list[str]) -> dict[str, str]:
-        return {}  # noticias does not use content hashing
+        if not urls:
+            return {}
+        rows = await db.execute(
+            "SELECT DISTINCT ON (url) url, content_hash "
+            "FROM bronze.snapshots "
+            "WHERE source = %(source)s AND url = ANY(%(urls)s) "
+            "AND content_hash IS NOT NULL "
+            "ORDER BY url, fetch_date DESC",
+            {"source": source, "urls": urls},
+        )
+        return {r["url"]: r["content_hash"] for r in rows}
 
     async def flush(self) -> None:
         pass  # each store_snapshot auto-commits via bulk_insert

@@ -1,23 +1,26 @@
-from noticias.scrapers.abc_color import ABCColorScraper
-from noticias.scrapers.adndigital import ADNDigitalScraper
-from noticias.scrapers.cronica import CronicaScraper
-from noticias.scrapers.elnacional import ElNacionalScraper
-from noticias.scrapers.hoy import HoyScraper
-from noticias.scrapers.lanacion import LaNacionScraper
-from noticias.scrapers.latribuna import LaTribunaScraper
-from noticias.scrapers.megacadena import MegacadenaScraper
-from noticias.scrapers.npy import NPYScraper
-from noticias.scrapers.ultimahora import UltimaHoraScraper
+import importlib
+import pkgutil
+from pathlib import Path
 
-SCRAPERS = {
-    "lanacion": LaNacionScraper,
-    "abc": ABCColorScraper,
-    "ultimahora": UltimaHoraScraper,
-    "latribuna": LaTribunaScraper,
-    "hoy": HoyScraper,
-    "megacadena": MegacadenaScraper,
-    "npy": NPYScraper,
-    "adndigital": ADNDigitalScraper,
-    "cronica": CronicaScraper,
-    "elnacional": ElNacionalScraper,
-}
+from noticias.scrapers._base import ApiScraper, BfsScraper
+
+
+def _discover_scrapers() -> dict[str, type]:
+    scrapers = {}
+    package_dir = Path(__file__).parent
+    for _, name, _ in pkgutil.iter_modules([str(package_dir)]):
+        if name.startswith("_"):
+            continue
+        module = importlib.import_module(f"{__package__}.{name}")
+        for attr in vars(module).values():
+            if (
+                isinstance(attr, type)
+                and issubclass(attr, (ApiScraper, BfsScraper))
+                and attr not in (ApiScraper, BfsScraper)
+                and hasattr(attr, "source")
+            ):
+                scrapers[attr.source] = attr
+    return scrapers
+
+
+SCRAPERS = _discover_scrapers()

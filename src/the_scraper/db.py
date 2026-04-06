@@ -2,11 +2,14 @@
 
 import json
 import logging
+import os
 
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_DATABASE_URL = "postgresql://the_scraper:the_scraper_secret@localhost:5432/the_scraper"
 
 _pool: AsyncConnectionPool | None = None
 
@@ -18,6 +21,16 @@ async def init_pool(dsn: str, *, min_size: int = 2, max_size: int = 10) -> None:
         return
     _pool = AsyncConnectionPool(dsn, min_size=min_size, max_size=max_size, open=False)
     await _pool.open()
+
+
+async def init(dsn: str | None = None, **kwargs) -> None:
+    """Convenience wrapper: init the pool from *dsn* or DATABASE_URL env var."""
+    await init_pool(dsn or os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL), **kwargs)
+
+
+async def close() -> None:
+    """Convenience wrapper: close the pool."""
+    await close_pool()
 
 
 def get_pool() -> AsyncConnectionPool:

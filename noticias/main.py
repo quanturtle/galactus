@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 from noticias.config import settings
-from noticias.db.engine import close, init
+from the_scraper.db import close, init
 from noticias.pipeline.bronze_to_silver import run as bronze_to_silver
 from noticias.scrapers import SCRAPERS
 
@@ -17,12 +17,13 @@ def setup_logging():
 
 
 async def cmd_scrape(sources: list[str]):
+    tasks = []
     for name in sources:
         cls = SCRAPERS[name]
         scraper = cls()
-        await scraper.scrape()
-        await scraper.close()
-        print(f"[scrape] {name}: done")
+        tasks.append(scraper.run())
+
+    await asyncio.gather(*tasks)
 
 
 async def cmd_transform(sources: list[str] | None):

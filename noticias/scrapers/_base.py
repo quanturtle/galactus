@@ -32,4 +32,5 @@ class BfsScraper(_BfsScraper):
                 allowed_attrs=ALLOWED_ATTRS,
                 keep_script_re=KEEP_SCRIPT_RE,
             ),
+            use_content_hash=True,
         )

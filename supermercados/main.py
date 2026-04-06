@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from supermercados import db
+from the_scraper import db
 from supermercados.scrapers import ALL_SCRAPERS
 
 logging.basicConfig(

@@ -1,13 +1,26 @@
-from supermercados.scrapers.arete import AreteScraper
-from supermercados.scrapers.biggie import BiggieScraper
-from supermercados.scrapers.casarica import CasaRicaScraper
-from supermercados.scrapers.grutter import GrutterScraper
-from supermercados.scrapers.superseis import SuperseisScraper
+import importlib
+import pkgutil
+from pathlib import Path
 
-ALL_SCRAPERS = {
-    "biggie": BiggieScraper,
-    "superseis": SuperseisScraper,
-    "casarica": CasaRicaScraper,
-    "grutter": GrutterScraper,
-    "arete": AreteScraper,
-}
+from supermercados.scrapers._base import ApiScraper, BfsScraper
+
+
+def _discover_scrapers() -> dict[str, type]:
+    scrapers = {}
+    package_dir = Path(__file__).parent
+    for _, name, _ in pkgutil.iter_modules([str(package_dir)]):
+        if name.startswith("_"):
+            continue
+        module = importlib.import_module(f"{__package__}.{name}")
+        for attr in vars(module).values():
+            if (
+                isinstance(attr, type)
+                and issubclass(attr, (ApiScraper, BfsScraper))
+                and attr not in (ApiScraper, BfsScraper)
+                and hasattr(attr, "source")
+            ):
+                scrapers[attr.source] = attr
+    return scrapers
+
+
+ALL_SCRAPERS = _discover_scrapers()

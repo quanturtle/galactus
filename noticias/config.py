@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     model_config = {"env_prefix": "NOTICIAS_"}
 
-    database_url: str = "postgresql://the_scraper:the_scraper_secret@localhost:5432/the_scraper"
     log_level: str = "INFO"
 
     # MLX local LLM server
