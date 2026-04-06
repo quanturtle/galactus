@@ -2,7 +2,6 @@ CREATE TABLE IF NOT EXISTS bronze.snapshots (
     id          BIGSERIAL PRIMARY KEY,
     source      TEXT NOT NULL,
     url         TEXT NOT NULL,
-    context     JSONB,
     html_blob   BYTEA NOT NULL,
     content_hash TEXT,
     fetch_date  DATE NOT NULL DEFAULT CURRENT_DATE,
