@@ -8,7 +8,11 @@ dependencies = [
     "beautifulsoup4",
     "lxml",
     "pyyaml",
+    "psycopg[binary,pool]",
 ]
+
+[project.optional-dependencies]
+dev = ["ruff"]
 
 [build-system]
 requires = ["hatchling"]

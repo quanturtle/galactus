@@ -1,15 +1,13 @@
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+"""Noticias DB initialisation — delegates to the shared async pool."""
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from the_scraper.db import close_pool, init_pool
 
 from noticias.config import settings
 
-engine = create_async_engine(settings.database_url, echo=False)
-async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+async def init() -> None:
+    await init_pool(settings.database_url)
 
 
-@asynccontextmanager
-async def get_session() -> AsyncIterator[AsyncSession]:
-    async with async_session_factory() as session:
-        yield session
+async def close() -> None:
+    await close_pool()

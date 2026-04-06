@@ -24,7 +24,7 @@ async def scrape(stores: list[str]):
     await asyncio.gather(*tasks)
 
 
-def main():
+async def main():
     parser = argparse.ArgumentParser(description="Supermarket HTML snapshot crawler - Paraguay")
     sub = parser.add_subparsers(dest="command")
 
@@ -45,20 +45,22 @@ def main():
 
     args = parser.parse_args()
 
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    await db.init()
     try:
         if args.command == "scrape":
             stores = list(ALL_SCRAPERS.keys()) if args.store == "all" else [args.store]
-            asyncio.run(scrape(stores))
+            await scrape(stores)
         elif args.command == "transform":
             from supermercados.transforms.bronze_to_silver import run
             source = None if args.source == "all" else args.source
-            run(source)
-        else:
-            parser.print_help()
-            sys.exit(1)
+            await run(source)
     finally:
-        db.close()
+        await db.close()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

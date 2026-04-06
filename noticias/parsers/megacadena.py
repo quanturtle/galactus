@@ -1,8 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
-
-_IMAGE_EXCLUDE = {"logo", "icon", "avatar", "emoji", "gravatar", "sprite", "pixel", "tracking", "badge"}
+from the_scraper.parsing import IMAGE_EXCLUDE, build_image_urls
 
 
 def parse(response_text: str) -> list[dict]:
@@ -30,7 +29,7 @@ def _parse_post(post: dict) -> dict | None:
         body_soup = BeautifulSoup(content_html, "lxml")
         for img in body_soup.select("img[src]"):
             src = img.get("src", "")
-            if src.startswith("http") and not any(kw in src.lower() for kw in _IMAGE_EXCLUDE):
+            if src.startswith("http") and not any(kw in src.lower() for kw in IMAGE_EXCLUDE):
                 if src not in body_images:
                     body_images.append(src)
 
@@ -54,7 +53,7 @@ def _parse_post(post: dict) -> dict | None:
     if terms and isinstance(terms[0], list) and terms[0]:
         section = terms[0][0].get("name")
 
-    all_images = _build_image_urls(image_url, body_images)
+    all_images = build_image_urls(image_url, body_images)
     return {
         "source": "megacadena",
         "source_url": post.get("link", ""),
@@ -81,13 +80,3 @@ def _html_to_text(html: str) -> str:
     if paragraphs:
         return "\n\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
     return soup.get_text(strip=True)
-
-
-def _build_image_urls(hero: str | None, body_images: list[str]) -> list[str] | None:
-    all_imgs: list[str] = []
-    if hero:
-        all_imgs.append(hero)
-    for img in body_images:
-        if img not in all_imgs:
-            all_imgs.append(img)
-    return all_imgs if all_imgs else None

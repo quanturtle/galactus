@@ -1,6 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
+from the_scraper.parsing import build_image_urls
 
 BASE_URL = "https://www.abc.com.py"
 
@@ -44,7 +45,7 @@ def _parse_article(gc: dict) -> dict | None:
     source_url = BASE_URL + website_url if website_url else gc.get("canonical_url", "")
 
     hero = promo.get("url")
-    all_images = _build_image_urls(hero, body_images)
+    all_images = build_image_urls(hero, body_images)
 
     return {
         "source": "abc",
@@ -59,13 +60,3 @@ def _parse_article(gc: dict) -> dict | None:
         "image_urls": json.dumps(all_images) if all_images else None,
         "raw_data": json.dumps(gc, ensure_ascii=False),
     }
-
-
-def _build_image_urls(hero: str | None, body_images: list[str]) -> list[str] | None:
-    all_imgs: list[str] = []
-    if hero:
-        all_imgs.append(hero)
-    for img in body_images:
-        if img not in all_imgs:
-            all_imgs.append(img)
-    return all_imgs if all_imgs else None

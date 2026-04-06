@@ -1,6 +1,6 @@
-"""Storage protocol implementations backed by psycopg sync connection pool."""
+"""Storage protocol implementations backed by the shared async psycopg3 pool."""
 
-from supermercados import db
+from the_scraper import db
 
 
 class PsycopgApiStorage:
@@ -9,7 +9,7 @@ class PsycopgApiStorage:
         self._pending: list[dict] = []
 
     async def load_today_endpoints(self, source: str) -> set[str]:
-        rows = db.execute(
+        rows = await db.execute(
             "SELECT endpoint FROM bronze.api_responses "
             "WHERE source = %(source)s AND fetch_date = CURRENT_DATE",
             {"source": source},
@@ -30,14 +30,14 @@ class PsycopgApiStorage:
 
     async def flush(self) -> None:
         if self._pending:
-            db.bulk_insert("bronze.api_responses", self._pending)
+            await db.bulk_insert("bronze.api_responses", self._pending)
             self._pending = []
 
 
 class PsycopgSnapshotStorage:
 
     async def load_today_urls(self, source: str) -> set[str]:
-        rows = db.execute(
+        rows = await db.execute(
             "SELECT url FROM bronze.snapshots "
             "WHERE source = %(source)s AND fetch_date = CURRENT_DATE",
             {"source": source},
@@ -54,13 +54,13 @@ class PsycopgSnapshotStorage:
         row = {"source": source, "url": url, "html_blob": html_blob}
         if content_hash:
             row["content_hash"] = content_hash
-        db.bulk_insert("bronze.snapshots", [row])
+        await db.bulk_insert("bronze.snapshots", [row])
         return True
 
     async def get_content_hashes(self, source: str, urls: list[str]) -> dict[str, str]:
         if not urls:
             return {}
-        rows = db.execute(
+        rows = await db.execute(
             "SELECT DISTINCT ON (url) url, content_hash "
             "FROM bronze.snapshots "
             "WHERE source = %(source)s AND url = ANY(%(urls)s) "
@@ -71,4 +71,4 @@ class PsycopgSnapshotStorage:
         return {r["url"]: r["content_hash"] for r in rows}
 
     async def flush(self) -> None:
-        pass  # psycopg auto-commits in bulk_insert
+        pass  # each store_snapshot auto-commits via bulk_insert

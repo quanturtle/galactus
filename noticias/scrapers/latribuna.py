@@ -2,7 +2,6 @@ import json
 import logging
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from the_scraper.html_cleaner import compress
 

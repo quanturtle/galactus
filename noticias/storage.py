@@ -1,72 +1,60 @@
-"""Storage protocol implementations backed by SQLAlchemy async sessions."""
+"""Storage protocol implementations backed by the shared async psycopg3 pool."""
 
-from sqlalchemy import select, text
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from noticias.db.bronze import ApiResponse, Snapshot
+from the_scraper import db
 
 
-class SQLAlchemyApiStorage:
+class PsycopgApiStorage:
 
-    def __init__(self, session: AsyncSession):
-        self._session = session
+    def __init__(self):
+        self._pending: list[dict] = []
 
     async def load_today_endpoints(self, source: str) -> set[str]:
-        result = await self._session.execute(
-            select(ApiResponse.endpoint).where(
-                ApiResponse.source == source,
-                ApiResponse.fetch_date == text("CURRENT_DATE"),
-            )
+        rows = await db.execute(
+            "SELECT endpoint FROM bronze.api_responses "
+            "WHERE source = %(source)s AND fetch_date = CURRENT_DATE",
+            {"source": source},
         )
-        return {row[0] for row in result.all()}
+        return {r["endpoint"] for r in rows}
 
     async def store_response(
         self, source: str, endpoint: str, page_params: dict, response_blob: bytes,
     ) -> None:
-        stmt = (
-            insert(ApiResponse)
-            .values(
-                source=source,
-                endpoint=endpoint,
-                page_params=page_params,
-                response_blob=response_blob,
-            )
-            .on_conflict_do_nothing(constraint="uq_api_responses_source_endpoint_date")
-        )
-        await self._session.execute(stmt)
+        self._pending.append({
+            "source": source,
+            "endpoint": endpoint,
+            "page_params": page_params,
+            "response_blob": response_blob,
+        })
+        if len(self._pending) >= 50:
+            await self.flush()
 
     async def flush(self) -> None:
-        await self._session.commit()
+        if self._pending:
+            await db.bulk_insert("bronze.api_responses", self._pending)
+            self._pending = []
 
 
-class SQLAlchemySnapshotStorage:
-
-    def __init__(self, session: AsyncSession):
-        self._session = session
+class PsycopgSnapshotStorage:
 
     async def load_today_urls(self, source: str) -> set[str]:
-        result = await self._session.execute(
-            select(Snapshot.url).where(
-                Snapshot.source == source,
-                Snapshot.fetch_date == text("CURRENT_DATE"),
-            )
+        rows = await db.execute(
+            "SELECT url FROM bronze.snapshots "
+            "WHERE source = %(source)s AND fetch_date = CURRENT_DATE",
+            {"source": source},
         )
-        return {row[0] for row in result.all()}
+        return {r["url"] for r in rows}
 
     async def store_snapshot(
         self, source: str, url: str, html_blob: bytes, content_hash: str | None = None,
     ) -> bool:
-        stmt = (
-            insert(Snapshot)
-            .values(source=source, url=url, html_blob=html_blob)
-            .on_conflict_do_nothing(constraint="uq_snapshots_source_url_date")
-        )
-        result = await self._session.execute(stmt)
-        return result.rowcount > 0
+        row = {"source": source, "url": url, "html_blob": html_blob}
+        if content_hash:
+            row["content_hash"] = content_hash
+        await db.bulk_insert("bronze.snapshots", [row])
+        return True
 
     async def get_content_hashes(self, source: str, urls: list[str]) -> dict[str, str]:
         return {}  # noticias does not use content hashing
 
     async def flush(self) -> None:
-        await self._session.commit()
+        pass  # each store_snapshot auto-commits via bulk_insert

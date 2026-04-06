@@ -1,6 +1,8 @@
 import html
 import json
 
+from the_scraper.parsing import safe_int
+
 
 def parse(response_text: str) -> list[dict]:
     """Parse a Grutter API response page into silver-ready product dicts."""
@@ -20,17 +22,8 @@ def parse(response_text: str) -> list[dict]:
             "url": f"api://grutter/{item['id']}",
             "name": name,
             "description": category,
-            "price": _safe_int(prices.get("price")),
+            "price": safe_int(prices.get("price")),
             "sku": str(item.get("sku", "")) or None,
         })
 
     return results
-
-
-def _safe_int(val) -> int | None:
-    if val is None:
-        return None
-    try:
-        return int(float(val))
-    except (ValueError, TypeError):
-        return None

@@ -1,10 +1,9 @@
 import argparse
 import asyncio
 import logging
-import sys
 
 from noticias.config import settings
-from noticias.db.engine import get_session
+from noticias.db.engine import close, init
 from noticias.pipeline.bronze_to_silver import run as bronze_to_silver
 from noticias.scrapers import SCRAPERS
 
@@ -20,22 +19,20 @@ def setup_logging():
 async def cmd_scrape(sources: list[str]):
     for name in sources:
         cls = SCRAPERS[name]
-        async with get_session() as session:
-            scraper = cls(session)
-            await scraper.scrape()
-            await scraper.close()
+        scraper = cls()
+        await scraper.scrape()
+        await scraper.close()
         print(f"[scrape] {name}: done")
 
 
 async def cmd_transform(sources: list[str] | None):
-    async with get_session() as session:
-        if sources:
-            total = 0
-            for source in sources:
-                total += await bronze_to_silver(session, source=source)
-        else:
-            total = await bronze_to_silver(session)
-        print(f"[transform] {total} articles inserted into silver")
+    if sources:
+        total = 0
+        for source in sources:
+            total += await bronze_to_silver(source=source)
+    else:
+        total = await bronze_to_silver()
+    print(f"[transform] {total} articles inserted into silver")
 
 
 async def cmd_run_all(sources: list[str]):
@@ -43,7 +40,7 @@ async def cmd_run_all(sources: list[str]):
     await cmd_transform(sources)
 
 
-def main():
+async def main():
     setup_logging()
     parser = argparse.ArgumentParser(description="Paraguay news scraper")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -76,13 +73,17 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "scrape":
-        asyncio.run(cmd_scrape(args.source))
-    elif args.command == "transform":
-        asyncio.run(cmd_transform(args.source))
-    elif args.command == "run-all":
-        asyncio.run(cmd_run_all(args.source))
+    await init()
+    try:
+        if args.command == "scrape":
+            await cmd_scrape(args.source)
+        elif args.command == "transform":
+            await cmd_transform(args.source)
+        elif args.command == "run-all":
+            await cmd_run_all(args.source)
+    finally:
+        await close()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

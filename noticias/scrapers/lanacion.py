@@ -2,7 +2,6 @@ import json
 import logging
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from the_scraper.html_cleaner import compress
 
@@ -16,8 +15,8 @@ class LaNacionScraper(ApiScraper):
 
     source = "lanacion"
 
-    def __init__(self, session: AsyncSession):
-        super().__init__(session)
+    def __init__(self):
+        super().__init__()
         self.website = self.cfg.get("website", "lanacionpy")
 
     def _build_params(self, page_index: int) -> dict:

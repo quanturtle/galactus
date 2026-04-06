@@ -1,8 +1,8 @@
 import logging
 
+from the_scraper import db
 from the_scraper.html_cleaner import decompress
 
-from supermercados import db
 from supermercados.parsers import parse_api_response
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 500
 
 
-def run(source: str | None = None):
+async def run(source: str | None = None):
     """Parse unparsed API responses and insert into silver.products."""
     query = """
         SELECT id, source, endpoint, response_blob, fetched_at
@@ -23,7 +23,7 @@ def run(source: str | None = None):
         params["source"] = source
     query += " ORDER BY id"
 
-    rows = db.execute(query, params or None)
+    rows = await db.execute(query, params or None)
 
     if not rows:
         logger.info("No unparsed API responses found")
@@ -54,12 +54,12 @@ def run(source: str | None = None):
         parsed_ids.append(row["id"])
 
         if len(silver_rows) >= BATCH_SIZE:
-            _flush(silver_rows, parsed_ids)
+            await _flush(silver_rows, parsed_ids)
             silver_rows = []
             parsed_ids = []
 
     if silver_rows or parsed_ids:
-        _flush(silver_rows, parsed_ids)
+        await _flush(silver_rows, parsed_ids)
 
     logger.info(
         "Done — %d products inserted into silver, %d API responses skipped",
@@ -67,11 +67,11 @@ def run(source: str | None = None):
     )
 
 
-def _flush(silver_rows: list[dict], parsed_ids: list[int]):
+async def _flush(silver_rows: list[dict], parsed_ids: list[int]):
     if silver_rows:
-        db.bulk_insert("silver.products", silver_rows)
+        await db.bulk_insert("silver.products", silver_rows)
     if parsed_ids:
-        db.execute(
+        await db.execute(
             "UPDATE bronze.api_responses SET parsed_at = NOW() WHERE id = ANY(%s)",
             [parsed_ids],
         )

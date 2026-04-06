@@ -1,8 +1,6 @@
 import json
 import logging
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from the_scraper.html_cleaner import compress
 
 from noticias.scrapers._base import ApiScraper
@@ -15,8 +13,8 @@ class ABCColorScraper(ApiScraper):
 
     source = "abc"
 
-    def __init__(self, session: AsyncSession):
-        super().__init__(session)
+    def __init__(self):
+        super().__init__()
         self.sections = self.cfg.get("sections", [])
 
     def _build_params(self, page_index: int) -> dict:

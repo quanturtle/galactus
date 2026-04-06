@@ -1,6 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
+from the_scraper.parsing import safe_int
 
 
 def parse(html: str, url: str) -> dict | None:
@@ -39,7 +40,7 @@ def parse(html: str, url: str) -> dict | None:
         "url": url,
         "name": name,
         "description": description,
-        "price": _safe_int(price),
+        "price": safe_int(price),
         "sku": sku or None,
     }
 
@@ -53,12 +54,3 @@ def _extract_json_ld(soup: BeautifulSoup) -> dict | None:
         except (json.JSONDecodeError, AttributeError, TypeError):
             continue
     return None
-
-
-def _safe_int(val: str | None) -> int | None:
-    if not val or val in ("", "None", "null"):
-        return None
-    try:
-        return int(float(val))
-    except (ValueError, TypeError):
-        return None
