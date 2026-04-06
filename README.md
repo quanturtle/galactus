@@ -17,7 +17,7 @@ cd supermercados && pip install -e . && cd ..
 
 # Scrape
 python -m noticias scrape --source lanacion abc
-python -m supermercados scrape --store superseis
+python -m supermercados scrape --source superseis
 
 # Transform bronze -> silver
 python -m noticias transform --source lanacion
@@ -33,21 +33,25 @@ the_scraper/
 │   │   ├── base.py            # BaseScraper (async HTTP, retry, concurrency)
 │   │   ├── bfs.py             # BfsScraper (breadth-first HTML crawler)
 │   │   └── api.py             # ApiScraper (paginated API fetcher)
+│   ├── db.py                  # Async psycopg3 connection pool
 │   ├── html_cleaner.py        # HTML stripping, compression, hashing
-│   ├── storage.py             # Storage protocols (ApiStorage, SnapshotStorage)
+│   ├── parsing.py             # Shared HTML/JSON-LD parsing helpers
+│   ├── storage.py             # Storage protocols + psycopg3 implementations
 │   └── urls.py                # URL normalization and link extraction
 ├── noticias/                  # News scraper application
 │   ├── scrapers/              # 10 news source scrapers
+│   ├── parsers/               # Per-source JSON-to-article parsers
 │   ├── config/scrapers/       # YAML configs per source
 │   ├── pipeline/              # Bronze-to-silver transforms
 │   └── main.py                # CLI entry point
 ├── supermercados/             # Supermarket scraper application
 │   ├── scrapers/              # 5 store scrapers
+│   ├── parsers/               # Per-store HTML-to-product parsers
 │   ├── config/scrapers/       # YAML configs per store
 │   ├── transforms/            # Bronze-to-silver transforms
 │   └── main.py                # CLI entry point
+├── sql/                       # Schema init scripts (mounted by Docker)
 ├── docker-compose.yml         # PostgreSQL 16
-├── init_db.sql                # Bronze + silver schema
 └── pyproject.toml             # Package metadata (Python >= 3.12)
 ```
 
@@ -81,9 +85,7 @@ flowchart LR
     subgraph DB["PostgreSQL"]
         direction LR
         BRONZE_API[bronze.api_responses] --> SILVER_ART[silver.articles]
-        BRONZE_API --> SILVER_PROD[silver.products]
-        BRONZE_SNAP[bronze.snapshots] --> SILVER_ART
-        BRONZE_SNAP --> SILVER_PROD
+        BRONZE_SNAP[bronze.snapshots] --> SILVER_PROD[silver.products]
     end
 
     Framework --> Noticias --> DB
@@ -165,38 +167,34 @@ myproject/
 ├── scrapers/
 │   ├── __init__.py        # Scraper registry
 │   └── _base.py           # Project-level base classes
+├── parsers/               # Per-source response parsers
 ├── config/scrapers/       # YAML configs per source
 ├── transforms/            # Bronze-to-silver parsing
-├── storage.py             # Storage protocol implementation
 └── main.py                # CLI entry point
 ```
 
-### 2. Implement the storage protocol
+### 2. Create project-level base classes
 
-Implement `ApiStorage` and/or `SnapshotStorage` from `the_scraper.storage` using your preferred database driver. See `noticias/storage.py` (SQLAlchemy async) or `supermercados/storage.py` (psycopg sync) for examples.
-
-### 3. Create project-level base classes
-
-Wire your storage implementation and config directory into the framework base classes in `scrapers/_base.py`:
+Wire the shared storage implementations and your config directory into the framework base classes in `scrapers/_base.py`:
 
 ```python
 from pathlib import Path
 from the_scraper.scrapers.bfs import BfsScraper as _BfsScraper
 from the_scraper.scrapers.api import ApiScraper as _ApiScraper
-from myproject.storage import MySnapshotStorage, MyApiStorage
+from the_scraper.storage import PsycopgApiStorage, PsycopgSnapshotStorage
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config" / "scrapers"
 
 class BfsScraper(_BfsScraper):
     def __init__(self):
-        super().__init__(storage=MySnapshotStorage(), config_dir=CONFIG_DIR)
+        super().__init__(storage=PsycopgSnapshotStorage(), config_dir=CONFIG_DIR)
 
 class ApiScraper(_ApiScraper):
     def __init__(self):
-        super().__init__(storage=MyApiStorage(), config_dir=CONFIG_DIR)
+        super().__init__(storage=PsycopgApiStorage(), config_dir=CONFIG_DIR)
 ```
 
-### 4. Add a CLI entry point
+### 3. Add a CLI entry point
 
 See `noticias/main.py` or `supermercados/main.py` for the pattern: argparse with `scrape` and `transform` subcommands.
 
@@ -271,19 +269,6 @@ class MyNewsSiteScraper(ApiScraper):
         return response.json()["total_pages"]
 ```
 
-### 3. Register the scraper
-
-Add it to the registry in `{project}/scrapers/__init__.py`:
-
-```python
-from myproject.scrapers.mynewstore import MyNewStoreScraper
-
-ALL_SCRAPERS = {
-    # ... existing entries ...
-    "mynewstore": MyNewStoreScraper,
-}
-```
-
-### 4. Add a transform
+### 3. Add a transform
 
 Write a parser in `{project}/transforms/` or `{project}/pipeline/` that reads from the bronze table, extracts structured fields, and inserts into the silver table.
