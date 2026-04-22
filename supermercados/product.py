@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
-from pydantic import BaseModel, ConfigDict
+from psycopg import AsyncConnection
+from pydantic import BaseModel, ConfigDict, Field
 
 from the_scraper import db
 
@@ -17,10 +18,20 @@ class Product(BaseModel):
     price: int | None = None
     sku: str | None = None
     scraped_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     @classmethod
-    async def persist_many(cls, products: list["Product"]) -> int:
+    async def persist_many(
+        cls,
+        products: list["Product"],
+        *,
+        conn: AsyncConnection | None = None,
+    ) -> int:
         if not products:
             return 0
-        await db.bulk_insert("silver.products", [p.model_dump() for p in products])
+        await db.bulk_insert(
+            "silver.products",
+            [p.model_dump() for p in products],
+            conn=conn,
+        )
         return len(products)

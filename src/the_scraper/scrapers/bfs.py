@@ -37,7 +37,6 @@ class BfsScraper(BaseScraper):
         **kwargs,
     ):
         super().__init__(config_dir=config_dir, **kwargs)
-        self._batch_size_override = batch_size
         self.storage = storage
         self.html_cleaner = html_cleaner or HtmlCleaner()
         self.use_content_hash = use_content_hash
@@ -45,7 +44,7 @@ class BfsScraper(BaseScraper):
         self.home_url = self.cfg["home_url"]
         self.scrape_pattern = self.cfg["scrape_pattern"]
         self.max_pages = self.cfg.get("max_pages", DEFAULT_BFS_MAX_PAGES)
-        self.batch_size = self._batch_size_override or self.cfg.get("batch_size", DEFAULT_BFS_BATCH_SIZE)
+        self.batch_size = batch_size or self.cfg.get("batch_size", DEFAULT_BFS_BATCH_SIZE)
         self.request_delay = self.cfg.get("request_delay", DEFAULT_BFS_REQUEST_DELAY)
         self.ignore_patterns = self.cfg.get("ignore_patterns", [])
         self.strip_path_prefixes = self.cfg.get("strip_path_prefixes")

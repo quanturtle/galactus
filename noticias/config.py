@@ -6,6 +6,9 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Size of each bronze->silver transform chunk.
+    chunk_size: int = 500
+
     # MLX local LLM server
     mlx_url: str = "http://localhost:8081"
     mlx_model: str = "mlx-community/gemma-3-4b-it-qat-4bit"

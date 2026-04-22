@@ -1,10 +1,16 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dateutil import parser as dateparser
+from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from the_scraper import db
+
+SILVER_ARTICLE_UPDATE_COLUMNS = (
+    "title", "subtitle", "body", "author", "published_at",
+    "section", "image_url", "processed_at",
+)
 
 
 class Article(BaseModel):
@@ -21,6 +27,7 @@ class Article(BaseModel):
     published_at: datetime | None = None
     section: str | None = None
     image_url: str | None = None
+    processed_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
     images: list[str] = Field(default_factory=list, exclude=True)
 
     @model_validator(mode="before")
@@ -52,11 +59,22 @@ class Article(BaseModel):
             return None
 
     @classmethod
-    async def persist_many(cls, articles: list["Article"]) -> int:
+    async def persist_many(
+        cls,
+        articles: list["Article"],
+        *,
+        conn: AsyncConnection | None = None,
+    ) -> int:
         if not articles:
             return 0
 
-        await db.bulk_insert("silver.articles", [a.model_dump() for a in articles])
+        await db.bulk_insert(
+            "silver.articles",
+            [a.model_dump() for a in articles],
+            conn=conn,
+            conflict_columns=("source", "source_url"),
+            update_columns=SILVER_ARTICLE_UPDATE_COLUMNS,
+        )
 
         sources = [a.source for a in articles]
         source_urls = [a.source_url for a in articles]
@@ -68,6 +86,7 @@ class Article(BaseModel):
               ON a.source = t.source AND a.source_url = t.source_url
             """,
             [sources, source_urls],
+            conn=conn,
         )
         key_to_id = {(r["source"], r["source_url"]): r["id"] for r in id_rows}
 
@@ -85,5 +104,5 @@ class Article(BaseModel):
                     "ordinal": idx,
                 })
 
-        await db.bulk_insert("silver.article_images", image_rows)
+        await db.bulk_insert("silver.article_images", image_rows, conn=conn)
         return len(articles)

@@ -23,6 +23,7 @@ class ApiScraper(BaseScraper):
         self.api_url = self.cfg["base_url"] + self.cfg["api_endpoint"]
         self.page_size = self.cfg.get("page_size", 100)
         self.max_pages = self.cfg.get("max_pages", 0)
+        self._storage_lock = asyncio.Lock()
 
     @abstractmethod
     def _build_params(self, page_index: int) -> dict:
@@ -39,10 +40,24 @@ class ApiScraper(BaseScraper):
         sorted_params = urlencode(sorted(params.items()))
         return f"{self.api_url}?{sorted_params}" if sorted_params else self.api_url
 
+    async def _fetch_and_store(self, endpoint: str, params: dict) -> bool:
+        """Fetch one page and hand it to storage. Returns True on success."""
+        try:
+            resp = await self.fetch(self.api_url, params=params)
+        except Exception as e:
+            logger.warning("%s: page fetch failed for %s: %s", self.source, endpoint, e)
+            return False
+        async with self._storage_lock:
+            await self.storage.store_response(
+                self.source, endpoint, params, compress(resp.text),
+            )
+        return True
+
     async def scrape(self) -> None:
         already_fetched = await self.storage.load_today_endpoints(self.source)
         total_stored = 0
         total_skipped = 0
+        total_errors = 0
 
         first_params = self._build_params(0)
         first_endpoint = self._build_endpoint(first_params)
@@ -54,9 +69,10 @@ class ApiScraper(BaseScraper):
         logger.info("%s: %d total pages", self.source, total_pages)
 
         if first_endpoint not in already_fetched:
-            await self.storage.store_response(
-                self.source, first_endpoint, first_params, compress(resp.text),
-            )
+            async with self._storage_lock:
+                await self.storage.store_response(
+                    self.source, first_endpoint, first_params, compress(resp.text),
+                )
             total_stored += 1
         else:
             total_skipped += 1
@@ -70,26 +86,27 @@ class ApiScraper(BaseScraper):
                 continue
             pending.append((endpoint, params))
 
-        responses = await asyncio.gather(
-            *(self.fetch(self.api_url, params=p) for _, p in pending),
-            return_exceptions=True,
-        )
-
-        for i, ((endpoint, params), resp) in enumerate(zip(pending, responses), start=1):
-            if isinstance(resp, Exception):
-                logger.warning("%s: page fetch failed for %s: %s", self.source, endpoint, resp)
-                continue
-            await self.storage.store_response(
-                self.source, endpoint, params, compress(resp.text),
-            )
-            total_stored += 1
-            logger.info(
-                "%s: stored page %d / %d (skipped %d)",
-                self.source, i, len(pending), total_skipped,
-            )
+        # Concurrency is already bounded by BaseScraper.semaphore inside fetch();
+        # as_completed + per-task storage writes keep in-flight responses bounded
+        # and flush progressively instead of holding every body until gather resolves.
+        tasks = [
+            asyncio.create_task(self._fetch_and_store(endpoint, params))
+            for endpoint, params in pending
+        ]
+        for i, coro in enumerate(asyncio.as_completed(tasks), start=1):
+            ok = await coro
+            if ok:
+                total_stored += 1
+            else:
+                total_errors += 1
+            if i % 10 == 0 or i == len(tasks):
+                logger.info(
+                    "%s: %d / %d pages processed (stored %d, errors %d, skipped %d)",
+                    self.source, i, len(tasks), total_stored, total_errors, total_skipped,
+                )
 
         await self.storage.flush()
         logger.info(
-            "%s: API scrape done — %d pages stored, %d skipped",
-            self.source, total_stored, total_skipped,
+            "%s: API scrape done — %d stored, %d errors, %d skipped",
+            self.source, total_stored, total_errors, total_skipped,
         )

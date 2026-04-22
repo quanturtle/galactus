@@ -3,22 +3,21 @@ import logging
 from the_scraper import db
 from the_scraper.html_cleaner import decompress
 
+from supermercados.config import settings
 from supermercados.parsers import API_PARSERS, parse_api_response
 from supermercados.product import Product
 
 logger = logging.getLogger(__name__)
 
-CHUNK = 500
 
-
-def _build_query(source: str | None) -> tuple[str, dict]:
+def _build_query(source: str | None, chunk: int) -> tuple[str, dict]:
     query = """
         SELECT id, source, endpoint, response_blob, fetched_at
         FROM bronze.api_responses
         WHERE parsed_at IS NULL
           AND source = ANY(%(sources)s)
     """
-    params: dict = {"sources": list(API_PARSERS), "chunk": CHUNK}
+    params: dict = {"sources": list(API_PARSERS), "chunk": chunk}
     if source:
         query += " AND source = %(source)s"
         params["source"] = source
@@ -35,14 +34,15 @@ def _parse_row(row) -> list[Product]:
     ]
 
 
-async def _mark_parsed(rows) -> None:
+async def _mark_parsed(rows, *, conn) -> None:
     await db.execute(
         "UPDATE bronze.api_responses SET parsed_at = NOW() WHERE id = ANY(%s)",
         [[r["id"] for r in rows]],
+        conn=conn,
     )
 
 
-def _chunk_products(rows) -> tuple[list[Product], int]:
+def _build_products(rows) -> tuple[list[Product], int]:
     products: list[Product] = []
     skipped = 0
     for row in rows:
@@ -54,9 +54,18 @@ def _chunk_products(rows) -> tuple[list[Product], int]:
     return products, skipped
 
 
-async def run(source: str | None = None) -> int:
+async def _commit_chunk(rows) -> tuple[int, int]:
+    products, skipped = _build_products(rows)
+    async with db.transaction() as conn:
+        inserted = await Product.persist_many(products, conn=conn)
+        await _mark_parsed(rows, conn=conn)
+    return inserted, skipped
+
+
+async def run(source: str | None = None, *, chunk: int | None = None) -> int:
     """Parse unparsed API responses and insert into silver.products."""
-    query, params = _build_query(source)
+    chunk_size = chunk or settings.chunk_size
+    query, params = _build_query(source, chunk_size)
     total_rows = total_products = total_skipped = 0
 
     while True:
@@ -64,10 +73,8 @@ async def run(source: str | None = None) -> int:
         if not rows:
             break
 
-        products, skipped = _chunk_products(rows)
-        inserted = await Product.persist_many(products)
-        await _mark_parsed(rows)
-        total_products += inserted
+        products, skipped = await _commit_chunk(rows)
+        total_products += products
         total_skipped += skipped
         total_rows += len(rows)
         logger.info(
