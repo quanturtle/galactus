@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from abc import abstractmethod
 from pathlib import Path
@@ -60,26 +61,31 @@ class ApiScraper(BaseScraper):
         else:
             total_skipped += 1
 
+        pending: list[tuple[str, dict]] = []
         for page_index in range(1, total_pages):
             params = self._build_params(page_index)
             endpoint = self._build_endpoint(params)
-
             if endpoint in already_fetched:
                 total_skipped += 1
                 continue
+            pending.append((endpoint, params))
 
-            resp = await self.fetch(self.api_url, params=params)
+        responses = await asyncio.gather(
+            *(self.fetch(self.api_url, params=p) for _, p in pending),
+            return_exceptions=True,
+        )
+
+        for i, ((endpoint, params), resp) in enumerate(zip(pending, responses), start=1):
+            if isinstance(resp, Exception):
+                logger.warning("%s: page fetch failed for %s: %s", self.source, endpoint, resp)
+                continue
             await self.storage.store_response(
                 self.source, endpoint, params, compress(resp.text),
             )
             total_stored += 1
-
-            if total_stored % 50 == 0:
-                await self.storage.flush()
-
             logger.info(
-                "%s: fetched page %d / %d, skipped %d",
-                self.source, page_index + 1, total_pages, total_skipped,
+                "%s: stored page %d / %d (skipped %d)",
+                self.source, i, len(pending), total_skipped,
             )
 
         await self.storage.flush()

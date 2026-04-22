@@ -4,7 +4,7 @@ from the_scraper import db
 from the_scraper.html_cleaner import decompress
 
 from noticias.parsers import HTML_PARSERS, parse_snapshot
-from noticias.transforms._common import _upsert_article
+from noticias.transforms._common import flush_articles_chunk
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +43,15 @@ async def _mark_parsed(rows) -> None:
 
 
 async def _process_chunk(rows) -> tuple[int, int]:
-    articles = skipped = 0
+    skipped = 0
+    chunk_articles: list[dict] = []
     for row in rows:
         parsed = _parse_row(row)
         if parsed:
-            await _upsert_article(parsed)
-            articles += 1
+            chunk_articles.append(parsed)
         else:
             skipped += 1
+    articles = await flush_articles_chunk(chunk_articles)
     return articles, skipped
 
 

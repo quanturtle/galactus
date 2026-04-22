@@ -28,73 +28,68 @@ def _count_words(body):
     return len(body.split())
 
 
-async def _upsert_article(article_dict: dict) -> None:
-    published = _parse_date(article_dict.get("published_at"))
-    word_count = _count_words(article_dict.get("body"))
-    keywords = _extract_keywords(article_dict.get("title"))
+def shape_article_row(article: dict) -> dict:
+    return {
+        "source": article["source"],
+        "source_url": article["source_url"],
+        "title": article.get("title"),
+        "subtitle": article.get("subtitle"),
+        "body": article.get("body"),
+        "author": article.get("author"),
+        "published_at": _parse_date(article.get("published_at")),
+        "section": article.get("section"),
+        "image_url": article.get("image_url"),
+        "word_count": _count_words(article.get("body")),
+        "keywords": _extract_keywords(article.get("title")),
+    }
 
-    rows = await db.execute(
-        """
-        INSERT INTO silver.articles
-            (source, source_url, title, subtitle, body, author,
-             published_at, section, image_url, word_count, keywords)
-        VALUES
-            (%(source)s, %(source_url)s, %(title)s, %(subtitle)s, %(body)s,
-             %(author)s, %(published_at)s, %(section)s, %(image_url)s,
-             %(word_count)s, %(keywords)s)
-        ON CONFLICT ON CONSTRAINT uq_silver_source_url
-        DO UPDATE SET
-            title       = EXCLUDED.title,
-            subtitle    = EXCLUDED.subtitle,
-            body        = EXCLUDED.body,
-            author      = EXCLUDED.author,
-            published_at = EXCLUDED.published_at,
-            section     = EXCLUDED.section,
-            image_url   = EXCLUDED.image_url,
-            word_count  = EXCLUDED.word_count,
-            keywords    = EXCLUDED.keywords,
-            processed_at = now()
-        RETURNING id
-        """,
-        {
-            "source": article_dict["source"],
-            "source_url": article_dict["source_url"],
-            "title": article_dict.get("title"),
-            "subtitle": article_dict.get("subtitle"),
-            "body": article_dict.get("body"),
-            "author": article_dict.get("author"),
-            "published_at": published,
-            "section": article_dict.get("section"),
-            "image_url": article_dict.get("image_url"),
-            "word_count": word_count,
-            "keywords": keywords,
-        },
-    )
-    silver_id = rows[0]["id"]
 
-    image_urls = []
-    raw_image_urls = article_dict.get("image_urls")
-    if raw_image_urls:
+def collect_image_urls(article: dict) -> list[str]:
+    raw = article.get("image_urls")
+    urls: list[str] = []
+    if raw:
         try:
-            image_urls = json.loads(raw_image_urls) if isinstance(raw_image_urls, str) else raw_image_urls
+            urls = json.loads(raw) if isinstance(raw, str) else list(raw)
         except (json.JSONDecodeError, TypeError):
-            pass
-    if not image_urls and article_dict.get("image_url"):
-        image_urls = [article_dict["image_url"]]
+            urls = []
+    if not urls and article.get("image_url"):
+        urls = [article["image_url"]]
+    return urls
 
-    for idx, img_url in enumerate(image_urls):
-        role = "hero" if idx == 0 and img_url == article_dict.get("image_url") else "body"
-        await db.execute(
-            """
-            INSERT INTO silver.article_images
-                (silver_article_id, image_url, image_role, ordinal)
-            VALUES (%(silver_article_id)s, %(image_url)s, %(image_role)s, %(ordinal)s)
-            ON CONFLICT ON CONSTRAINT uq_silver_article_image DO NOTHING
-            """,
-            {
+
+async def flush_articles_chunk(articles: list[dict]) -> int:
+    if not articles:
+        return 0
+
+    article_rows = [shape_article_row(a) for a in articles]
+    await db.bulk_insert("silver.articles", article_rows)
+
+    sources = [a["source"] for a in articles]
+    source_urls = [a["source_url"] for a in articles]
+    id_rows = await db.execute(
+        """
+        SELECT a.id, a.source, a.source_url
+        FROM silver.articles a
+        JOIN unnest(%s::text[], %s::text[]) AS t(source, source_url)
+          ON a.source = t.source AND a.source_url = t.source_url
+        """,
+        [sources, source_urls],
+    )
+    key_to_id = {(r["source"], r["source_url"]): r["id"] for r in id_rows}
+
+    image_rows: list[dict] = []
+    for article in articles:
+        silver_id = key_to_id.get((article["source"], article["source_url"]))
+        if silver_id is None:
+            continue
+        hero_url = article.get("image_url")
+        for idx, img_url in enumerate(collect_image_urls(article)):
+            image_rows.append({
                 "silver_article_id": silver_id,
                 "image_url": img_url,
-                "image_role": role,
+                "image_role": "hero" if idx == 0 and img_url == hero_url else "body",
                 "ordinal": idx,
-            },
-        )
+            })
+
+    await db.bulk_insert("silver.article_images", image_rows)
+    return len(articles)
