@@ -59,7 +59,8 @@ the_scraper/
 │   ├── Dockerfile             # Bakes framework + both projects into the image
 │   └── dags/                  # noticias_daily.py, supermercados_daily.py
 ├── sql/                       # Schema init scripts (mounted by Docker on first boot)
-├── migrations/                # Alembic scaffolding (reserved for future schema changes)
+├── alembic.ini                # Alembic config (migrations/ script_location, DATABASE_URL via env.py)
+├── migrations/                # Alembic migrations (env.py reads DATABASE_URL, psycopg3 driver)
 ├── docker-compose.yml         # PostgreSQL 16 + Airflow (init, scheduler, webserver)
 ├── pyproject.toml             # Package metadata (Python >= 3.12)
 └── uv.lock                    # uv lockfile

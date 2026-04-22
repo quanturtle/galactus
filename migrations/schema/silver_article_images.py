@@ -1,0 +1,40 @@
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    text,
+)
+
+from . import metadata
+
+Table(
+    "article_images",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("silver_article_id", BigInteger, nullable=False),
+    Column("image_url", Text, nullable=False),
+    Column("image_role", String(20), nullable=False, server_default=text("'hero'")),
+    Column("ordinal", Integer, nullable=False, server_default=text("0")),
+    Column("s3_bucket", String(100)),
+    Column("s3_key", Text),
+    Column("content_type", String(50)),
+    Column("file_size_bytes", Integer),
+    Column("width", Integer),
+    Column("height", Integer),
+    Column("content_hash", String(64)),
+    Column("download_status", String(20), nullable=False, server_default=text("'pending'")),
+    Column("download_error", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
+    UniqueConstraint("silver_article_id", "image_url", name="uq_silver_article_image"),
+    Index("idx_silver_images_article", "silver_article_id"),
+    Index("idx_silver_images_status", "download_status"),
+    Index("idx_silver_images_hash", "content_hash"),
+    schema="silver",
+)
