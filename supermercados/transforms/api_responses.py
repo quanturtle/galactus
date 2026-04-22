@@ -4,6 +4,7 @@ from the_scraper import db
 from the_scraper.html_cleaner import decompress
 
 from supermercados.parsers import API_PARSERS, parse_api_response
+from supermercados.product import Product
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +26,13 @@ def _build_query(source: str | None) -> tuple[str, dict]:
     return query, params
 
 
-def _parse_row(row) -> list[dict]:
+def _parse_row(row) -> list[Product]:
     response_text = decompress(bytes(row["response_blob"]))
     results = parse_api_response(row["source"], response_text)
-    for r in results:
-        r["source"] = row["source"]
-        r["scraped_at"] = row["fetched_at"]
-    return results
+    return [
+        Product.model_validate({**r, "source": row["source"], "scraped_at": row["fetched_at"]})
+        for r in results
+    ]
 
 
 async def _mark_parsed(rows) -> None:
@@ -41,16 +42,16 @@ async def _mark_parsed(rows) -> None:
     )
 
 
-def _chunk_silver_rows(rows) -> tuple[list[dict], int]:
-    silver_rows: list[dict] = []
+def _chunk_products(rows) -> tuple[list[Product], int]:
+    products: list[Product] = []
     skipped = 0
     for row in rows:
         parsed = _parse_row(row)
         if parsed:
-            silver_rows.extend(parsed)
+            products.extend(parsed)
         else:
             skipped += 1
-    return silver_rows, skipped
+    return products, skipped
 
 
 async def run(source: str | None = None) -> int:
@@ -63,11 +64,10 @@ async def run(source: str | None = None) -> int:
         if not rows:
             break
 
-        silver_rows, skipped = _chunk_silver_rows(rows)
-        if silver_rows:
-            await db.bulk_insert("silver.products", silver_rows)
+        products, skipped = _chunk_products(rows)
+        inserted = await Product.persist_many(products)
         await _mark_parsed(rows)
-        total_products += len(silver_rows)
+        total_products += inserted
         total_skipped += skipped
         total_rows += len(rows)
         logger.info(

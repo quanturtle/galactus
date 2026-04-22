@@ -447,6 +447,7 @@ dependencies = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
 ]
@@ -462,6 +463,7 @@ requires-dist = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "psycopg", extras = ["binary", "pool"] },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "ruff", marker = "extra == 'dev'" },

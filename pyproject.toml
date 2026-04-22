@@ -9,6 +9,7 @@ dependencies = [
     "lxml",
     "pyyaml",
     "psycopg[binary,pool]",
+    "pydantic",
     "pydantic-settings",
 ]
 

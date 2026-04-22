@@ -3,8 +3,8 @@ import logging
 from the_scraper import db
 from the_scraper.html_cleaner import decompress
 
+from noticias.article import Article
 from noticias.parsers import HTML_PARSERS, parse_snapshot
-from noticias.transforms._common import flush_articles_chunk
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +44,15 @@ async def _mark_parsed(rows) -> None:
 
 async def _process_chunk(rows) -> tuple[int, int]:
     skipped = 0
-    chunk_articles: list[dict] = []
+    articles: list[Article] = []
     for row in rows:
         parsed = _parse_row(row)
         if parsed:
-            chunk_articles.append(parsed)
+            articles.append(Article.model_validate(parsed))
         else:
             skipped += 1
-    articles = await flush_articles_chunk(chunk_articles)
-    return articles, skipped
+    inserted = await Article.persist_many(articles)
+    return inserted, skipped
 
 
 async def run(source: str | None = None) -> int:
