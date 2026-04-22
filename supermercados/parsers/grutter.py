@@ -3,6 +3,8 @@ import json
 
 from the_scraper.parsing import safe_int
 
+SOURCE = "grutter"
+
 
 def parse(response_text: str) -> list[dict]:
     """Parse a Grutter API response page into silver-ready product dicts."""

@@ -18,10 +18,10 @@ class ABCColorScraper(ApiScraper):
         self.sections = self.cfg.get("sections", [])
 
     def _build_params(self, page_index: int) -> dict:
-        raise NotImplementedError
+        return {}
 
     def _extract_total_pages(self, response) -> int:
-        raise NotImplementedError
+        return 0
 
     async def scrape(self) -> None:
         """Per-section pagination — override scrape entirely."""

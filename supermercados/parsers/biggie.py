@@ -2,6 +2,8 @@ import json
 
 from the_scraper.parsing import safe_int
 
+SOURCE = "biggie"
+
 
 def parse(response_text: str) -> list[dict]:
     """Parse a Biggie API response page into silver-ready product dicts."""

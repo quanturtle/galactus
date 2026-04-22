@@ -1,25 +1,23 @@
 import json
+import re
 
 from bs4 import BeautifulSoup
 from the_scraper.parsing import build_image_urls
 
-BASE_URL = "https://www.lanacion.com.py"
+SOURCE = "lanacion"
+
+_FUSION_RE = re.compile(r"Fusion\.globalContent\s*=\s*(\{.*?\});", re.DOTALL)
 
 
-def parse(response_text: str) -> list[dict]:
-    data = json.loads(response_text)
-    elements = data.get("content_elements", [])
-    results = []
+def parse(html: str, url: str) -> dict | None:
+    m = _FUSION_RE.search(html)
+    if not m:
+        return None
+    try:
+        gc = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return None
 
-    for gc in elements:
-        article = _parse_article(gc)
-        if article:
-            results.append(article)
-
-    return results
-
-
-def _parse_article(gc: dict) -> dict | None:
     headlines = gc.get("headlines", {})
     title = headlines.get("basic")
     if not title:
@@ -41,19 +39,14 @@ def _parse_article(gc: dict) -> dict | None:
         elif el.get("type") == "image" and el.get("url"):
             body_images.append(el["url"])
 
-    body = "\n\n".join(body_parts) if body_parts else None
-    if not body:
-        body = gc.get("description", {}).get("basic")
-
-    canonical = gc.get("canonical_url", "")
-    source_url = BASE_URL + canonical if canonical.startswith("/") else canonical
+    body = "\n\n".join(body_parts) if body_parts else gc.get("description", {}).get("basic")
 
     hero = promo.get("url")
     all_images = build_image_urls(hero, body_images)
 
     return {
         "source": "lanacion",
-        "source_url": source_url,
+        "source_url": url,
         "title": title,
         "subtitle": subheadlines.get("basic"),
         "body": body,
@@ -62,5 +55,4 @@ def _parse_article(gc: dict) -> dict | None:
         "section": primary_section.get("name"),
         "image_url": hero,
         "image_urls": json.dumps(all_images) if all_images else None,
-        "raw_data": json.dumps(gc, ensure_ascii=False),
     }

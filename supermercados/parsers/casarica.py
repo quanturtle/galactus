@@ -1,5 +1,7 @@
 from the_scraper.parsing import extract_var_data, safe_int
 
+SOURCE = "casarica"
+
 
 def parse(html: str, url: str) -> dict | None:
     data = extract_var_data(html)

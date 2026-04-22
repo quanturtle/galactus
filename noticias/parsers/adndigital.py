@@ -3,6 +3,8 @@ import json
 from bs4 import BeautifulSoup
 from the_scraper.parsing import build_image_urls, extract_body_images, extract_json_ld, meta
 
+SOURCE = "adndigital"
+
 
 def parse(html: str, url: str) -> dict | None:
     soup = BeautifulSoup(html, "lxml")

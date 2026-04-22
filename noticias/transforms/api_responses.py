@@ -3,7 +3,7 @@ import logging
 from the_scraper import db
 from the_scraper.html_cleaner import decompress
 
-from noticias.parsers import parse_api_response
+from noticias.parsers import API_PARSERS, parse_api_response
 from noticias.transforms._common import _upsert_article
 
 logger = logging.getLogger(__name__)
@@ -16,14 +16,15 @@ async def run(source: str | None = None) -> int:
         SELECT id, source, endpoint, response_blob, fetched_at
         FROM bronze.api_responses
         WHERE parsed_at IS NULL
+          AND source = ANY(%(sources)s)
     """
-    params = {}
+    params: dict = {"sources": list(API_PARSERS)}
     if source:
         query += " AND source = %(source)s"
         params["source"] = source
     query += " ORDER BY id"
 
-    rows = await db.execute(query, params or None)
+    rows = await db.execute(query, params)
 
     if not rows:
         logger.info("No unparsed API responses found")
