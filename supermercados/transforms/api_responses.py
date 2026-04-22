@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 500
 
 
-async def run(source: str | None = None):
+async def run(source: str | None = None) -> int:
     """Parse unparsed API responses and insert into silver.products."""
     query = """
         SELECT id, source, endpoint, response_blob, fetched_at
@@ -27,7 +27,7 @@ async def run(source: str | None = None):
 
     if not rows:
         logger.info("No unparsed API responses found")
-        return
+        return 0
 
     logger.info("Processing %d unparsed API responses", len(rows))
 
@@ -65,6 +65,7 @@ async def run(source: str | None = None):
         "Done — %d products inserted into silver, %d API responses skipped",
         total_products, skipped,
     )
+    return total_products
 
 
 async def _flush(silver_rows: list[dict], parsed_ids: list[int]):

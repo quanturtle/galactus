@@ -3,15 +3,15 @@ import logging
 from the_scraper import db
 from the_scraper.html_cleaner import decompress
 
-from supermercados.parsers import parse_snapshot
+from noticias.parsers import parse_snapshot
+from noticias.transforms._common import _upsert_article
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 500
+BATCH_SIZE = 1000
 
 
 async def run(source: str | None = None) -> int:
-    """Parse unparsed snapshots and insert into silver.products."""
     query = """
         SELECT id, source, url, html_blob, fetched_at
         FROM bronze.snapshots
@@ -31,47 +31,43 @@ async def run(source: str | None = None) -> int:
 
     logger.info("Processing %d unparsed snapshots", len(rows))
 
-    silver_rows = []
-    parsed_ids = []
-    inserted = 0
+    count = 0
+    last_commit = 0
     skipped = 0
+    parsed_ids: list[int] = []
 
     for row in rows:
         html = decompress(bytes(row["html_blob"]))
-        result = parse_snapshot(row["source"], html, row["url"])
-
-        if result is None:
-            skipped += 1
+        try:
+            article_dict = parse_snapshot(row["source"], html, row["url"])
+        except Exception:
+            logger.exception("Failed to parse snapshot %d (%s)", row["id"], row["url"])
             parsed_ids.append(row["id"])
+            skipped += 1
             continue
 
-        result["source"] = row["source"]
-        result["scraped_at"] = row["fetched_at"]
-        silver_rows.append(result)
+        if article_dict:
+            await _upsert_article(article_dict)
+            count += 1
+        else:
+            skipped += 1
+
         parsed_ids.append(row["id"])
 
-        if len(silver_rows) >= BATCH_SIZE:
-            inserted += len(silver_rows)
-            await _flush(silver_rows, parsed_ids)
-            silver_rows = []
+        if count - last_commit >= BATCH_SIZE:
+            await db.execute(
+                "UPDATE bronze.snapshots SET parsed_at = NOW() WHERE id = ANY(%s)",
+                [parsed_ids],
+            )
+            logger.info("Snapshots: parsed %d, inserted %d into silver", len(parsed_ids), count)
             parsed_ids = []
+            last_commit = count
 
-    if silver_rows or parsed_ids:
-        inserted += len(silver_rows)
-        await _flush(silver_rows, parsed_ids)
-
-    logger.info(
-        "Done — %d products inserted into silver, %d snapshots skipped",
-        inserted, skipped,
-    )
-    return inserted
-
-
-async def _flush(silver_rows: list[dict], parsed_ids: list[int]):
-    if silver_rows:
-        await db.bulk_insert("silver.products", silver_rows)
     if parsed_ids:
         await db.execute(
             "UPDATE bronze.snapshots SET parsed_at = NOW() WHERE id = ANY(%s)",
             [parsed_ids],
         )
+
+    logger.info("Snapshots: done — %d silver articles from %d snapshots, %d skipped", count, len(rows), skipped)
+    return count

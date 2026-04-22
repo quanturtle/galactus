@@ -22,15 +22,15 @@ async def cmd_scrape(sources: list[str]):
 
 
 async def cmd_transform(sources: list[str] | None):
-    from noticias.pipeline.bronze_to_silver import run
+    from noticias.transforms.bronze_to_silver import run
 
+    total = 0
     if sources:
-        total = 0
         for source in sources:
             total += await run(source=source)
     else:
         total = await run()
-    logger.info("%d articles inserted into silver", total)
+    logger.info("%d rows inserted into silver", total)
 
 
 async def cmd_run_all(sources: list[str]):
@@ -51,7 +51,7 @@ async def main():
         help="Sources to scrape (default: all)",
     )
 
-    p_transform = sub.add_parser("transform", help="Parse bronze raw data -> silver articles")
+    p_transform = sub.add_parser("transform", help="Parse bronze raw data -> silver")
     p_transform.add_argument(
         "--source",
         choices=list(SCRAPERS.keys()),

@@ -1,11 +1,14 @@
 import argparse
 import asyncio
+import logging
 
+from supermercados.config import settings
 from the_scraper import db
 from the_scraper.logging import setup_logging
 from supermercados.scrapers import SCRAPERS
 
-setup_logging("INFO")
+setup_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 
 async def cmd_scrape(sources: list[str]):
@@ -21,11 +24,13 @@ async def cmd_scrape(sources: list[str]):
 async def cmd_transform(sources: list[str] | None):
     from supermercados.transforms.bronze_to_silver import run
 
+    total = 0
     if sources:
         for source in sources:
-            await run(source)
+            total += await run(source=source)
     else:
-        await run()
+        total = await run()
+    logger.info("%d rows inserted into silver", total)
 
 
 async def cmd_run_all(sources: list[str]):
@@ -46,7 +51,7 @@ async def main():
         help="Sources to scrape (default: all)",
     )
 
-    p_transform = sub.add_parser("transform", help="Parse bronze raw data -> silver products")
+    p_transform = sub.add_parser("transform", help="Parse bronze raw data -> silver")
     p_transform.add_argument(
         "--source",
         choices=list(SCRAPERS.keys()),

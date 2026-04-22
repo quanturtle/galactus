@@ -2,8 +2,8 @@
 
 import logging
 
-from supermercados.parsers import API_PARSERS, HTML_PARSERS
-from supermercados.transforms import api_responses, snapshots
+from noticias.parsers import API_PARSERS, HTML_PARSERS
+from noticias.transforms import api_responses, snapshots
 
 logger = logging.getLogger(__name__)
 
