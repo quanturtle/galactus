@@ -1,7 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
-from the_scraper.parsing import safe_int
+from galactus.parsing import safe_int
 
 SOURCE = "superseis"
 

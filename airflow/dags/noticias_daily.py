@@ -34,6 +34,6 @@ with DAG(
         BashOperator(
             task_id=f"run_{source}",
             bash_command=(
-                f"cd /opt/the_scraper && python -m noticias.main run-all --source {source}"
+                f"cd /opt/galactus && python -m noticias.main run-all --source {source}"
             ),
         )

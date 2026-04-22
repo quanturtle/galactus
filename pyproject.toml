@@ -1,5 +1,5 @@
 [project]
-name = "the_scraper"
+name = "galactus"
 version = "0.1.0"
 description = "Reusable async web scraper framework with BFS crawling and API pagination"
 requires-python = ">=3.12"

@@ -6,7 +6,7 @@ classes implement those protocols against the shared async connection pool.
 
 from typing import Protocol, runtime_checkable
 
-from the_scraper import db
+from galactus import db
 
 
 # ── Protocols ────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
-"""the_scraper — Reusable async web scraper framework."""
+"""galactus — Reusable async web scraper framework."""
 
-from the_scraper.html_cleaner import HtmlCleaner, compress, compute_content_hash, decompress
-from the_scraper.parsing import (
+from galactus.html_cleaner import HtmlCleaner, compress, compute_content_hash, decompress
+from galactus.parsing import (
     IMAGE_EXCLUDE,
     build_image_urls,
     extract_body_images,
@@ -10,8 +10,8 @@ from the_scraper.parsing import (
     meta,
     safe_int,
 )
-from the_scraper.scrapers import ApiScraper, BaseScraper, BfsScraper
-from the_scraper.storage import ApiStorage, SnapshotStorage
+from galactus.scrapers import ApiScraper, BaseScraper, BfsScraper
+from galactus.storage import ApiStorage, SnapshotStorage
 
 __all__ = [
     "BaseScraper",

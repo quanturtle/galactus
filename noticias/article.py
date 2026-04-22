@@ -4,7 +4,7 @@ from dateutil import parser as dateparser
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from the_scraper import db
+from galactus import db
 
 SILVER_ARTICLE_UPDATE_COLUMNS = (
     "title", "subtitle", "body", "author", "published_at",

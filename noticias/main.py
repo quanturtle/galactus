@@ -3,8 +3,8 @@ import asyncio
 import logging
 
 from noticias.config import settings
-from the_scraper import db
-from the_scraper.logging import setup_logging
+from galactus import db
+from galactus.logging import setup_logging
 from noticias.scrapers import SCRAPERS
 
 setup_logging(settings.log_level)

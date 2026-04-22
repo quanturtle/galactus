@@ -6,7 +6,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 USER airflow
-WORKDIR /opt/the_scraper
+WORKDIR /opt/galactus
 
 COPY --chown=airflow:root pyproject.toml ./
 COPY --chown=airflow:root src ./src

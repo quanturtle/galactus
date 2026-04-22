@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from schema import metadata  # noqa: E402
 
-from the_scraper.db import DEFAULT_DATABASE_URL  # noqa: E402
+from galactus.db import DEFAULT_DATABASE_URL  # noqa: E402
 
 config = context.config
 

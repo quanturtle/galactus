@@ -6,8 +6,8 @@ from urllib.parse import urlencode
 
 import httpx
 
-from the_scraper.html_cleaner import compress
-from the_scraper.storage import ApiStorage
+from galactus.html_cleaner import compress
+from galactus.storage import ApiStorage
 
 from .base import BaseScraper
 

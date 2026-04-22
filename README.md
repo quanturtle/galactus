@@ -1,6 +1,6 @@
-# the_scraper
+# galactus
 
-Async web scraper framework for structured data collection from Paraguayan news sites and supermarkets. Built on a reusable core (`the_scraper`) that powers two applications: **noticias** (10 news sources) and **supermercados** (5 supermarket chains).
+Async web scraper framework for structured data collection from Paraguayan news sites and supermarkets. Built on a reusable core (`galactus`) that powers two applications: **noticias** (10 news sources) and **supermercados** (5 supermarket chains).
 
 ## Quick start
 
@@ -29,8 +29,8 @@ python -m noticias.main run-all --source lanacion
 ## Project structure
 
 ```
-the_scraper/
-├── src/the_scraper/           # Reusable framework
+galactus/
+├── src/galactus/              # Reusable framework
 │   ├── scrapers/
 │   │   ├── base.py            # BaseScraper (async HTTP, retry, concurrency)
 │   │   ├── bfs.py             # BfsScraper (breadth-first HTML crawler)
@@ -70,7 +70,7 @@ the_scraper/
 
 ```mermaid
 flowchart LR
-    subgraph Framework["Framework — the_scraper"]
+    subgraph Framework["Framework — galactus"]
         BASE[BaseScraper<br/><i>httpx async, retry, concurrency</i>]
         BFS[BfsScraper<br/><i>breadth-first HTML crawler</i>]
         API[ApiScraper<br/><i>paginated API fetcher</i>]
@@ -190,9 +190,9 @@ Wire the shared storage implementations and your config directory into the frame
 
 ```python
 from pathlib import Path
-from the_scraper.scrapers.bfs import BfsScraper as _BfsScraper
-from the_scraper.scrapers.api import ApiScraper as _ApiScraper
-from the_scraper.storage import PsycopgApiStorage, PsycopgSnapshotStorage
+from galactus.scrapers.bfs import BfsScraper as _BfsScraper
+from galactus.scrapers.api import ApiScraper as _ApiScraper
+from galactus.storage import PsycopgApiStorage, PsycopgSnapshotStorage
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "configs"
 
@@ -326,7 +326,7 @@ The `airflow-init` service seeds the metadata DB and admin user, then exits. Sch
 If you already have a `pgdata` volume from an earlier setup, the new `08-airflow-db.sql` init script won't run (Postgres only runs init scripts on a fresh data dir). Create the database once manually:
 
 ```bash
-docker compose exec db psql -U the_scraper -c "CREATE DATABASE airflow;"
+docker compose exec db psql -U galactus -c "CREATE DATABASE airflow;"
 ```
 
 ### DAGs
@@ -341,15 +341,15 @@ Both DAGs ship paused. Unpause them from the UI once you've verified a manual tr
 Each task shells out to the CLI from inside the Airflow image:
 
 ```bash
-cd /opt/the_scraper && python -m noticias.main run-all --source <name>
-cd /opt/the_scraper && python -m supermercados.main run-all --source <name>
+cd /opt/galactus && python -m noticias.main run-all --source <name>
+cd /opt/galactus && python -m supermercados.main run-all --source <name>
 ```
 
 `run-all` scrapes bronze and transforms to silver in a single task. Retries are 2 with 15-minute back-off and a 2-hour execution timeout.
 
 ### Rebuilding after source changes
 
-The Airflow image copies `src/`, `noticias/`, and `supermercados/` into `/opt/the_scraper` at build time (see `airflow/Dockerfile`) — it does not mount them. After editing scraper/parser/transform code, rebuild:
+The Airflow image copies `src/`, `noticias/`, and `supermercados/` into `/opt/galactus` at build time (see `airflow/Dockerfile`) — it does not mount them. After editing scraper/parser/transform code, rebuild:
 
 ```bash
 docker compose up -d --build

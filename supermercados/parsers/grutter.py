@@ -1,7 +1,7 @@
 import html
 import json
 
-from the_scraper.parsing import safe_int
+from galactus.parsing import safe_int
 
 SOURCE = "grutter"
 

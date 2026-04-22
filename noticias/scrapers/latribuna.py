@@ -3,7 +3,7 @@ import logging
 
 import httpx
 
-from the_scraper.html_cleaner import compress
+from galactus.html_cleaner import compress
 
 from noticias.scrapers._base import ApiScraper
 

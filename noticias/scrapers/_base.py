@@ -3,10 +3,10 @@
 import re
 from pathlib import Path
 
-from the_scraper.html_cleaner import HtmlCleaner
-from the_scraper.scrapers.api import ApiScraper as _ApiScraper
-from the_scraper.scrapers.bfs import BfsScraper as _BfsScraper
-from the_scraper.storage import PsycopgApiStorage, PsycopgSnapshotStorage
+from galactus.html_cleaner import HtmlCleaner
+from galactus.scrapers.api import ApiScraper as _ApiScraper
+from galactus.scrapers.bfs import BfsScraper as _BfsScraper
+from galactus.storage import PsycopgApiStorage, PsycopgSnapshotStorage
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "configs"
 

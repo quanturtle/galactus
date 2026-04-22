@@ -1,7 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
-from the_scraper.parsing import IMAGE_EXCLUDE, build_image_urls
+from galactus.parsing import IMAGE_EXCLUDE, build_image_urls
 
 SOURCE = "megacadena"
 

@@ -4,7 +4,7 @@ x-airflow-common: &airflow-common
     dockerfile: airflow/Dockerfile
   env_file: .env
   environment:
-    DATABASE_URL: postgresql://the_scraper:the_scraper_secret@db:5432/the_scraper
+    DATABASE_URL: postgresql://galactus:galactus_secret@db:5432/galactus
     AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
   volumes:
     - ./airflow/dags:/opt/airflow/dags
@@ -25,7 +25,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-the_scraper}", "-d", "${POSTGRES_DB:-the_scraper}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-galactus}", "-d", "${POSTGRES_DB:-galactus}"]
       interval: 10s
       timeout: 5s
       retries: 5

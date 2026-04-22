@@ -1,7 +1,7 @@
 import logging
 
-from the_scraper import db
-from the_scraper.html_cleaner import decompress
+from galactus import db
+from galactus.html_cleaner import decompress
 
 from noticias.article import Article
 from noticias.config import settings

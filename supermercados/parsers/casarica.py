@@ -1,4 +1,4 @@
-from the_scraper.parsing import extract_var_data, safe_int
+from galactus.parsing import extract_var_data, safe_int
 
 SOURCE = "casarica"
 

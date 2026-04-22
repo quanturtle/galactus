@@ -1,7 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
-from the_scraper.parsing import build_image_urls, extract_body_images, extract_json_ld, meta
+from galactus.parsing import build_image_urls, extract_body_images, extract_json_ld, meta
 
 SOURCE = "elnacional"
 

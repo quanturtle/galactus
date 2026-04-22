@@ -5,9 +5,9 @@ from collections import deque
 from pathlib import Path
 from urllib.parse import urlparse
 
-from the_scraper.html_cleaner import HtmlCleaner, compress, compute_content_hash
-from the_scraper.storage import SnapshotStorage
-from the_scraper.urls import extract_same_domain_links, normalize, should_ignore
+from galactus.html_cleaner import HtmlCleaner, compress, compute_content_hash
+from galactus.storage import SnapshotStorage
+from galactus.urls import extract_same_domain_links, normalize, should_ignore
 
 from .base import BaseScraper
 

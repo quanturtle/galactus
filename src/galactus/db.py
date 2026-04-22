@@ -12,7 +12,7 @@ from psycopg_pool import AsyncConnectionPool
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DATABASE_URL = "postgresql://the_scraper:the_scraper_secret@localhost:5432/the_scraper"
+DEFAULT_DATABASE_URL = "postgresql://galactus:galactus_secret@localhost:5432/galactus"
 
 _pool: AsyncConnectionPool | None = None
 

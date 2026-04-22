@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from psycopg import AsyncConnection
 from pydantic import BaseModel, ConfigDict, Field
 
-from the_scraper import db
+from galactus import db
 
 SILVER_PRODUCT_UPDATE_COLUMNS = (
     "name", "description", "price", "sku", "updated_at",

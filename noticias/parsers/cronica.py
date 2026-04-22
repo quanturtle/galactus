@@ -1,7 +1,7 @@
 import json
 
 from bs4 import BeautifulSoup
-from the_scraper.parsing import build_image_urls, extract_body_images, meta
+from galactus.parsing import build_image_urls, extract_body_images, meta
 
 SOURCE = "cronica"
 
