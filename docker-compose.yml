@@ -1,3 +1,19 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://the_scraper:the_scraper_secret@db:5432/the_scraper
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - airflow_logs:/opt/airflow/logs
+  depends_on:
+    db:
+      condition: service_healthy
+  user: "${AIRFLOW_UID:-50000}:0"
+
 services:
   db:
     image: postgres:16-alpine
@@ -8,19 +24,53 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-the_scraper}", "-d", "${POSTGRES_DB:-the_scraper}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # minio:
-  #   image: minio/minio:latest
-  #   command: server /data --console-address ":9001"
-  #   environment:
-  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
-  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
-  #   ports:
-  #     - "9000:9000"
-  #     - "9001:9001"
-  #   volumes:
-  #     - minio_data:/data
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" \
+          --password "${_AIRFLOW_WWW_USER_PASSWORD:-admin}" \
+          --firstname Admin --lastname User --role Admin --email admin@example.com \
+          || true
+    restart: "no"
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   pgdata:
-  # minio_data:
+  airflow_logs:

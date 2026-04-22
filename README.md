@@ -272,3 +272,55 @@ class MyNewsSiteScraper(ApiScraper):
 ### 3. Add a transform
 
 Write a parser in `{project}/transforms/` or `{project}/pipeline/` that reads from the bronze table, extracts structured fields, and inserts into the silver table.
+
+## Orchestration (Airflow)
+
+Daily per-source runs are orchestrated by Airflow, packaged alongside Postgres in the same `docker-compose.yml`.
+
+### First-time setup
+
+```bash
+# 1. Copy the env template and fill in the two empty secrets
+cp .env.example .env
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # -> AIRFLOW__CORE__FERNET_KEY
+python -c "import secrets; print(secrets.token_hex(32))"                                    # -> AIRFLOW__WEBSERVER__SECRET_KEY
+
+# 2. Build and start everything
+docker compose up -d --build
+
+# 3. Open the UI
+open http://localhost:8080   # login: admin / admin
+```
+
+The `airflow-init` service seeds the metadata DB and admin user, then exits. Scheduler and webserver keep running.
+
+If you already have a `pgdata` volume from an earlier setup, the new `08-airflow-db.sql` init script won't run (Postgres only runs init scripts on a fresh data dir). Create the database once manually:
+
+```bash
+docker compose exec db psql -U the_scraper -c "CREATE DATABASE airflow;"
+```
+
+### DAGs
+
+| DAG | Schedule (UTC) | Tasks |
+|-----|----------------|-------|
+| `noticias_daily` | `0 6 * * *` (06:00) | one `run_<source>` BashOperator per news source |
+| `supermercados_daily` | `30 6 * * *` (06:30) | one `run_<source>` BashOperator per supermarket |
+
+Each task shells out to the existing CLI:
+
+```bash
+python -m noticias.main run-all --source <name>
+python -m supermercados.main run-all --source <name>
+```
+
+`run-all` scrapes bronze and transforms to silver in a single task. Retries are configured to 2 with 15-minute back-off. The two DAGs are offset by 30 minutes to avoid simultaneous DB pressure.
+
+### Adding or removing a source in orchestration
+
+Edit the source list at the top of the relevant DAG file:
+
+- `airflow/dags/noticias_daily.py`
+- `airflow/dags/supermercados_daily.py`
+
+The scheduler picks up changes on its next DAG-file scan (no restart needed).

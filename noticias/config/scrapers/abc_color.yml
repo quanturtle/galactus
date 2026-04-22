@@ -1,4 +1,4 @@
-source: abc
+source: abc_color
 base_url: https://www.abc.com.py
 api_endpoint: /pf/api/v3/content/fetch/sections-api
 page_size: 100

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class ABCColorScraper(ApiScraper):
     """ABC Color scraper — Arc Publishing CMS with per-section pagination."""
 
-    source = "abc"
+    source = "abc_color"
 
     def __init__(self):
         super().__init__()

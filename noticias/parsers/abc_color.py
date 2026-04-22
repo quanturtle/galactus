@@ -3,7 +3,7 @@ import json
 from bs4 import BeautifulSoup
 from the_scraper.parsing import build_image_urls
 
-SOURCE = "abc"
+SOURCE = "abc_color"
 
 BASE_URL = "https://www.abc.com.py"
 
@@ -50,7 +50,7 @@ def _parse_article(gc: dict) -> dict | None:
     all_images = build_image_urls(hero, body_images)
 
     return {
-        "source": "abc",
+        "source": "abc_color",
         "source_url": source_url,
         "title": title,
         "subtitle": subheadlines.get("basic"),

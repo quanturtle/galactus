@@ -31,7 +31,8 @@ class LaTribunaScraper(ApiScraper):
     async def scrape(self) -> None:
         """Open-ended pagination — override scrape entirely."""
         already_fetched = await self.storage.load_today_endpoints(self.source)
-        total_stored = 0
+        # Count pages already stored today so max_pages caps per-day, not per-invocation.
+        total_stored = len(already_fetched)
         total_skipped = 0
         page = 0
 
