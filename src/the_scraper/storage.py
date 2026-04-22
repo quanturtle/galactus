@@ -38,8 +38,8 @@ class ApiStorage(Protocol):
 class SnapshotStorage(Protocol):
     """Protocol for storing BFS crawler HTML snapshots."""
 
-    async def load_today_urls(self, source: str) -> set[str]:
-        """Return URLs already snapshotted today for this source."""
+    async def load_today_urls(self, source: str, urls: list[str]) -> set[str]:
+        """Return the subset of `urls` already snapshotted today for this source."""
         ...
 
     async def store_snapshot(
@@ -48,8 +48,8 @@ class SnapshotStorage(Protocol):
         url: str,
         html_blob: bytes,
         content_hash: str | None = None,
-    ) -> bool:
-        """Store a snapshot. Return True if stored, False if skipped."""
+    ) -> None:
+        """Queue a snapshot for insertion. Auto-flushes once the buffer fills."""
         ...
 
     async def get_content_hashes(
@@ -98,26 +98,32 @@ class PsycopgApiStorage:
 
 class PsycopgSnapshotStorage:
 
-    async def load_today_urls(self, source: str) -> set[str]:
+    def __init__(self):
+        self._pending: list[dict] = []
+        self.inserted = 0
+        self.hash_skipped = 0
+
+    async def load_today_urls(self, source: str, urls: list[str]) -> set[str]:
+        if not urls:
+            return set()
         rows = await db.execute(
             "SELECT url FROM bronze.snapshots "
-            "WHERE source = %(source)s AND fetch_date = CURRENT_DATE",
-            {"source": source},
+            "WHERE source = %(source)s "
+            "AND fetch_date = CURRENT_DATE "
+            "AND url = ANY(%(urls)s)",
+            {"source": source, "urls": urls},
         )
         return {r["url"] for r in rows}
 
     async def store_snapshot(
         self, source: str, url: str, html_blob: bytes, content_hash: str | None = None,
-    ) -> bool:
-        if content_hash:
-            existing = await self.get_content_hashes(source, [url])
-            if existing.get(url) == content_hash:
-                return False
+    ) -> None:
         row = {"source": source, "url": url, "html_blob": html_blob}
         if content_hash:
             row["content_hash"] = content_hash
-        await db.bulk_insert("bronze.snapshots", [row])
-        return True
+        self._pending.append(row)
+        if len(self._pending) >= 50:
+            await self.flush()
 
     async def get_content_hashes(self, source: str, urls: list[str]) -> dict[str, str]:
         if not urls:
@@ -133,4 +139,18 @@ class PsycopgSnapshotStorage:
         return {r["url"]: r["content_hash"] for r in rows}
 
     async def flush(self) -> None:
-        pass  # each store_snapshot auto-commits via bulk_insert
+        if not self._pending:
+            return
+        source = self._pending[0]["source"]
+        hash_urls = [r["url"] for r in self._pending if r.get("content_hash")]
+        existing = await self.get_content_hashes(source, hash_urls) if hash_urls else {}
+        to_insert = [
+            r for r in self._pending
+            if not r.get("content_hash") or existing.get(r["url"]) != r["content_hash"]
+        ]
+        skipped = len(self._pending) - len(to_insert)
+        if to_insert:
+            await db.bulk_insert("bronze.snapshots", to_insert)
+        self.inserted += len(to_insert)
+        self.hash_skipped += skipped
+        self._pending = []

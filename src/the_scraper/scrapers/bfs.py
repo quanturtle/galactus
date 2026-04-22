@@ -78,23 +78,17 @@ class BfsScraper(BaseScraper):
 
     async def scrape(self) -> None:
         seed = normalize(self.home_url)
-        already_snapshotted = await self.storage.load_today_urls(self.source)
 
         target_queue: deque[str] = deque()
         discovery_queue: deque[str] = deque([seed])
-        seen: set[str] = {seed} | already_snapshotted
+        seen: set[str] = {seed}
         visited: set[str] = set()
-        total_stored = 0
-        total_skipped = 0
+        total_day_skipped = 0
         total_errors = 0
 
         target_re = re.compile(self.scrape_pattern)
         ignore_res = [re.compile(p) for p in self.ignore_patterns]
         home_domain = urlparse(self.home_url).netloc
-
-        logger.info(
-            "%s: %d URLs already snapshotted today", self.source, len(already_snapshotted),
-        )
 
         while (target_queue or discovery_queue) and len(visited) < self.max_pages:
             batch_urls: list[str] = []
@@ -106,6 +100,13 @@ class BfsScraper(BaseScraper):
 
             if not batch_urls:
                 break
+
+            already_today = await self.storage.load_today_urls(self.source, batch_urls)
+            if already_today:
+                total_day_skipped += len(already_today)
+                batch_urls = [u for u in batch_urls if u not in already_today]
+            if not batch_urls:
+                continue
 
             results = await asyncio.gather(
                 *(self._process_url(u, target_re, home_domain) for u in batch_urls),
@@ -129,11 +130,7 @@ class BfsScraper(BaseScraper):
                             discovery_queue.append(normalized)
 
                 if snapshot is not None:
-                    stored = await self.storage.store_snapshot(**snapshot)
-                    if stored:
-                        total_stored += 1
-                    else:
-                        total_skipped += 1
+                    await self.storage.store_snapshot(**snapshot)
 
             await self.storage.flush()
 
@@ -142,13 +139,14 @@ class BfsScraper(BaseScraper):
 
             queued = len(target_queue) + len(discovery_queue)
             logger.info(
-                "%s: visited %d, queued %d (target: %d), "
-                "stored %d, skipped %d, errors %d",
-                self.source, len(visited), queued, len(target_queue),
-                total_stored, total_skipped, total_errors,
+                "%s: visited %d, queued %d (target: %d), errors %d",
+                self.source, len(visited), queued, len(target_queue), total_errors,
             )
 
         logger.info(
-            "%s: BFS done — %d visited, %d stored, %d skipped, %d errors",
-            self.source, len(visited), total_stored, total_skipped, total_errors,
+            "%s: BFS done — %d visited, %d stored, %d hash-skipped, "
+            "%d already-today-skipped, %d errors",
+            self.source, len(visited),
+            self.storage.inserted, self.storage.hash_skipped,
+            total_day_skipped, total_errors,
         )

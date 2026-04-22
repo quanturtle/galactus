@@ -8,67 +8,76 @@ from noticias.transforms._common import _upsert_article
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 1000
+CHUNK = 500
 
 
-async def run(source: str | None = None) -> int:
+def _build_query(source: str | None) -> tuple[str, dict]:
     query = """
         SELECT id, source, url, html_blob, fetched_at
         FROM bronze.snapshots
         WHERE parsed_at IS NULL
           AND source = ANY(%(sources)s)
     """
-    params: dict = {"sources": list(HTML_PARSERS)}
+    params: dict = {"sources": list(HTML_PARSERS), "chunk": CHUNK}
     if source:
         query += " AND source = %(source)s"
         params["source"] = source
-    query += " ORDER BY id"
+    query += " ORDER BY id LIMIT %(chunk)s"
+    return query, params
 
-    rows = await db.execute(query, params)
 
-    if not rows:
-        logger.info("No unparsed snapshots found")
-        return 0
+def _parse_row(row) -> dict | None:
+    html = decompress(bytes(row["html_blob"]))
+    try:
+        return parse_snapshot(row["source"], html, row["url"])
+    except Exception:
+        logger.exception("Failed to parse snapshot %d (%s)", row["id"], row["url"])
+        return None
 
-    logger.info("Processing %d unparsed snapshots", len(rows))
 
-    count = 0
-    last_commit = 0
-    skipped = 0
-    parsed_ids: list[int] = []
+async def _mark_parsed(rows) -> None:
+    await db.execute(
+        "UPDATE bronze.snapshots SET parsed_at = NOW() WHERE id = ANY(%s)",
+        [[r["id"] for r in rows]],
+    )
 
+
+async def _process_chunk(rows) -> tuple[int, int]:
+    articles = skipped = 0
     for row in rows:
-        html = decompress(bytes(row["html_blob"]))
-        try:
-            article_dict = parse_snapshot(row["source"], html, row["url"])
-        except Exception:
-            logger.exception("Failed to parse snapshot %d (%s)", row["id"], row["url"])
-            parsed_ids.append(row["id"])
-            skipped += 1
-            continue
-
-        if article_dict:
-            await _upsert_article(article_dict)
-            count += 1
+        parsed = _parse_row(row)
+        if parsed:
+            await _upsert_article(parsed)
+            articles += 1
         else:
             skipped += 1
+    return articles, skipped
 
-        parsed_ids.append(row["id"])
 
-        if count - last_commit >= BATCH_SIZE:
-            await db.execute(
-                "UPDATE bronze.snapshots SET parsed_at = NOW() WHERE id = ANY(%s)",
-                [parsed_ids],
-            )
-            logger.info("Snapshots: parsed %d, inserted %d into silver", len(parsed_ids), count)
-            parsed_ids = []
-            last_commit = count
+async def run(source: str | None = None) -> int:
+    query, params = _build_query(source)
+    total_rows = total_articles = total_skipped = 0
 
-    if parsed_ids:
-        await db.execute(
-            "UPDATE bronze.snapshots SET parsed_at = NOW() WHERE id = ANY(%s)",
-            [parsed_ids],
+    while True:
+        rows = await db.execute(query, params)
+        if not rows:
+            break
+
+        articles, skipped = await _process_chunk(rows)
+        await _mark_parsed(rows)
+        total_articles += articles
+        total_skipped += skipped
+        total_rows += len(rows)
+        logger.info(
+            "Snapshots: chunk of %d (total rows %d, articles %d, skipped %d)",
+            len(rows), total_rows, total_articles, total_skipped,
         )
 
-    logger.info("Snapshots: done — %d silver articles from %d snapshots, %d skipped", count, len(rows), skipped)
-    return count
+    if total_rows == 0:
+        logger.info("No unparsed snapshots found")
+    else:
+        logger.info(
+            "Snapshots: done — %d articles from %d snapshots, %d skipped",
+            total_articles, total_rows, total_skipped,
+        )
+    return total_articles
