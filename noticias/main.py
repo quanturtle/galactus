@@ -4,13 +4,11 @@ import logging
 
 from noticias.config import settings
 from the_scraper import db
+from the_scraper.logging import setup_logging
 from noticias.scrapers import SCRAPERS
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-    datefmt="%H:%M:%S",
-)
+setup_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 
 async def cmd_scrape(sources: list[str]):
@@ -32,7 +30,7 @@ async def cmd_transform(sources: list[str] | None):
             total += await run(source=source)
     else:
         total = await run()
-    print(f"[transform] {total} articles inserted into silver")
+    logger.info("%d articles inserted into silver", total)
 
 
 async def cmd_run_all(sources: list[str]):

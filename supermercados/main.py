@@ -1,15 +1,11 @@
 import argparse
 import asyncio
-import logging
 
 from the_scraper import db
+from the_scraper.logging import setup_logging
 from supermercados.scrapers import SCRAPERS
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-    datefmt="%H:%M:%S",
-)
+setup_logging("INFO")
 
 
 async def cmd_scrape(sources: list[str]):
