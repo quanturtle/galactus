@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _build_query(source: str | None, chunk: int) -> tuple[str, dict]:
     query = """
-        SELECT id, source, url, html_blob, fetched_at
+        SELECT id, source, url, html_blob
         FROM bronze.snapshots
         WHERE parsed_at IS NULL
           AND source = ANY(%(sources)s)
@@ -30,9 +30,7 @@ def _parse_row(row) -> Product | None:
     result = parse_snapshot(row["source"], html, row["url"])
     if result is None:
         return None
-    return Product.model_validate(
-        {**result, "source": row["source"], "scraped_at": row["fetched_at"]}
-    )
+    return Product.model_validate({**result, "source": row["source"]})
 
 
 async def _mark_parsed(rows, *, conn) -> None:

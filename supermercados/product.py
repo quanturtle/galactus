@@ -5,6 +5,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from the_scraper import db
 
+SILVER_PRODUCT_UPDATE_COLUMNS = (
+    "name", "description", "price", "sku", "updated_at",
+)
+
 
 class Product(BaseModel):
     """Silver-layer product. `model_dump()` yields a row for `silver.products`."""
@@ -17,8 +21,8 @@ class Product(BaseModel):
     description: str | None = None
     price: int | None = None
     sku: str | None = None
-    scraped_at: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     @classmethod
     async def persist_many(
@@ -33,5 +37,7 @@ class Product(BaseModel):
             "silver.products",
             [p.model_dump() for p in products],
             conn=conn,
+            conflict_columns=("source", "url"),
+            update_columns=SILVER_PRODUCT_UPDATE_COLUMNS,
         )
         return len(products)

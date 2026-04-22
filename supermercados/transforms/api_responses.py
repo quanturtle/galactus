@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _build_query(source: str | None, chunk: int) -> tuple[str, dict]:
     query = """
-        SELECT id, source, endpoint, response_blob, fetched_at
+        SELECT id, source, endpoint, response_blob
         FROM bronze.api_responses
         WHERE parsed_at IS NULL
           AND source = ANY(%(sources)s)
@@ -29,7 +29,7 @@ def _parse_row(row) -> list[Product]:
     response_text = decompress(bytes(row["response_blob"]))
     results = parse_api_response(row["source"], response_text)
     return [
-        Product.model_validate({**r, "source": row["source"], "scraped_at": row["fetched_at"]})
+        Product.model_validate({**r, "source": row["source"]})
         for r in results
     ]
 

@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS silver.articles (
     image_url     TEXT,
     word_count    INTEGER,
     keywords      TEXT[],
-    processed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_silver_source_url UNIQUE(source, source_url)
 );
 

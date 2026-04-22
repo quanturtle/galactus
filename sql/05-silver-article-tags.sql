@@ -2,7 +2,8 @@ CREATE TABLE IF NOT EXISTS silver.article_tags (
     id                 BIGSERIAL PRIMARY KEY,
     silver_article_id  BIGINT NOT NULL,
     tags               TEXT[] NOT NULL,
-    processed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(silver_article_id)
 );
 

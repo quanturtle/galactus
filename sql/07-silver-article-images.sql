@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS silver.article_images (
     content_hash       VARCHAR(64),
     download_status    VARCHAR(20) NOT NULL DEFAULT 'pending',
     download_error     TEXT,
-    downloaded_at      TIMESTAMPTZ,
-    processed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_silver_article_image UNIQUE(silver_article_id, image_url)
 );
 

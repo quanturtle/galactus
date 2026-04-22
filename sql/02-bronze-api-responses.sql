@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS bronze.api_responses (
     page_params   JSONB,
     response_blob BYTEA NOT NULL,
     fetch_date    DATE NOT NULL DEFAULT CURRENT_DATE,
-    fetched_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     parsed_at     TIMESTAMPTZ,
     CONSTRAINT uq_api_responses_source_endpoint_date UNIQUE(source, endpoint, fetch_date)
 );

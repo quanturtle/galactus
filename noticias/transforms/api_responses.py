@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _build_query(source: str | None, chunk: int) -> tuple[str, dict]:
     query = """
-        SELECT id, source, endpoint, response_blob, fetched_at
+        SELECT id, source, endpoint, response_blob
         FROM bronze.api_responses
         WHERE parsed_at IS NULL
           AND source = ANY(%(sources)s)

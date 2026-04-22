@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS silver.article_entities (
     confidence         FLOAT,
     mention_count      INTEGER NOT NULL DEFAULT 1,
     method             VARCHAR(20) NOT NULL,
-    processed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(silver_article_id, entity_name, method)
 );
 
