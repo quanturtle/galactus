@@ -1,93 +1,78 @@
 import json
 import logging
 
-from the_scraper.html_cleaner import compress, compute_content_hash
+import httpx
 
-from noticias.scrapers._base import BfsScraper
+from the_scraper.html_cleaner import compress
+
+from noticias.scrapers._base import ApiScraper
 
 logger = logging.getLogger(__name__)
 
 
-class LaNacionScraper(BfsScraper):
-    """La Nacion scraper — Arc Publishing feed returns metadata only, so we
-    discover URLs via the feed API and fetch each article's detail HTML,
-    storing cleaned snapshots in bronze.snapshots."""
+class LaNacionScraper(ApiScraper):
+    """La Nación scraper — Arc Publishing feed with open-ended pagination."""
 
     source = "lanacion"
 
-    async def scrape(self) -> None:
-        api_url = self.cfg["base_url"] + self.cfg["api_endpoint"]
-        page_size = self.cfg.get("page_size", 100)
-        website = self.cfg.get("website", "lanacionpy")
+    def _build_params(self, page_index: int) -> dict:
+        return {
+            "query": json.dumps({
+                "feedSize": str(self.page_size),
+                "feedFrom": str(page_index * self.page_size),
+                "website": self.cfg.get("website", "lanacionpy"),
+                "feedQuery": "type:story",
+            })
+        }
 
-        total_attempted = 0
-        total_day_skipped = 0
+    def _extract_total_pages(self, response: httpx.Response) -> int:
+        elements = response.json().get("content_elements", [])
+        return 2 if len(elements) >= self.page_size else 1
+
+    async def scrape(self) -> None:
+        """Open-ended pagination — override scrape entirely."""
+        already_fetched = await self.storage.load_today_endpoints(self.source)
+        total_stored = len(already_fetched)
+        total_skipped = 0
         page = 0
 
-        while not self.max_pages or total_attempted < self.max_pages:
-            params = {
-                "query": json.dumps({
-                    "feedSize": str(page_size),
-                    "feedFrom": str(page * page_size),
-                    "website": website,
-                    "feedQuery": "type:story",
-                })
-            }
+        while not self.max_pages or total_stored < self.max_pages:
+            params = self._build_params(page)
+            endpoint = self._build_endpoint(params)
+
+            if endpoint in already_fetched:
+                total_skipped += 1
+                page += 1
+                continue
+
             try:
-                feed_resp = await self.fetch(api_url, params=params)
+                resp = await self.fetch(self.api_url, params=params)
             except Exception:
-                logger.exception("%s: failed feed page %d", self.source, page)
+                logger.exception("%s: failed page %d", self.source, page)
                 break
 
-            elements = feed_resp.json().get("content_elements", [])
+            elements = resp.json().get("content_elements", [])
             if not elements:
                 break
 
-            page_urls: list[str] = []
-            for gc in elements:
-                canonical = gc.get("canonical_url", "")
-                if not canonical:
-                    continue
-                url = self.cfg["base_url"] + canonical if canonical.startswith("/") else canonical
-                page_urls.append(url)
+            await self.storage.store_response(
+                self.source, endpoint, params, compress(resp.text),
+            )
+            total_stored += 1
 
-            already_today = await self.storage.load_today_urls(self.source, page_urls)
-            total_day_skipped += len(already_today)
+            if total_stored % 50 == 0:
+                await self.storage.flush()
 
-            for url in page_urls:
-                if self.max_pages and total_attempted >= self.max_pages:
-                    break
-                if url in already_today:
-                    continue
-
-                try:
-                    article_resp = await self.fetch(url)
-                except Exception:
-                    logger.exception("%s: failed article fetch %s", self.source, url)
-                    continue
-
-                cleaned = self.html_cleaner.clean(article_resp.text)
-                compressed = compress(cleaned)
-                await self.storage.store_snapshot(
-                    source=self.source,
-                    url=url,
-                    html_blob=compressed,
-                    content_hash=compute_content_hash(cleaned) if self.use_content_hash else None,
-                )
-                total_attempted += 1
-
-            await self.storage.flush()
             logger.info(
-                "%s: feed page %d — attempted %d, day-skipped %d",
-                self.source, page, total_attempted, total_day_skipped,
+                "%s: page %d -> %d articles", self.source, page + 1, len(elements),
             )
 
-            if len(elements) < page_size:
+            if len(elements) < self.page_size:
                 break
             page += 1
 
+        await self.storage.flush()
         logger.info(
-            "%s: scrape done — %d inserted, %d hash-skipped, %d already-today-skipped",
-            self.source,
-            self.storage.inserted, self.storage.hash_skipped, total_day_skipped,
+            "%s: API scrape done — %d stored, %d skipped",
+            self.source, total_stored, total_skipped,
         )

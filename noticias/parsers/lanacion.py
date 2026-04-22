@@ -1,23 +1,14 @@
 import json
-import re
 
 from bs4 import BeautifulSoup
 from the_scraper.parsing import build_image_urls
 
 SOURCE = "lanacion"
 
-_FUSION_RE = re.compile(r"Fusion\.globalContent\s*=\s*(\{.*?\});", re.DOTALL)
+BASE_URL = "https://www.lanacion.com.py"
 
 
-def parse(html: str, url: str) -> dict | None:
-    m = _FUSION_RE.search(html)
-    if not m:
-        return None
-    try:
-        gc = json.loads(m.group(1))
-    except json.JSONDecodeError:
-        return None
-
+def _parse_article(gc: dict) -> dict | None:
     headlines = gc.get("headlines", {})
     title = headlines.get("basic")
     if not title:
@@ -41,12 +32,15 @@ def parse(html: str, url: str) -> dict | None:
 
     body = "\n\n".join(body_parts) if body_parts else gc.get("description", {}).get("basic")
 
+    canonical = gc.get("canonical_url", "")
+    source_url = BASE_URL + canonical if canonical.startswith("/") else canonical
+
     hero = promo.get("url")
     all_images = build_image_urls(hero, body_images)
 
     return {
         "source": "lanacion",
-        "source_url": url,
+        "source_url": source_url,
         "title": title,
         "subtitle": subheadlines.get("basic"),
         "body": body,
@@ -56,3 +50,15 @@ def parse(html: str, url: str) -> dict | None:
         "image_url": hero,
         "image_urls": json.dumps(all_images) if all_images else None,
     }
+
+
+def parse(response_text: str) -> list[dict]:
+    data = json.loads(response_text)
+    results = []
+
+    for gc in data.get("content_elements", []):
+        article = _parse_article(gc)
+        if article:
+            results.append(article)
+
+    return results
