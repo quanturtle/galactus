@@ -7,7 +7,7 @@ from the_scraper.scrapers.api import ApiScraper as _ApiScraper
 from the_scraper.scrapers.bfs import BfsScraper as _BfsScraper
 from the_scraper.storage import PsycopgApiStorage, PsycopgSnapshotStorage
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "config" / "scrapers"
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "configs"
 
 ALLOWED_ATTRS = frozenset({
     "id", "class", "href", "src", "alt", "content", "property",

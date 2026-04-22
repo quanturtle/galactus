@@ -1,6 +1,0 @@
-source: lanacion
-base_url: https://www.lanacion.com.py
-api_endpoint: /pf/api/v3/content/fetch/content-search-feed
-page_size: 100
-max_pages: 50000
-website: lanacionpy

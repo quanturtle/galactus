@@ -3,6 +3,27 @@ import json
 from bs4 import BeautifulSoup
 from the_scraper.parsing import safe_int
 
+SOURCE = "superseis"
+
+
+def _extract_json_ld(soup: BeautifulSoup) -> dict | None:
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            if data.get("@type") == "Product":
+                return data
+            for item in data.get("@graph", []):
+                if isinstance(item, dict) and item.get("@type") == "Product":
+                    return item
+        elif isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and item.get("@type") == "Product":
+                    return item
+    return None
+
 
 def parse(html: str, url: str) -> dict | None:
     soup = BeautifulSoup(html, "lxml")
@@ -43,14 +64,3 @@ def parse(html: str, url: str) -> dict | None:
         "price": safe_int(price),
         "sku": sku or None,
     }
-
-
-def _extract_json_ld(soup: BeautifulSoup) -> dict | None:
-    for script in soup.select('script[type="application/ld+json"]'):
-        try:
-            ld = json.loads(script.string)
-            if ld.get("@type") == "Product":
-                return ld
-        except (json.JSONDecodeError, AttributeError, TypeError):
-            continue
-    return None

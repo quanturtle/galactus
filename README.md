@@ -41,13 +41,13 @@ the_scraper/
 ├── noticias/                  # News scraper application
 │   ├── scrapers/              # 10 news source scrapers
 │   ├── parsers/               # Per-source JSON-to-article parsers
-│   ├── config/scrapers/       # YAML configs per source
+│   ├── configs/               # YAML configs per source
 │   ├── pipeline/              # Bronze-to-silver transforms
 │   └── main.py                # CLI entry point
 ├── supermercados/             # Supermarket scraper application
 │   ├── scrapers/              # 5 store scrapers
 │   ├── parsers/               # Per-store HTML-to-product parsers
-│   ├── config/scrapers/       # YAML configs per store
+│   ├── configs/               # YAML configs per store
 │   ├── transforms/            # Bronze-to-silver transforms
 │   └── main.py                # CLI entry point
 ├── sql/                       # Schema init scripts (mounted by Docker)
@@ -168,7 +168,7 @@ myproject/
 │   ├── __init__.py        # Scraper registry
 │   └── _base.py           # Project-level base classes
 ├── parsers/               # Per-source response parsers
-├── config/scrapers/       # YAML configs per source
+├── configs/               # YAML configs per source
 ├── transforms/            # Bronze-to-silver parsing
 └── main.py                # CLI entry point
 ```
@@ -183,7 +183,7 @@ from the_scraper.scrapers.bfs import BfsScraper as _BfsScraper
 from the_scraper.scrapers.api import ApiScraper as _ApiScraper
 from the_scraper.storage import PsycopgApiStorage, PsycopgSnapshotStorage
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "config" / "scrapers"
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "configs"
 
 class BfsScraper(_BfsScraper):
     def __init__(self):
@@ -204,7 +204,7 @@ A source is a single website or API within an existing project.
 
 ### 1. Create the YAML config
 
-Add `{project}/config/scrapers/{name}.yml`.
+Add `{project}/configs/{name}.yml`.
 
 **For a BFS scraper** (HTML crawling):
 

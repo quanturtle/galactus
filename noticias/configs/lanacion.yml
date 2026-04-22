@@ -1,0 +1,11 @@
+source: lanacion
+# home_url / scrape_pattern are required by BfsScraper's base __init__ but
+# unused here — the scraper overrides scrape() to drive URL discovery from
+# the Arc Publishing feed API below.
+home_url: https://www.lanacion.com.py
+scrape_pattern: ".*"
+base_url: https://www.lanacion.com.py
+api_endpoint: /pf/api/v3/content/fetch/content-search-feed
+page_size: 100
+max_pages: 50000
+website: lanacionpy

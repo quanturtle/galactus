@@ -1,8 +1,11 @@
-"""Configurable HTML cleaning and compression for snapshot storage.
+"""Two-stage HTML cleaning and compression for snapshot storage.
 
-Strips noise (scripts, styles, nav, footer, etc.) while preserving
-elements parsers need: JSON-LD blocks, embedded data scripts, and
-data attributes used for content extraction.
+Stage 1 (basic filter) strips site-agnostic noise every HTML source has:
+comments, non-whitelisted scripts, a baseline set of tags, and any
+attribute not on the allow list.
+
+Stage 2 (configured filter) layers per-source strip rules on top:
+extra tags and CSS classes declared in the source's YAML config.
 """
 
 import hashlib
@@ -12,7 +15,7 @@ from dataclasses import dataclass, field
 
 from bs4 import BeautifulSoup, Comment
 
-DEFAULT_STRIP_TAGS = {"style", "noscript", "svg", "iframe", "link", "nav", "header", "footer"}
+DEFAULT_STRIP_TAGS = frozenset({"style", "noscript", "svg", "iframe", "link", "nav", "header", "footer"})
 
 DEFAULT_ALLOWED_ATTRS = frozenset({
     "id", "class", "href", "src", "alt", "content", "property", "name", "type",
@@ -23,12 +26,17 @@ DEFAULT_KEEP_SCRIPT_RE = re.compile(r"var\s+data\s*=\s*\{")
 
 @dataclass
 class HtmlCleaner:
-    """Configurable HTML cleaner for snapshot storage."""
+    """Two-stage HTML cleaner.
 
-    strip_tags: set[str] = field(default_factory=lambda: set(DEFAULT_STRIP_TAGS))
-    strip_classes: list[str] | None = None
+    The basic filter (always applied) uses DEFAULT_STRIP_TAGS plus the
+    allowed_attrs and keep_script_re wired by the project-level scraper.
+    The configured filter layers per-source extras on top.
+    """
+
     allowed_attrs: frozenset[str] = DEFAULT_ALLOWED_ATTRS
     keep_script_re: re.Pattern = field(default_factory=lambda: DEFAULT_KEEP_SCRIPT_RE)
+    extra_strip_tags: set[str] = field(default_factory=set)
+    extra_strip_classes: list[str] = field(default_factory=list)
 
     def _keep_script(self, tag) -> bool:
         if tag.get("type") == "application/ld+json":
@@ -37,19 +45,11 @@ class HtmlCleaner:
             return True
         return False
 
-    def clean(self, html: str) -> str:
-        """Strip non-essential elements and attributes from HTML."""
-        soup = BeautifulSoup(html, "lxml")
-
+    def _apply_basic_filter(self, soup: BeautifulSoup) -> None:
         for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
             comment.extract()
 
-        if self.strip_classes:
-            for cls in self.strip_classes:
-                for el in soup.find_all(class_=cls):
-                    el.decompose()
-
-        for tag_name in self.strip_tags:
+        for tag_name in DEFAULT_STRIP_TAGS:
             for tag in soup.find_all(tag_name):
                 tag.decompose()
 
@@ -63,6 +63,19 @@ class HtmlCleaner:
                 if attr not in self.allowed_attrs:
                     del tag.attrs[attr]
 
+    def _apply_configured_filter(self, soup: BeautifulSoup) -> None:
+        for cls in self.extra_strip_classes:
+            for el in soup.find_all(class_=cls):
+                el.decompose()
+
+        for tag_name in self.extra_strip_tags:
+            for tag in soup.find_all(tag_name):
+                tag.decompose()
+
+    def clean(self, html: str) -> str:
+        soup = BeautifulSoup(html, "lxml")
+        self._apply_basic_filter(soup)
+        self._apply_configured_filter(soup)
         return str(soup)
 
 

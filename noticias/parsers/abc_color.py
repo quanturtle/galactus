@@ -8,19 +8,6 @@ SOURCE = "abc_color"
 BASE_URL = "https://www.abc.com.py"
 
 
-def parse(response_text: str) -> list[dict]:
-    data = json.loads(response_text)
-    elements = data.get("content_elements", [])
-    results = []
-
-    for gc in elements:
-        article = _parse_article(gc)
-        if article:
-            results.append(article)
-
-    return results
-
-
 def _parse_article(gc: dict) -> dict | None:
     headlines = gc.get("headlines", {})
     title = headlines.get("basic")
@@ -62,3 +49,16 @@ def _parse_article(gc: dict) -> dict | None:
         "image_urls": json.dumps(all_images) if all_images else None,
         "raw_data": json.dumps(gc, ensure_ascii=False),
     }
+
+
+def parse(response_text: str) -> list[dict]:
+    data = json.loads(response_text)
+    elements = data.get("content_elements", [])
+    results = []
+
+    for gc in elements:
+        article = _parse_article(gc)
+        if article:
+            results.append(article)
+
+    return results

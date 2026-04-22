@@ -50,13 +50,31 @@ class BfsScraper(BaseScraper):
         self.ignore_patterns = self.cfg.get("ignore_patterns", [])
         self.strip_path_prefixes = self.cfg.get("strip_path_prefixes")
 
-        # Per-scraper overrides from YAML config
-        cfg_strip_tags = self.cfg.get("strip_tags")
-        if cfg_strip_tags is not None:
-            self.html_cleaner.strip_tags = set(cfg_strip_tags)
-        cfg_strip_classes = self.cfg.get("strip_classes")
-        if cfg_strip_classes is not None:
-            self.html_cleaner.strip_classes = cfg_strip_classes
+        # Per-source extras layered on top of the framework's basic filter
+        self.html_cleaner.extra_strip_tags = set(self.cfg.get("strip_tags", []))
+        self.html_cleaner.extra_strip_classes = list(self.cfg.get("strip_classes", []))
+
+    async def _process_url(
+        self, url: str, target_re: re.Pattern, home_domain: str,
+    ) -> tuple[list[str], dict | None]:
+        resp = await self.fetch(url)
+        raw_html = resp.text
+
+        links = extract_same_domain_links(raw_html, url, home_domain)
+
+        snapshot = None
+        if target_re.search(url):
+            cleaned = self.html_cleaner.clean(raw_html)
+            compressed = compress(cleaned)
+            snapshot = {
+                "source": self.source,
+                "url": url,
+                "html_blob": compressed,
+            }
+            if self.use_content_hash:
+                snapshot["content_hash"] = compute_content_hash(cleaned)
+
+        return links, snapshot
 
     async def scrape(self) -> None:
         seed = normalize(self.home_url)
@@ -134,25 +152,3 @@ class BfsScraper(BaseScraper):
             "%s: BFS done — %d visited, %d stored, %d skipped, %d errors",
             self.source, len(visited), total_stored, total_skipped, total_errors,
         )
-
-    async def _process_url(
-        self, url: str, target_re: re.Pattern, home_domain: str,
-    ) -> tuple[list[str], dict | None]:
-        resp = await self.fetch(url)
-        raw_html = resp.text
-
-        links = extract_same_domain_links(raw_html, url, home_domain)
-
-        snapshot = None
-        if target_re.search(url):
-            cleaned = self.html_cleaner.clean(raw_html)
-            compressed = compress(cleaned)
-            snapshot = {
-                "source": self.source,
-                "url": url,
-                "html_blob": compressed,
-            }
-            if self.use_content_hash:
-                snapshot["content_hash"] = compute_content_hash(cleaned)
-
-        return links, snapshot

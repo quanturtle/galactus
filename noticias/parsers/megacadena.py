@@ -3,17 +3,20 @@ import json
 from bs4 import BeautifulSoup
 from the_scraper.parsing import IMAGE_EXCLUDE, build_image_urls
 
+SOURCE = "megacadena"
 
-def parse(response_text: str) -> list[dict]:
-    posts = json.loads(response_text)
-    results = []
 
-    for post in posts:
-        article = _parse_post(post)
-        if article:
-            results.append(article)
+def _strip_html(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    return soup.get_text(strip=True)
 
-    return results
+
+def _html_to_text(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    paragraphs = soup.find_all("p")
+    if paragraphs:
+        return "\n\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+    return soup.get_text(strip=True)
 
 
 def _parse_post(post: dict) -> dict | None:
@@ -69,14 +72,13 @@ def _parse_post(post: dict) -> dict | None:
     }
 
 
-def _strip_html(html: str) -> str:
-    soup = BeautifulSoup(html, "lxml")
-    return soup.get_text(strip=True)
+def parse(response_text: str) -> list[dict]:
+    posts = json.loads(response_text)
+    results = []
 
+    for post in posts:
+        article = _parse_post(post)
+        if article:
+            results.append(article)
 
-def _html_to_text(html: str) -> str:
-    soup = BeautifulSoup(html, "lxml")
-    paragraphs = soup.find_all("p")
-    if paragraphs:
-        return "\n\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
-    return soup.get_text(strip=True)
+    return results

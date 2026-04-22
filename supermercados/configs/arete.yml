@@ -9,15 +9,6 @@ ignore_patterns:
   - /checkout
   - /register
 
-strip_tags:
-  - style
-  - noscript
-  - svg
-  - iframe
-  - link
-  - nav
-  - header
-  - footer
 strip_classes:
   - banners-simple
   - menu-top-bar-left
