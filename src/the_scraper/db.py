@@ -63,7 +63,7 @@ async def bulk_insert(table: str, rows: list[dict]) -> None:
     for row in rows:
         r = {}
         for k, v in row.items():
-            r[k] = json.dumps(v) if isinstance(v, (dict, list)) else v
+            r[k] = json.dumps(v) if isinstance(v, dict) else v
         prepared.append(r)
 
     async with get_pool().connection() as conn:
