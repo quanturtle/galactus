@@ -1,5 +1,9 @@
 # galactus
 
+<p align="center">
+  <img src="img/logo.jpg" alt="galactus logo" width="400">
+</p>
+
 Async web scraper framework for structured data collection from Paraguayan news sites and supermarkets. Built on a reusable core (`galactus`) that powers two applications: **noticias** (10 news sources) and **supermercados** (5 supermarket chains).
 
 ## Quick start
