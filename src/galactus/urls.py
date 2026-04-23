@@ -34,7 +34,7 @@ def normalize(url: str, strip_path_prefixes: list[str] | None = None) -> str:
 
 def extract_same_domain_links(html: str, page_url: str, home_domain: str) -> list[str]:
     """Extract all same-domain links from an HTML page."""
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, "html.parser")
     urls: list[str] = []
     seen: set[str] = set()
 

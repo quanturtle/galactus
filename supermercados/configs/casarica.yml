@@ -1,5 +1,5 @@
 source: casarica
-home_url: https://casarica.com.py
+home_url: https://www.casarica.com.py
 scrape_pattern: "-p\\d+"
 max_pages: 40000
 ignore_patterns:

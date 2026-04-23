@@ -6,7 +6,6 @@ from airflow.operators.bash import BashOperator
 NOTICIAS_SOURCES = [
     "abc_color",
     "adndigital",
-    "cronica",
     "elnacional",
     "hoy",
     "lanacion",
