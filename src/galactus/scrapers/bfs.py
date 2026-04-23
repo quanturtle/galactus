@@ -31,14 +31,14 @@ class BfsScraper(BaseScraper):
         *,
         storage: SnapshotStorage,
         config_dir: Path | str,
-        html_cleaner: HtmlCleaner | None = None,
+        allowed_attrs: frozenset[str] | None = None,
+        keep_script_re: re.Pattern | None = None,
         use_content_hash: bool = False,
         batch_size: int | None = None,
         **kwargs,
     ):
         super().__init__(config_dir=config_dir, **kwargs)
         self.storage = storage
-        self.html_cleaner = html_cleaner or HtmlCleaner()
         self.use_content_hash = use_content_hash
 
         self.home_url = self.cfg["home_url"]
@@ -49,9 +49,15 @@ class BfsScraper(BaseScraper):
         self.ignore_patterns = self.cfg.get("ignore_patterns", [])
         self.strip_path_prefixes = self.cfg.get("strip_path_prefixes")
 
-        # Per-source extras layered on top of the framework's basic filter
-        self.html_cleaner.extra_strip_tags = set(self.cfg.get("strip_tags", []))
-        self.html_cleaner.extra_strip_classes = list(self.cfg.get("strip_classes", []))
+        cleaner_kwargs: dict = {
+            "extra_strip_tags": set(self.cfg.get("strip_tags", [])),
+            "extra_strip_classes": list(self.cfg.get("strip_classes", [])),
+        }
+        if allowed_attrs is not None:
+            cleaner_kwargs["allowed_attrs"] = allowed_attrs
+        if keep_script_re is not None:
+            cleaner_kwargs["keep_script_re"] = keep_script_re
+        self.html_cleaner = HtmlCleaner(**cleaner_kwargs)
 
     async def _process_url(
         self, url: str, target_re: re.Pattern, home_domain: str,
@@ -84,6 +90,8 @@ class BfsScraper(BaseScraper):
         visited: set[str] = set()
         total_day_skipped = 0
         total_errors = 0
+        total_inserted = 0
+        total_hash_skipped = 0
 
         target_re = re.compile(self.scrape_pattern)
         ignore_res = [re.compile(p) for p in self.ignore_patterns]
@@ -115,6 +123,7 @@ class BfsScraper(BaseScraper):
             for url, result in zip(batch_urls, results):
                 if isinstance(result, Exception):
                     total_errors += 1
+                    logger.warning("%s: fetch failed for %s: %r", self.source, url, result)
                     continue
 
                 new_links, snapshot = result
@@ -131,7 +140,9 @@ class BfsScraper(BaseScraper):
                 if snapshot is not None:
                     await self.storage.store_snapshot(**snapshot)
 
-            await self.storage.flush()
+            inserted, hash_skipped = await self.storage.flush()
+            total_inserted += inserted
+            total_hash_skipped += hash_skipped
 
             if self.request_delay > 0:
                 await asyncio.sleep(self.request_delay)
@@ -146,6 +157,6 @@ class BfsScraper(BaseScraper):
             "%s: BFS done — %d visited, %d stored, %d hash-skipped, "
             "%d already-today-skipped, %d errors",
             self.source, len(visited),
-            self.storage.inserted, self.storage.hash_skipped,
+            total_inserted, total_hash_skipped,
             total_day_skipped, total_errors,
         )

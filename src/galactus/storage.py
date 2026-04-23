@@ -58,8 +58,8 @@ class SnapshotStorage(Protocol):
         """Return most recent content_hash for each URL. Empty dict if unsupported."""
         ...
 
-    async def flush(self) -> None:
-        """Commit any pending writes."""
+    async def flush(self) -> tuple[int, int]:
+        """Commit any pending writes. Returns (inserted, hash_skipped)."""
         ...
 
 
@@ -102,8 +102,6 @@ class PsycopgSnapshotStorage:
     def __init__(self, flush_every: int = 10):
         self._pending: list[dict] = []
         self._flush_every = flush_every
-        self.inserted = 0
-        self.hash_skipped = 0
 
     async def load_today_urls(self, source: str, urls: list[str]) -> set[str]:
         if not urls:
@@ -140,9 +138,9 @@ class PsycopgSnapshotStorage:
         )
         return {r["url"]: r["content_hash"] for r in rows}
 
-    async def flush(self) -> None:
+    async def flush(self) -> tuple[int, int]:
         if not self._pending:
-            return
+            return (0, 0)
         source = self._pending[0]["source"]
         hash_urls = [r["url"] for r in self._pending if r.get("content_hash")]
         existing = await self.get_content_hashes(source, hash_urls) if hash_urls else {}
@@ -153,6 +151,5 @@ class PsycopgSnapshotStorage:
         skipped = len(self._pending) - len(to_insert)
         if to_insert:
             await db.bulk_insert("bronze.snapshots", to_insert)
-        self.inserted += len(to_insert)
-        self.hash_skipped += skipped
         self._pending = []
+        return (len(to_insert), skipped)
