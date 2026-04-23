@@ -64,9 +64,6 @@ class ABCColorScraper(ApiScraper):
                 )
                 total_stored += 1
 
-                if total_stored % 50 == 0:
-                    await self.storage.flush()
-
                 logger.info(
                     "%s: %s offset %d -> %d articles",
                     self.source, section, offset, len(elements),

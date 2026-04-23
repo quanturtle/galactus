@@ -67,8 +67,9 @@ class SnapshotStorage(Protocol):
 
 class PsycopgApiStorage:
 
-    def __init__(self):
+    def __init__(self, flush_every: int = 10):
         self._pending: list[dict] = []
+        self._flush_every = flush_every
 
     async def load_today_endpoints(self, source: str) -> set[str]:
         rows = await db.execute(
@@ -87,7 +88,7 @@ class PsycopgApiStorage:
             "page_params": page_params,
             "response_blob": response_blob,
         })
-        if len(self._pending) >= 50:
+        if len(self._pending) >= self._flush_every:
             await self.flush()
 
     async def flush(self) -> None:
@@ -98,8 +99,9 @@ class PsycopgApiStorage:
 
 class PsycopgSnapshotStorage:
 
-    def __init__(self):
+    def __init__(self, flush_every: int = 10):
         self._pending: list[dict] = []
+        self._flush_every = flush_every
         self.inserted = 0
         self.hash_skipped = 0
 
@@ -122,7 +124,7 @@ class PsycopgSnapshotStorage:
         if content_hash:
             row["content_hash"] = content_hash
         self._pending.append(row)
-        if len(self._pending) >= 50:
+        if len(self._pending) >= self._flush_every:
             await self.flush()
 
     async def get_content_hashes(self, source: str, urls: list[str]) -> dict[str, str]:
