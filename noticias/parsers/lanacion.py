@@ -48,7 +48,7 @@ def _parse_article(gc: dict) -> dict | None:
         "published_at": gc.get("publish_date") or gc.get("display_date"),
         "section": primary_section.get("name"),
         "image_url": hero,
-        "image_urls": json.dumps(all_images) if all_images else None,
+        "images": all_images or [],
     }
 
 

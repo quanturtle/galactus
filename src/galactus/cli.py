@@ -15,6 +15,7 @@ async def run_cli(
     description: str,
     scrapers: dict[str, type],
     transform_runner: Callable[..., Awaitable[int]],
+    image_downloader: Callable[..., Awaitable[int]] | None = None,
 ) -> None:
     parser = argparse.ArgumentParser(description=description)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -32,6 +33,14 @@ async def run_cli(
     p_all = sub.add_parser("run-all", help="Scrape + transform")
     p_all.add_argument("--source", choices=choices, nargs="+", default=choices)
 
+    if image_downloader is not None:
+        p_images = sub.add_parser(
+            "download-images",
+            help="Download pending silver image rows to S3/MinIO",
+        )
+        p_images.add_argument("--source", choices=choices, nargs="+", default=None,
+                              help="Sources to download (default: all pending)")
+
     args = parser.parse_args()
 
     await db.init()
@@ -43,6 +52,9 @@ async def run_cli(
         elif args.command == "run-all":
             await _run_scrape(scrapers, args.source)
             await _run_transform(transform_runner, args.source)
+        elif args.command == "download-images":
+            assert image_downloader is not None
+            await _run_images(image_downloader, args.source)
     finally:
         await db.close()
 
@@ -63,3 +75,16 @@ async def _run_transform(
     else:
         total = await runner()
     logger.info("%d rows inserted into silver", total)
+
+
+async def _run_images(
+    downloader: Callable[..., Awaitable[int]],
+    sources: list[str] | None,
+) -> None:
+    total = 0
+    if sources:
+        for source in sources:
+            total += await downloader(source=source)
+    else:
+        total = await downloader()
+    logger.info("%d image rows processed", total)

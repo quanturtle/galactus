@@ -67,7 +67,7 @@ def _parse_post(post: dict) -> dict | None:
         "published_at": post.get("date"),
         "section": section,
         "image_url": image_url,
-        "image_urls": json.dumps(all_images) if all_images else None,
+        "images": all_images or [],
         "raw_data": json.dumps(post, ensure_ascii=False, default=str),
     }
 

@@ -15,13 +15,13 @@ from sqlalchemy import (
 from . import metadata
 
 Table(
-    "article_images",
+    "product_images",
     metadata,
     Column("id", BigInteger, primary_key=True, autoincrement=True),
     Column(
-        "silver_article_id",
-        BigInteger,
-        ForeignKey("silver.articles.id", ondelete="CASCADE", name="fk_silver_article_images_article"),
+        "silver_product_id",
+        Integer,
+        ForeignKey("silver.products.id", ondelete="CASCADE", name="fk_silver_product_images_product"),
         nullable=False,
     ),
     Column("image_url", Text, nullable=False),
@@ -38,9 +38,9 @@ Table(
     Column("download_error", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
-    UniqueConstraint("silver_article_id", "image_url", name="uq_silver_article_image"),
-    Index("idx_silver_images_article", "silver_article_id"),
-    Index("idx_silver_images_status", "download_status"),
-    Index("idx_silver_images_hash", "content_hash"),
+    UniqueConstraint("silver_product_id", "image_url", name="uq_silver_product_image"),
+    Index("idx_silver_product_images_product", "silver_product_id"),
+    Index("idx_silver_product_images_status", "download_status"),
+    Index("idx_silver_product_images_hash", "content_hash"),
     schema="silver",
 )

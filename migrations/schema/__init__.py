@@ -15,6 +15,7 @@ from . import (  # noqa: E402, F401  — import for side-effect (table registrat
     bronze_snapshots,
     bronze_api_responses,
     silver_products,
+    silver_product_images,
     silver_articles,
     silver_article_tags,
     silver_article_entities,

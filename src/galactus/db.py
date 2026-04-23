@@ -85,7 +85,8 @@ async def bulk_insert(
     conn: AsyncConnection | None = None,
     conflict_columns: Sequence[str] | None = None,
     update_columns: Sequence[str] | None = None,
-) -> None:
+    returning: Sequence[str] | None = None,
+) -> list[dict]:
     """Insert rows into *table*. Column names come from the first row's keys.
 
     Conflict handling:
@@ -93,15 +94,20 @@ async def bulk_insert(
     - if *update_columns* is given: ``ON CONFLICT (conflict_columns) DO UPDATE
       SET col = EXCLUDED.col …``. *conflict_columns* is required in that case.
 
+    Returning:
+    - default: returns ``[]``.
+    - if *returning* is given, the INSERT is issued as one multi-row VALUES
+      statement with ``RETURNING {cols}``; each input row yields one result
+      row (both fresh inserts and ``ON CONFLICT DO UPDATE`` hits).
+
     When *conn* is provided, runs on that connection without committing — the
     caller's transaction owns the commit. Otherwise grabs a pooled connection
     and commits immediately.
     """
     if not rows:
-        return
+        return []
     columns = list(rows[0].keys())
     col_names = ", ".join(columns)
-    placeholders = ", ".join(f"%({c})s" for c in columns)
 
     if update_columns:
         if not conflict_columns:
@@ -112,8 +118,6 @@ async def bulk_insert(
     else:
         conflict_clause = "ON CONFLICT DO NOTHING"
 
-    query = f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) {conflict_clause}"
-
     prepared = []
     for row in rows:
         r = {}
@@ -121,12 +125,37 @@ async def bulk_insert(
             r[k] = json.dumps(v) if isinstance(v, dict) else v
         prepared.append(r)
 
+    if returning:
+        groups = []
+        flat_params: dict = {}
+        for i, row in enumerate(prepared):
+            placeholders = ", ".join(f"%({c}__{i})s" for c in columns)
+            groups.append(f"({placeholders})")
+            for c in columns:
+                flat_params[f"{c}__{i}"] = row[c]
+        values_clause = ", ".join(groups)
+        ret_clause = f"RETURNING {', '.join(returning)}"
+        query = (
+            f"INSERT INTO {table} ({col_names}) VALUES {values_clause} "
+            f"{conflict_clause} {ret_clause}"
+        )
+        if conn is not None:
+            return await _execute_on(conn, query, flat_params)
+        async with get_pool().connection() as c:
+            result = await _execute_on(c, query, flat_params)
+            await c.commit()
+            return result
+
+    placeholders = ", ".join(f"%({c})s" for c in columns)
+    query = f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) {conflict_clause}"
+
     if conn is not None:
         await _bulk_insert_on(conn, query, prepared)
-        return
+        return []
     async with get_pool().connection() as c:
         await _bulk_insert_on(c, query, prepared)
         await c.commit()
+        return []
 
 
 async def _bulk_insert_on(conn: AsyncConnection, query: str, prepared: list[dict]) -> None:

@@ -28,6 +28,7 @@ class Article(BaseModel):
     image_url: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    images: list[str] = Field(default_factory=list, exclude=True)
 
     @field_validator("published_at", mode="before")
     @classmethod
@@ -47,15 +48,40 @@ class Article(BaseModel):
         articles: list["Article"],
         *,
         conn: AsyncConnection | None = None,
-    ) -> int:
+    ) -> list[tuple[int, str, str]]:
         if not articles:
-            return 0
+            return []
 
-        await db.bulk_insert(
+        inserted = await db.bulk_insert(
             "silver.articles",
             [a.model_dump() for a in articles],
             conn=conn,
             conflict_columns=("source", "source_url"),
             update_columns=SILVER_ARTICLE_UPDATE_COLUMNS,
+            returning=("id", "source", "source_url"),
         )
-        return len(articles)
+
+        id_map = {(r["source"], r["source_url"]): r["id"] for r in inserted}
+        image_rows: list[dict] = []
+        for article in articles:
+            article_id = id_map.get((article.source, article.source_url))
+            if article_id is None:
+                continue
+            for ordinal, url in enumerate(article.images):
+                image_rows.append({
+                    "silver_article_id": article_id,
+                    "image_url": url,
+                    "image_role": "hero" if ordinal == 0 else "body",
+                    "ordinal": ordinal,
+                    "download_status": "pending",
+                })
+
+        if image_rows:
+            await db.bulk_insert(
+                "silver.article_images",
+                image_rows,
+                conn=conn,
+                conflict_columns=("silver_article_id", "image_url"),
+            )
+
+        return [(r["id"], r["source"], r["source_url"]) for r in inserted]

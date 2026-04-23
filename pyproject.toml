@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings",
     "alembic>=1.18.4",
     "python-dateutil",
+    "aioboto3",
 ]
 
 [project.optional-dependencies]

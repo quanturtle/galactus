@@ -71,6 +71,6 @@ def parse(html: str, url: str) -> dict | None:
         "published_at": published_at,
         "section": section,
         "image_url": image_url,
-        "image_urls": json.dumps(all_images) if all_images else None,
+        "images": all_images or [],
         "raw_data": raw_data,
     }
