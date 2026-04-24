@@ -25,7 +25,7 @@ def _extract_json_ld(soup: BeautifulSoup) -> dict | None:
     return None
 
 
-def parse(html: str, url: str) -> dict | None:
+def transform(html: str, url: str) -> dict | None:
     soup = BeautifulSoup(html, "lxml")
 
     ld = _extract_json_ld(soup)

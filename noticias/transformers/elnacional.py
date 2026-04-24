@@ -1,8 +1,8 @@
-from noticias.parsers._wordpress_ld import make_parser
+from noticias.transformers._wordpress_ld import make_transformer
 
 SOURCE = "elnacional"
 
-parse = make_parser(
+transform = make_transformer(
     SOURCE,
     ["article", ".entry-content", ".article-content", ".post-content"],
 )

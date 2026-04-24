@@ -1,18 +1,19 @@
 source: abc_color
-base_url: https://www.abc.com.py
-api_endpoint: /pf/api/v3/content/fetch/sections-api
-page_size: 100
-max_pages: 50000
-sections:
-  - /nacionales
-  - /internacionales
-  - /politica
-  - /economia
-  - /deportes
-  - /policiales
-  - /espectaculos
-  - /opinion
-  - /ciencia
-  - /tecnologia
-  - /locales
-  - /sociedad
+scraper:
+  base_url: https://www.abc.com.py
+  api_endpoint: /pf/api/v3/content/fetch/sections-api
+  page_size: 100
+  max_pages: 50000
+  sections:
+    - /nacionales
+    - /internacionales
+    - /politica
+    - /economia
+    - /deportes
+    - /policiales
+    - /espectaculos
+    - /opinion
+    - /ciencia
+    - /tecnologia
+    - /locales
+    - /sociedad

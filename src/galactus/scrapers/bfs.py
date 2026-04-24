@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from galactus.html_cleaner import HtmlCleaner, compress, compute_content_hash
+from galactus.parsers import ParserPolicyRegistry
 from galactus.storage import SnapshotStorage
 from galactus.urls import extract_same_domain_links, normalize, should_ignore
 
@@ -31,8 +32,7 @@ class BfsScraper(BaseScraper):
         *,
         storage: SnapshotStorage,
         config_dir: Path | str,
-        allowed_attrs: frozenset[str] | None = None,
-        keep_script_re: re.Pattern | None = None,
+        parser_registry: ParserPolicyRegistry,
         use_content_hash: bool = False,
         batch_size: int | None = None,
         **kwargs,
@@ -49,14 +49,14 @@ class BfsScraper(BaseScraper):
         self.ignore_patterns = self.cfg.get("ignore_patterns", [])
         self.strip_path_prefixes = self.cfg.get("strip_path_prefixes")
 
+        parser = parser_registry.get(self.source)
         cleaner_kwargs: dict = {
-            "extra_strip_tags": set(self.cfg.get("strip_tags", [])),
-            "extra_strip_classes": list(self.cfg.get("strip_classes", [])),
+            "allowed_attrs": parser.allowed_attrs,
+            "extra_strip_tags": set(parser.strip_tags),
+            "extra_strip_classes": list(parser.strip_classes),
         }
-        if allowed_attrs is not None:
-            cleaner_kwargs["allowed_attrs"] = allowed_attrs
-        if keep_script_re is not None:
-            cleaner_kwargs["keep_script_re"] = keep_script_re
+        if parser.keep_script_re is not None:
+            cleaner_kwargs["keep_script_re"] = parser.keep_script_re
         self.html_cleaner = HtmlCleaner(**cleaner_kwargs)
 
     async def _process_url(

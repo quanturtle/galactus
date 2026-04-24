@@ -3,16 +3,17 @@ import json
 from bs4 import BeautifulSoup
 from galactus.parsing import build_image_urls, extract_body_images, extract_json_ld, meta
 
-SOURCE = "npy"
+SOURCE = "ultimahora"
 
 
-def parse(html: str, url: str) -> dict | None:
+def transform(html: str, url: str) -> dict | None:
     soup = BeautifulSoup(html, "lxml")
 
     json_ld = extract_json_ld(soup)
     title = None
     author = None
     published_at = None
+    section = None
     image_url = None
     raw_data = None
 
@@ -21,7 +22,7 @@ def parse(html: str, url: str) -> dict | None:
         published_at = json_ld.get("datePublished")
         authors = json_ld.get("author")
         if isinstance(authors, list) and authors:
-            author = authors[0].get("name") if isinstance(authors[0], dict) else str(authors[0])
+            author = authors[0].get("name")
         elif isinstance(authors, dict):
             author = authors.get("name")
         images = json_ld.get("image")
@@ -42,19 +43,26 @@ def parse(html: str, url: str) -> dict | None:
         image_url = meta(soup, "og:image")
 
     section = meta(soup, "article:section")
+    if not section:
+        breadcrumb = soup.select_one(".Breadcrumb a, nav.breadcrumb a")
+        if breadcrumb:
+            section = breadcrumb.get_text(strip=True)
+
     subtitle = meta(soup, "og:description")
 
-    body_el = soup.select(".RichTextArticleBody p, .RichTextBody p, .Page-articleBody p")
+    body_el = soup.select(".RichTextArticleBody p, .Page-articleBody p, article p")
     body = "\n\n".join(p.get_text(strip=True) for p in body_el if p.get_text(strip=True))
 
-    body_images = extract_body_images(soup, ".RichTextArticleBody, .RichTextBody, .Page-articleBody")
+    body_images = extract_body_images(soup, ".RichTextArticleBody, .Page-articleBody, article")
 
+    if not json_ld and not body:
+        return None
     if not title and not body:
         return None
 
     all_images = build_image_urls(image_url, body_images)
     return {
-        "source": "npy",
+        "source": "ultimahora",
         "source_url": url,
         "title": title,
         "subtitle": subtitle,

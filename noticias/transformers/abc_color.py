@@ -51,7 +51,7 @@ def _parse_article(gc: dict) -> dict | None:
     }
 
 
-def parse(response_text: str) -> list[dict]:
+def transform(response_text: str) -> list[dict]:
     data = json.loads(response_text)
     elements = data.get("content_elements", [])
     results = []

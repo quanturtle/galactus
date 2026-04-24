@@ -1,10 +1,11 @@
 source: adndigital
-home_url: https://www.adndigital.com.py
-scrape_pattern: "adndigital\\.com\\.py/[^/]+-[^/]+-[^/]+-[^/]+"
-max_pages: 50000
-ignore_patterns:
-  - /wp-admin
-  - /wp-login
-  - /author/
-  - /tag/
-  - "\\?(s|search)="
+scraper:
+  home_url: https://www.adndigital.com.py
+  scrape_pattern: "adndigital\\.com\\.py/[^/]+-[^/]+-[^/]+-[^/]+"
+  max_pages: 50000
+  ignore_patterns:
+    - /wp-admin
+    - /wp-login
+    - /author/
+    - /tag/
+    - "\\?(s|search)="

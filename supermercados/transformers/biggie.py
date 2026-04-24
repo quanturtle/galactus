@@ -5,7 +5,7 @@ from galactus.parsing import safe_int
 SOURCE = "biggie"
 
 
-def parse(response_text: str) -> list[dict]:
+def transform(response_text: str) -> list[dict]:
     """Parse a Biggie API response page into silver-ready product dicts."""
     data = json.loads(response_text)
     results = []

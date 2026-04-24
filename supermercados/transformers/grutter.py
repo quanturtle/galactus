@@ -6,7 +6,7 @@ from galactus.parsing import safe_int
 SOURCE = "grutter"
 
 
-def parse(response_text: str) -> list[dict]:
+def transform(response_text: str) -> list[dict]:
     """Parse a Grutter API response page into silver-ready product dicts."""
     items = json.loads(response_text)
     results = []

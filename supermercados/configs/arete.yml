@@ -1,18 +1,19 @@
 source: arete
-home_url: https://www.arete.com.py
-scrape_pattern: "-p\\d+"
-max_pages: 40000
-ignore_patterns:
-  - /login
-  - /cart
-  - /account
-  - /checkout
-  - /register
-
-strip_classes:
-  - banners-simple
-  - menu-top-bar-left
-  - tm-related-products-carousel
-strip_path_prefixes:
-  - /catalogo/
-  - /promociones/
+scraper:
+  home_url: https://www.arete.com.py
+  scrape_pattern: "-p\\d+"
+  max_pages: 40000
+  ignore_patterns:
+    - /login
+    - /cart
+    - /account
+    - /checkout
+    - /register
+  strip_path_prefixes:
+    - /catalogo/
+    - /promociones/
+parser:
+  strip_classes:
+    - banners-simple
+    - menu-top-bar-left
+    - tm-related-products-carousel

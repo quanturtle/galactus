@@ -52,7 +52,8 @@ class BaseScraper(ABC):
     def _load_config(config_dir: Path, name: str) -> dict:
         path = config_dir / f"{name}.yml"
         with open(path) as f:
-            return yaml.safe_load(f)
+            data = yaml.safe_load(f) or {}
+        return data.get("scraper") or {}
 
     async def close(self):
         await self.client.aclose()

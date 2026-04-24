@@ -1,5 +1,6 @@
 source: latribuna
-base_url: https://www.latribuna.com.py
-api_endpoint: /pf/api/v3/content/fetch/story-feed-query
-page_size: 100
-max_pages: 50000
+scraper:
+  base_url: https://www.latribuna.com.py
+  api_endpoint: /pf/api/v3/content/fetch/story-feed-query
+  page_size: 100
+  max_pages: 50000

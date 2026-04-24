@@ -1,16 +1,17 @@
 source: casarica
-home_url: https://www.casarica.com.py
-scrape_pattern: "-p\\d+"
-max_pages: 40000
-ignore_patterns:
-  - /login
-  - /cart
-  - /account
-  - /checkout
-  - /register
-
-strip_classes:
-  - banners-simple
-  - tm-related-products-carousel
-strip_path_prefixes:
-  - /catalogo/
+scraper:
+  home_url: https://www.casarica.com.py
+  scrape_pattern: "-p\\d+"
+  max_pages: 40000
+  ignore_patterns:
+    - /login
+    - /cart
+    - /account
+    - /checkout
+    - /register
+  strip_path_prefixes:
+    - /catalogo/
+parser:
+  strip_classes:
+    - banners-simple
+    - tm-related-products-carousel

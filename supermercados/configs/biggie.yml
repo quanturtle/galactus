@@ -1,4 +1,5 @@
 source: biggie
-base_url: https://api.app.biggie.com.py/api
-api_endpoint: /articles
-page_size: 100
+scraper:
+  base_url: https://api.app.biggie.com.py/api
+  api_endpoint: /articles
+  page_size: 100

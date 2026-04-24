@@ -72,7 +72,7 @@ def _parse_post(post: dict) -> dict | None:
     }
 
 
-def parse(response_text: str) -> list[dict]:
+def transform(response_text: str) -> list[dict]:
     posts = json.loads(response_text)
     results = []
 

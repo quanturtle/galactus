@@ -1,7 +1,7 @@
-"""Shared parser for WordPress-style sites that expose JSON-LD + OG meta.
+"""Shared transformer for WordPress-style sites that expose JSON-LD + OG meta.
 
 Callers bind it to a source name and a list of body container CSS selectors;
-`make_parser` returns a `parse(html, url)` callable ready for discovery.
+`make_transformer` returns a `transform(html, url)` callable ready for discovery.
 """
 
 import json
@@ -12,11 +12,11 @@ from bs4 import BeautifulSoup
 from galactus.parsing import build_image_urls, extract_body_images, extract_json_ld, meta
 
 
-def make_parser(source: str, body_containers: list[str]) -> Callable[[str, str], dict | None]:
+def make_transformer(source: str, body_containers: list[str]) -> Callable[[str, str], dict | None]:
     body_selector = ", ".join(f"{c} p" for c in body_containers)
     images_selector = ", ".join(body_containers)
 
-    def parse(html: str, url: str) -> dict | None:
+    def transform(html: str, url: str) -> dict | None:
         soup = BeautifulSoup(html, "lxml")
 
         json_ld = extract_json_ld(soup)
@@ -77,4 +77,4 @@ def make_parser(source: str, body_containers: list[str]) -> Callable[[str, str],
             "raw_data": raw_data,
         }
 
-    return parse
+    return transform

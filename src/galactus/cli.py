@@ -3,14 +3,13 @@
 import argparse
 import asyncio
 import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 
 from galactus import db
+from galactus.domain import DomainSpec, Pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -19,16 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
 
-@dataclass
-class DomainSpec:
-    """Everything the CLI needs to run a domain's scrape/transform/image ops."""
-
-    name: str
-    description: str
-    scrapers: dict[str, type]
-    transform_runner: Callable[..., Awaitable[int]]
-    image_downloader: Callable[..., Awaitable[int]] | None = None
-    setup: Callable[[], None] | None = None
+__all__ = ["DomainSpec", "main"]
 
 
 # ---- Database commands (alembic wrapper) -----------------------------------
@@ -81,7 +71,7 @@ def _run_db(args: argparse.Namespace) -> None:
 # ---- Domain commands -------------------------------------------------------
 
 def register_domain_commands(subparsers: argparse._SubParsersAction, spec: DomainSpec) -> None:
-    choices = list(spec.scrapers.keys())
+    choices = list(spec.pipelines.keys())
 
     p = subparsers.add_parser(spec.name, help=spec.description)
     sub = p.add_subparsers(dest="subcommand", required=True)
@@ -97,7 +87,7 @@ def register_domain_commands(subparsers: argparse._SubParsersAction, spec: Domai
     p_all = sub.add_parser("run-all", help="Scrape + transform")
     p_all.add_argument("--source", choices=choices, nargs="+", default=choices)
 
-    if spec.image_downloader is not None:
+    if spec.image_scraper is not None:
         p_images = sub.add_parser(
             "download-images",
             help="Download pending silver image rows to S3/MinIO",
@@ -113,49 +103,47 @@ async def _run_domain(spec: DomainSpec, args: argparse.Namespace) -> None:
     try:
         sub = args.subcommand
         if sub == "scrape":
-            await _run_scrape(spec.scrapers, args.source)
+            await _run_scrape(spec.pipelines, args.source)
         elif sub == "transform":
-            await _run_transform(spec.transform_runner, args.source)
+            await _run_transform(spec.pipelines, args.source)
         elif sub == "run-all":
-            await _run_scrape(spec.scrapers, args.source)
-            await _run_transform(spec.transform_runner, args.source)
+            await _run_scrape(spec.pipelines, args.source)
+            await _run_transform(spec.pipelines, args.source)
         elif sub == "download-images":
-            assert spec.image_downloader is not None
-            await _run_images(spec.image_downloader, args.source)
+            assert spec.image_scraper is not None
+            await _run_images(spec.pipelines, spec.image_scraper, args.source)
         else:
             raise AssertionError(f"unknown domain subcommand: {sub}")
     finally:
         await db.close()
 
 
-async def _run_scrape(scrapers: dict[str, type], sources: list[str]) -> None:
-    tasks = [scrapers[name]().run() for name in sources]
-    await asyncio.gather(*tasks)
+async def _run_scrape(pipelines: dict[str, Pipeline], sources: list[str]) -> None:
+    await asyncio.gather(*(pipelines[name].scrape() for name in sources))
 
 
 async def _run_transform(
-    runner: Callable[..., Awaitable[int]],
+    pipelines: dict[str, Pipeline],
     sources: list[str] | None,
 ) -> None:
+    selected = sources if sources else list(pipelines.keys())
     total = 0
-    if sources:
-        for source in sources:
-            total += await runner(source=source)
-    else:
-        total = await runner()
+    for name in selected:
+        total += await pipelines[name].transform()
     logger.info("%d rows inserted into silver", total)
 
 
 async def _run_images(
-    downloader: Callable[..., Awaitable[int]],
+    pipelines: dict[str, Pipeline],
+    image_scraper: type,
     sources: list[str] | None,
 ) -> None:
-    total = 0
     if sources:
-        for source in sources:
-            total += await downloader(source=source)
+        total = 0
+        for name in sources:
+            total += await pipelines[name].download_images()
     else:
-        total = await downloader()
+        total = await image_scraper().run()
     logger.info("%d image rows processed", total)
 
 

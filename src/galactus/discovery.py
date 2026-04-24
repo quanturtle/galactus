@@ -29,55 +29,55 @@ def discover_scrapers(
     return scrapers
 
 
-def discover_parsers(
+def discover_transformers(
     package: ModuleType,
 ) -> tuple[dict[str, Callable], dict[str, Callable]]:
-    """Return ``(html_parsers, api_parsers)`` by scanning *package*.
+    """Return ``(html_transformers, api_transformers)`` by scanning *package*.
 
-    A module is registered if it exposes a ``parse`` callable. Classification:
-      - explicit: module sets ``PARSER_KIND = "html"`` or ``"api"``;
-      - fallback: ``parse`` signature with >= 2 params → html, else api.
+    A module is registered if it exposes a ``transform`` callable. Classification:
+      - explicit: module sets ``TRANSFORMER_KIND = "html"`` or ``"api"``;
+      - fallback: ``transform`` signature with >= 2 params → html, else api.
     """
-    html_parsers: dict[str, Callable] = {}
-    api_parsers: dict[str, Callable] = {}
+    html_transformers: dict[str, Callable] = {}
+    api_transformers: dict[str, Callable] = {}
     package_dir = Path(package.__file__).parent
     for _, name, _ in pkgutil.iter_modules([str(package_dir)]):
         if name.startswith("_"):
             continue
         module = importlib.import_module(f"{package.__name__}.{name}")
-        parse_fn = getattr(module, "parse", None)
-        if parse_fn is None:
+        transform_fn = getattr(module, "transform", None)
+        if transform_fn is None:
             continue
         source = getattr(module, "SOURCE", name)
-        kind = getattr(module, "PARSER_KIND", None)
+        kind = getattr(module, "TRANSFORMER_KIND", None)
         if kind is None:
-            kind = "html" if len(inspect.signature(parse_fn).parameters) >= 2 else "api"
+            kind = "html" if len(inspect.signature(transform_fn).parameters) >= 2 else "api"
         if kind == "html":
-            html_parsers[source] = parse_fn
+            html_transformers[source] = transform_fn
         elif kind == "api":
-            api_parsers[source] = parse_fn
+            api_transformers[source] = transform_fn
         else:
-            raise ValueError(f"{module.__name__}: invalid PARSER_KIND={kind!r}")
-    return html_parsers, api_parsers
+            raise ValueError(f"{module.__name__}: invalid TRANSFORMER_KIND={kind!r}")
+    return html_transformers, api_transformers
 
 
 @dataclass
-class ParserRegistry:
+class TransformerRegistry:
     html: dict[str, Callable]
     api: dict[str, Callable]
 
     @classmethod
-    def from_package(cls, package: ModuleType) -> "ParserRegistry":
-        return cls(*discover_parsers(package))
+    def from_package(cls, package: ModuleType) -> "TransformerRegistry":
+        return cls(*discover_transformers(package))
 
-    def parse_snapshot(self, source: str, html: str, url: str) -> dict | None:
+    def transform_snapshot(self, source: str, html: str, url: str) -> dict | None:
         fn = self.html.get(source)
         if fn is None:
-            raise ValueError(f"No HTML parser registered for source: {source}")
+            raise ValueError(f"No HTML transformer registered for source: {source}")
         return fn(html, url)
 
-    def parse_api_response(self, source: str, response_text: str) -> list[dict]:
+    def transform_api_response(self, source: str, response_text: str) -> list[dict]:
         fn = self.api.get(source)
         if fn is None:
-            raise ValueError(f"No API parser registered for source: {source}")
+            raise ValueError(f"No API transformer registered for source: {source}")
         return fn(response_text)

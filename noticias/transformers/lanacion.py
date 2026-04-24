@@ -3,9 +3,9 @@ import json
 from bs4 import BeautifulSoup
 from galactus.parsing import build_image_urls
 
-SOURCE = "latribuna"
+SOURCE = "lanacion"
 
-BASE_URL = "https://www.latribuna.com.py"
+BASE_URL = "https://www.lanacion.com.py"
 
 
 def _parse_article(gc: dict) -> dict | None:
@@ -30,33 +30,33 @@ def _parse_article(gc: dict) -> dict | None:
         elif el.get("type") == "image" and el.get("url"):
             body_images.append(el["url"])
 
-    website_url = gc.get("website_url", "")
-    source_url = BASE_URL + website_url if website_url else gc.get("canonical_url", "")
+    body = "\n\n".join(body_parts) if body_parts else gc.get("description", {}).get("basic")
+
+    canonical = gc.get("canonical_url", "")
+    source_url = BASE_URL + canonical if canonical.startswith("/") else canonical
 
     hero = promo.get("url")
     all_images = build_image_urls(hero, body_images)
 
     return {
-        "source": "latribuna",
+        "source": "lanacion",
         "source_url": source_url,
         "title": title,
         "subtitle": subheadlines.get("basic"),
-        "body": "\n\n".join(body_parts) if body_parts else None,
+        "body": body,
         "author": authors[0].get("name") if authors else None,
         "published_at": gc.get("publish_date") or gc.get("display_date"),
         "section": primary_section.get("name"),
         "image_url": hero,
         "images": all_images or [],
-        "raw_data": json.dumps(gc, ensure_ascii=False),
     }
 
 
-def parse(response_text: str) -> list[dict]:
+def transform(response_text: str) -> list[dict]:
     data = json.loads(response_text)
-    elements = data.get("content_elements", [])
     results = []
 
-    for gc in elements:
+    for gc in data.get("content_elements", []):
         article = _parse_article(gc)
         if article:
             results.append(article)

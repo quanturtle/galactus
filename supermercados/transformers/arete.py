@@ -3,7 +3,7 @@ from galactus.parsing import extract_var_data, safe_int
 SOURCE = "arete"
 
 
-def parse(html: str, url: str) -> dict | None:
+def transform(html: str, url: str) -> dict | None:
     data = extract_var_data(html)
     if not data:
         return None
