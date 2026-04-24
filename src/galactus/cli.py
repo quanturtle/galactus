@@ -10,6 +10,7 @@ from alembic.config import Config as AlembicConfig
 
 from galactus import db
 from galactus.domain import DomainSpec, Pipeline
+from galactus.scrapers.images import ImageScraper
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ async def _run_transform(
 
 async def _run_images(
     pipelines: dict[str, Pipeline],
-    image_scraper: type,
+    image_scraper: ImageScraper,
     sources: list[str] | None,
 ) -> None:
     if sources:
@@ -143,7 +144,7 @@ async def _run_images(
         for name in sources:
             total += await pipelines[name].download_images()
     else:
-        total = await image_scraper().run()
+        total = await image_scraper.run()
     logger.info("%d image rows processed", total)
 
 

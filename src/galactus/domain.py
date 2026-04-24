@@ -4,7 +4,8 @@ A domain is a dict of per-source Pipelines: each pipeline bundles a scraper
 class, a parser (HTML preservation policy), a transformer (bronze→silver
 extractor), and a runner that knows how to execute the transform step for
 that source. `make_domain(...)` iterates the domain's sources and calls
-`make_pipeline(...)` for each.
+`make_pipeline(...)` for each. An optional `image_config` wires a single
+shared `ImageScraper` instance onto every Pipeline.
 """
 
 from dataclasses import dataclass, field
@@ -12,6 +13,7 @@ from types import ModuleType
 from typing import Awaitable, Callable
 
 from galactus.parsers import Parser
+from galactus.scrapers.images import ImageConfig, ImageScraper
 from galactus.transformers import api_responses, snapshots
 
 
@@ -25,7 +27,7 @@ class Pipeline:
     transformer: Callable
     transformer_kind: str  # "html" | "api"
     _transform_runner: Callable[..., Awaitable[int]] = field(repr=False)
-    _image_scraper: type | None = field(default=None, repr=False)
+    _image_scraper: ImageScraper | None = field(default=None, repr=False)
 
     async def scrape(self) -> None:
         await self.scraper().run()
@@ -36,7 +38,7 @@ class Pipeline:
     async def download_images(self) -> int:
         if self._image_scraper is None:
             return 0
-        return await self._image_scraper().run(source=self.source)
+        return await self._image_scraper.run(source=self.source)
 
     async def run(self) -> None:
         """Scrape + transform for this source. Image download stays separate."""
@@ -52,7 +54,7 @@ def make_pipeline(
     transformer: Callable,
     transformer_kind: str,
     transform_runner: Callable[..., Awaitable[int]],
-    image_scraper: type | None = None,
+    image_scraper: ImageScraper | None = None,
 ) -> Pipeline:
     return Pipeline(
         source=source,
@@ -72,7 +74,7 @@ class DomainSpec:
     name: str
     description: str
     pipelines: dict[str, Pipeline]
-    image_scraper: type | None = None
+    image_scraper: ImageScraper | None = None
     setup: Callable[[], None] | None = None
 
 
@@ -84,12 +86,12 @@ def make_domain(
     scrapers: ModuleType,
     transformers: ModuleType,
     chunk_size: int,
+    image_config: ImageConfig | None = None,
     setup: Callable[[], None] | None = None,
 ) -> DomainSpec:
     html = transformers.HTML_TRANSFORMERS
     api = transformers.API_TRANSFORMERS
     parser_registry = scrapers.PARSER_REGISTRY
-    image_scraper_cls = getattr(scrapers, "IMAGE_SCRAPER", None)
 
     async def _snapshot_runner(source: str | None = None) -> int:
         return await snapshots.run(
@@ -107,6 +109,16 @@ def make_domain(
             transformer_sources=list(api),
             chunk=chunk_size,
             source=source,
+        )
+
+    image_scraper: ImageScraper | None = None
+    if image_config is not None:
+        image_scraper = ImageScraper(
+            config=image_config,
+            html_transformer_fn=transformers.transform_snapshot,
+            api_transformer_fn=transformers.transform_api_response,
+            html_sources=list(html),
+            api_sources=list(api),
         )
 
     pipelines: dict[str, Pipeline] = {}
@@ -127,13 +139,13 @@ def make_domain(
             transformer=transformer_fn,
             transformer_kind=kind,
             transform_runner=runner,
-            image_scraper=image_scraper_cls,
+            image_scraper=image_scraper,
         )
 
     return DomainSpec(
         name=name,
         description=description,
         pipelines=pipelines,
-        image_scraper=image_scraper_cls,
+        image_scraper=image_scraper,
         setup=setup,
     )

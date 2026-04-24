@@ -24,7 +24,13 @@ Table(
     Column("fetch_date", Date, nullable=False, server_default=text("CURRENT_DATE")),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     Column("parsed_at", DateTime(timezone=True)),
+    Column("images_processed_at", DateTime(timezone=True)),
     UniqueConstraint("source", "url", "fetch_date", name="uq_snapshots_source_url_date"),
     Index("idx_snapshots_unparsed", "source", postgresql_where=text("parsed_at IS NULL")),
+    Index(
+        "idx_snapshots_images_pending",
+        "source",
+        postgresql_where=text("images_processed_at IS NULL"),
+    ),
     schema="bronze",
 )

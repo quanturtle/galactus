@@ -34,13 +34,10 @@ Table(
     Column("width", Integer),
     Column("height", Integer),
     Column("content_hash", String(64)),
-    Column("download_status", String(20), nullable=False, server_default=text("'pending'")),
-    Column("download_error", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     UniqueConstraint("silver_article_id", "image_url", name="uq_silver_article_image"),
     Index("idx_silver_images_article", "silver_article_id"),
-    Index("idx_silver_images_status", "download_status"),
     Index("idx_silver_images_hash", "content_hash"),
     schema="silver",
 )

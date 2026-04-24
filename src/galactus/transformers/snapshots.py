@@ -17,9 +17,7 @@ class Persistable(Protocol):
     @classmethod
     def model_validate(cls, data: dict) -> Any: ...
     @classmethod
-    def persist_many(
-        cls, items: list, *, conn: Any,
-    ) -> Awaitable[list[tuple[int, str, str]]]: ...
+    def persist_many(cls, items: list, *, conn: Any) -> Awaitable[int]: ...
 
 
 async def run(
@@ -99,10 +97,10 @@ async def _commit_chunk(
 ) -> tuple[int, int]:
     entities, skipped = _build_entities(rows, entity_cls, transformer_fn)
     async with db.transaction() as conn:
-        persisted = await entity_cls.persist_many(entities, conn=conn)
+        inserted = await entity_cls.persist_many(entities, conn=conn)
         await db.execute(
             "UPDATE bronze.snapshots SET parsed_at = NOW() WHERE id = ANY(%s)",
             [[r["id"] for r in rows]],
             conn=conn,
         )
-    return len(persisted), skipped
+    return inserted, skipped
