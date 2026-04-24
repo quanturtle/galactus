@@ -16,18 +16,18 @@ cp .env.example .env
 docker compose up -d
 
 # Install the framework (Python >= 3.12). Both projects are installed by this single step.
-pip install -e .
+uv sync
 
 # Scrape
-python -m noticias.main scrape --source lanacion abc_color
-python -m supermercados.main scrape --source superseis
+uv run python -m noticias.main scrape --source lanacion abc_color
+uv run python -m supermercados.main scrape --source superseis
 
 # Transform bronze -> silver
-python -m noticias.main transform --source lanacion
-python -m supermercados.main transform --source superseis
+uv run python -m noticias.main transform --source lanacion
+uv run python -m supermercados.main transform --source superseis
 
 # Or do both in one go
-python -m noticias.main run-all --source lanacion
+uv run python -m noticias.main run-all --source lanacion
 ```
 
 ## Project structure
@@ -315,8 +315,8 @@ Daily per-source runs are orchestrated by Airflow, packaged alongside Postgres i
 ```bash
 # 1. Copy the env template and fill in the two empty secrets
 cp .env.example .env
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # -> AIRFLOW__CORE__FERNET_KEY
-python -c "import secrets; print(secrets.token_hex(32))"                                    # -> AIRFLOW__WEBSERVER__SECRET_KEY
+uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # -> AIRFLOW__CORE__FERNET_KEY
+uv run python -c "import secrets; print(secrets.token_hex(32))"                                    # -> AIRFLOW__WEBSERVER__SECRET_KEY
 
 # 2. Build and start everything
 docker compose up -d --build
