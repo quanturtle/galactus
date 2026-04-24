@@ -20,7 +20,7 @@ Table(
     Column("tags", ARRAY(Text), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
-    UniqueConstraint("silver_article_id"),
+    UniqueConstraint("silver_article_id", name="article_tags_silver_article_id_key"),
     Index("idx_silver_tags_article", "silver_article_id"),
     Index("idx_silver_tags_gin", "tags", postgresql_using="gin"),
     schema="silver",

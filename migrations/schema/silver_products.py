@@ -23,7 +23,7 @@ Table(
     Column("sku", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
-    UniqueConstraint("source", "url"),
+    UniqueConstraint("source", "url", name="products_source_url_key"),
     Index("idx_silver_products_source", "source"),
     Index("idx_silver_products_sku", "sku"),
     schema="silver",

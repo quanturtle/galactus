@@ -22,6 +22,30 @@ if config.config_file_name is not None:
 
 target_metadata = metadata
 
+MANAGED_SCHEMAS = {"bronze", "silver"}
+
+
+def _include_name(name, type_, parent_names):
+    if type_ == "schema":
+        return name in MANAGED_SCHEMAS
+    return True
+
+
+def _include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table":
+        return getattr(object, "schema", None) in MANAGED_SCHEMAS
+    return True
+
+
+_AUTOGEN_OPTS = dict(
+    target_metadata=target_metadata,
+    include_schemas=True,
+    include_name=_include_name,
+    include_object=_include_object,
+    compare_type=True,
+    compare_server_default=True,
+)
+
 
 def _database_url() -> str:
     url = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
@@ -35,10 +59,9 @@ def _database_url() -> str:
 def run_migrations_offline() -> None:
     context.configure(
         url=_database_url(),
-        target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        include_schemas=True,
+        **_AUTOGEN_OPTS,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -53,11 +76,7 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            include_schemas=True,
-        )
+        context.configure(connection=connection, **_AUTOGEN_OPTS)
         with context.begin_transaction():
             context.run_migrations()
 
