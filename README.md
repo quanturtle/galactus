@@ -18,17 +18,37 @@ docker compose up -d
 # Install the framework (Python >= 3.12). Both projects are installed by this single step.
 uv sync
 
+# Apply DB migrations (one-off; docker compose also runs this automatically via the db-migrate service)
+uv run galactus migrate
+
 # Scrape
-uv run python -m noticias.main scrape --source lanacion abc_color
-uv run python -m supermercados.main scrape --source superseis
+uv run galactus noticias scrape --source lanacion abc_color
+uv run galactus supermercados scrape --source superseis
 
 # Transform bronze -> silver
-uv run python -m noticias.main transform --source lanacion
-uv run python -m supermercados.main transform --source superseis
+uv run galactus noticias transform --source lanacion
+uv run galactus supermercados transform --source superseis
 
 # Or do both in one go
-uv run python -m noticias.main run-all --source lanacion
+uv run galactus noticias run-all --source lanacion
 ```
+
+## Schema
+
+Alembic is the single source of truth. Table definitions live in `migrations/schema/*.py` (SQLAlchemy `Table` objects consumed by autogenerate), and `migrations/versions/*.py` holds the revision history. `docker compose up -d` boots Postgres, then the `db-migrate` one-shot service runs `galactus migrate` (i.e. `alembic upgrade head`) before Airflow starts.
+
+Outside Docker, apply changes with:
+
+```bash
+uv run galactus migrate                 # alembic upgrade head
+uv run galactus current                 # print current revision
+uv run galactus history                 # print revision graph
+uv run galactus downgrade -n 1          # roll back one step
+uv run galactus stamp <rev>             # mark revision applied without running
+uv run galactus revision --autogenerate -m "message"
+```
+
+The Pydantic `Article` (`noticias/article.py`) and `Product` (`supermercados/product.py`) models are per-domain validation + persistence helpers, not SQL schema.
 
 ## Project structure
 
@@ -51,14 +71,14 @@ galactus/
 │   ├── scrapers/              # 10 news source scrapers + _base.py
 │   ├── parsers/               # Per-source parsers (HTML or JSON → article dict)
 │   ├── transforms/            # Bronze → silver dispatch (bronze_to_silver.py)
-│   └── main.py                # CLI entry point (scrape / transform / run-all)
+│   └── __init__.py            # DomainSpec (registered into the `galactus` CLI)
 ├── supermercados/             # Supermarket scraper application
 │   ├── config.py              # Pydantic settings
 │   ├── configs/               # YAML configs per store
 │   ├── scrapers/              # 5 store scrapers + _base.py
 │   ├── parsers/               # Per-store parsers (HTML or JSON → product dict)
 │   ├── transforms/            # Bronze → silver dispatch
-│   └── main.py                # CLI entry point
+│   └── __init__.py            # DomainSpec (registered into the `galactus` CLI)
 ├── airflow/                   # Airflow orchestration
 │   ├── Dockerfile             # Bakes framework + both projects into the image
 │   └── dags/                  # noticias_daily.py, supermercados_daily.py
@@ -211,7 +231,7 @@ class ApiScraper(_ApiScraper):
 
 ### 3. Add a CLI entry point
 
-See `noticias/main.py` or `supermercados/main.py` for the pattern: argparse with `scrape` and `transform` subcommands.
+See `noticias/__init__.py` or `supermercados/__init__.py` for the pattern: export a `DOMAIN: DomainSpec` and register it in `galactus.cli.main()`.
 
 ## Adding a new source
 
@@ -327,7 +347,7 @@ open http://localhost:8080   # login: admin / admin
 
 The `airflow-init` service seeds the metadata DB and admin user, then exits. Scheduler and webserver keep running.
 
-If you already have a `pgdata` volume from an earlier setup, the new `08-airflow-db.sql` init script won't run (Postgres only runs init scripts on a fresh data dir). Create the database once manually:
+If you already have a `pgdata` volume from an earlier setup, the `00-airflow-db.sql` init script won't run (Postgres only runs init scripts on a fresh data dir). Create the database once manually:
 
 ```bash
 docker compose exec db psql -U galactus -c "CREATE DATABASE airflow;"
@@ -345,8 +365,8 @@ Both DAGs ship paused. Unpause them from the UI once you've verified a manual tr
 Each task shells out to the CLI from inside the Airflow image:
 
 ```bash
-cd /opt/galactus && python -m noticias.main run-all --source <name>
-cd /opt/galactus && python -m supermercados.main run-all --source <name>
+cd /opt/galactus && galactus noticias run-all --source <name>
+cd /opt/galactus && galactus supermercados run-all --source <name>
 ```
 
 `run-all` scrapes bronze and transforms to silver in a single task. Retries are 2 with 15-minute back-off and a 2-hour execution timeout.

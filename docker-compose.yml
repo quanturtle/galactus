@@ -30,6 +30,15 @@ services:
       timeout: 5s
       retries: 5
 
+  db-migrate:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command: ["-c", "cd /opt/galactus && galactus migrate"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
@@ -43,6 +52,11 @@ services:
           --firstname Admin --lastname User --role Admin --email admin@example.com \
           || true
     restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
 
   airflow-scheduler:
     <<: *airflow-common
@@ -51,6 +65,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       airflow-init:
         condition: service_completed_successfully
 
@@ -63,6 +79,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       airflow-init:
         condition: service_completed_successfully
     healthcheck:
