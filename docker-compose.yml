@@ -9,6 +9,13 @@ x-airflow-common: &airflow-common
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - airflow_logs:/opt/airflow/logs
+    - ./src:/opt/galactus/src
+    - ./noticias:/opt/galactus/noticias
+    - ./supermercados:/opt/galactus/supermercados
+    - ./migrations:/opt/galactus/migrations
+    - ./alembic.ini:/opt/galactus/alembic.ini
+    - ./pyproject.toml:/opt/galactus/pyproject.toml
+    - ./requirements.txt:/opt/galactus/requirements.txt
   depends_on:
     db:
       condition: service_healthy

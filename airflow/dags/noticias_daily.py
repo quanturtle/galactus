@@ -22,6 +22,7 @@ with DAG(
     start_date=datetime(2026, 4, 20),
     catchup=False,
     max_active_runs=1,
+    max_active_tasks=2,
     default_args={
         "retries": 2,
         "retry_delay": timedelta(minutes=15),
