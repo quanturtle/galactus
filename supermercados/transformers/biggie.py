@@ -1,8 +1,22 @@
 import json
 
-from galactus.parsing import safe_int
+from galactus.parsing import safe_int, slugify
 
 SOURCE = "biggie"
+
+_PRODUCT_PAGE_BASE = "https://biggie.com.py/item"
+
+
+def _build_url(name: str, code: str) -> str:
+    return f"{_PRODUCT_PAGE_BASE}/{slugify(name)}-{code}"
+
+
+def _full_size_image_urls(item: dict) -> list[str]:
+    return [
+        im["src"]
+        for im in (item.get("images") or [])
+        if im.get("type") == 0 and im.get("src")
+    ]
 
 
 def transform(response_text: str) -> list[dict]:
@@ -12,7 +26,8 @@ def transform(response_text: str) -> list[dict]:
 
     for item in data.get("items", []):
         name = item.get("name", "").strip()
-        if not name:
+        code = str(item.get("code", "")).strip()
+        if not name or not code:
             continue
 
         brand = (item.get("brand") or {}).get("name", "").strip()
@@ -28,11 +43,12 @@ def transform(response_text: str) -> list[dict]:
             price = item["priceSaleOffer"]
 
         results.append({
-            "url": f"api://biggie/{item['id']}",
+            "url": _build_url(name, code),
             "name": name,
             "description": description,
             "price": safe_int(price),
-            "sku": str(item.get("code", "")) or None,
+            "sku": code,
+            "images": _full_size_image_urls(item),
         })
 
     return results

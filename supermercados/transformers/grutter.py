@@ -6,6 +6,10 @@ from galactus.parsing import safe_int
 SOURCE = "grutter"
 
 
+def _image_urls(item: dict) -> list[str]:
+    return [im["src"] for im in (item.get("images") or []) if im.get("src")]
+
+
 def transform(response_text: str) -> list[dict]:
     """Parse a Grutter API response page into silver-ready product dicts."""
     items = json.loads(response_text)
@@ -13,7 +17,8 @@ def transform(response_text: str) -> list[dict]:
 
     for item in items:
         name = html.unescape(item.get("name", "")).strip()
-        if not name:
+        permalink = (item.get("permalink") or "").strip()
+        if not name or not permalink:
             continue
 
         prices = item.get("prices") or {}
@@ -21,11 +26,12 @@ def transform(response_text: str) -> list[dict]:
         category = categories[0]["name"] if categories else None
 
         results.append({
-            "url": f"api://grutter/{item['id']}",
+            "url": permalink,
             "name": name,
             "description": category,
             "price": safe_int(prices.get("price")),
             "sku": str(item.get("sku", "")) or None,
+            "images": _image_urls(item),
         })
 
     return results

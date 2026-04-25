@@ -2,10 +2,13 @@
 
 import json
 import re
+import unicodedata
 
 from bs4 import BeautifulSoup
 
 IMAGE_EXCLUDE = {"logo", "icon", "avatar", "emoji", "gravatar", "sprite", "pixel", "tracking", "badge"}
+
+_SLUG_NONALNUM = re.compile(r"[^a-z0-9]+")
 
 
 def meta(soup: BeautifulSoup, prop: str) -> str | None:
@@ -70,6 +73,15 @@ def safe_int(val: str | None) -> int | None:
         return int(float(val))
     except (ValueError, TypeError):
         return None
+
+
+def slugify(text: str) -> str:
+    """Lowercase, strip accents, collapse non-alphanumerics to single hyphens."""
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    return _SLUG_NONALNUM.sub("-", ascii_only.lower()).strip("-")
 
 
 def extract_var_data(html: str) -> dict | None:
