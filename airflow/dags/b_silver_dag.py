@@ -12,8 +12,7 @@ SUPERMERCADOS_SOURCES = [
 ]
 
 with DAG(
-    dag_id="supermercados_daily",
-    # schedule="0 1 * * *",  # daily 01:00 UTC — paused during rollout
+    dag_id="b_silver",
     schedule=None,
     start_date=datetime(2026, 4, 20),
     catchup=False,
@@ -24,15 +23,10 @@ with DAG(
         "retry_delay": timedelta(minutes=15),
         "execution_timeout": timedelta(hours=2),
     },
-    tags=["scraper", "supermercados"],
+    tags=["scraper", "supermercados", "silver"],
 ) as dag:
+    download_tasks = []
     for source in SUPERMERCADOS_SOURCES:
-        scrape = BashOperator(
-            task_id=f"scrape_{source}",
-            bash_command=(
-                f"cd /opt/galactus && galactus supermercados scrape --source {source}"
-            ),
-        )
         transform = BashOperator(
             task_id=f"transform_{source}",
             bash_command=(
@@ -45,4 +39,16 @@ with DAG(
                 f"cd /opt/galactus && galactus supermercados download-images --source {source}"
             ),
         )
-        scrape >> transform >> download_images
+        transform >> download_images
+        download_tasks.append(download_images)
+
+    standardize_sku = BashOperator(
+        task_id="standardize_sku",
+        bash_command="cd /opt/galactus && galactus supermercados standardize --step sku",
+    )
+    standardize_name = BashOperator(
+        task_id="standardize_name",
+        bash_command="cd /opt/galactus && galactus supermercados standardize --step name",
+    )
+
+    download_tasks >> standardize_sku >> standardize_name
