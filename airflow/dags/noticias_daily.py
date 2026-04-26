@@ -42,4 +42,10 @@ with DAG(
                 f"cd /opt/galactus && galactus noticias transform --source {source}"
             ),
         )
-        scrape >> transform
+        download_images = BashOperator(
+            task_id=f"download_images_{source}",
+            bash_command=(
+                f"cd /opt/galactus && galactus noticias download-images --source {source}"
+            ),
+        )
+        scrape >> transform >> download_images

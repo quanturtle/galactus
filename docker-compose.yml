@@ -66,6 +66,40 @@ services:
       db-migrate:
         condition: service_completed_successfully
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    env_file: .env
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing local/${NOTICIAS_S3_BUCKET:-noticias-images} &&
+        mc mb --ignore-existing local/${SUPERMERCADOS_S3_BUCKET:-supermercados-images}
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
@@ -76,6 +110,8 @@ services:
       db-migrate:
         condition: service_completed_successfully
       airflow-init:
+        condition: service_completed_successfully
+      minio-init:
         condition: service_completed_successfully
 
   airflow-webserver:
@@ -91,6 +127,8 @@ services:
         condition: service_completed_successfully
       airflow-init:
         condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 30s
@@ -100,3 +138,4 @@ services:
 volumes:
   pgdata:
   airflow_logs:
+  minio_data:
