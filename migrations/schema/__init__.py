@@ -21,12 +21,16 @@ metadata = MetaData(naming_convention=NAMING_CONVENTION)
 from . import (  # noqa: E402, F401  — import for side-effect (table registration)
     bronze_snapshots,
     bronze_api_responses,
+    silver_canonical_products,
     silver_products,
+    silver_canonical_product_members,
     silver_product_images,
+    silver_price_history,
     silver_articles,
     silver_article_tags,
     silver_article_entities,
     silver_article_images,
+    gold_products,
 )
 
 __all__ = ["metadata"]

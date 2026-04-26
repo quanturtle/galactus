@@ -96,6 +96,26 @@ def register_domain_commands(subparsers: argparse._SubParsersAction, spec: Domai
         p_images.add_argument("--source", choices=choices, nargs="+", default=None,
                               help="Sources to download (default: all pending)")
 
+    if spec.name == "supermercados":
+        p_std = sub.add_parser(
+            "standardize",
+            help="Run canonical-product pipeline (sku/name/llm steps)",
+        )
+        p_std.add_argument(
+            "--step", choices=["sku", "name", "llm", "all"], default="all",
+            help="Which step to run (default: all)",
+        )
+        p_std.add_argument(
+            "--limit", type=int, default=None,
+            help="Per-step row limit (LLM defaults to 200 seed clusters if unset)",
+        )
+        p_std.add_argument(
+            "--dry-run", action="store_true",
+            help="LLM step only: print proposed merge mapping without writing",
+        )
+
+        sub.add_parser("build-gold", help="Rebuild gold.products from silver")
+
 
 async def _run_domain(spec: DomainSpec, args: argparse.Namespace) -> None:
     if spec.setup is not None:
@@ -113,6 +133,10 @@ async def _run_domain(spec: DomainSpec, args: argparse.Namespace) -> None:
         elif sub == "download-images":
             assert spec.image_scraper is not None
             await _run_images(spec.pipelines, spec.image_scraper, args.source)
+        elif sub == "standardize":
+            await _run_standardize(args.step, args.limit, dry_run=args.dry_run)
+        elif sub == "build-gold":
+            await _run_build_gold()
         else:
             raise AssertionError(f"unknown domain subcommand: {sub}")
     finally:
@@ -132,6 +156,29 @@ async def _run_transform(
     for name in selected:
         total += await pipelines[name].transform()
     logger.info("%d rows inserted into silver", total)
+
+
+async def _run_standardize(
+    step: str, limit: int | None, *, dry_run: bool = False,
+) -> None:
+    from galactus.canonical import sku_match, name_match, llm_refine
+
+    if step in ("sku", "all"):
+        await sku_match.run(limit=limit)
+    if step in ("name", "all"):
+        await name_match.run(limit=limit)
+    if step in ("llm", "all"):
+        await llm_refine.run(
+            limit=limit if limit is not None else 200,
+            dry_run=dry_run,
+        )
+
+
+async def _run_build_gold() -> None:
+    from galactus.gold import products as gold_products
+
+    n = await gold_products.run()
+    logger.info("build-gold: %d gold.products rows", n)
 
 
 async def _run_images(
