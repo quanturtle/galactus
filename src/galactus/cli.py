@@ -114,7 +114,7 @@ def register_domain_commands(subparsers: argparse._SubParsersAction, spec: Domai
             help="LLM step only: print proposed merge mapping without writing",
         )
 
-        sub.add_parser("build-gold", help="Rebuild gold.products from silver")
+        sub.add_parser("build-gold", help="Extend gold.dim_dates forward")
 
 
 async def _run_domain(spec: DomainSpec, args: argparse.Namespace) -> None:
@@ -177,8 +177,8 @@ async def _run_standardize(
 async def _run_build_gold() -> None:
     from galactus.gold import products as gold_products
 
-    n = await gold_products.run()
-    logger.info("build-gold: %d gold.products rows", n)
+    n = await gold_products.extend_dim_dates()
+    logger.info("build-gold: %d gold.dim_dates rows added", n)
 
 
 async def _run_images(

@@ -30,7 +30,7 @@ from . import (  # noqa: E402, F401  — import for side-effect (table registrat
     silver_article_tags,
     silver_article_entities,
     silver_article_images,
-    gold_products,
+    gold_dim_dates,
 )
 
 __all__ = ["metadata"]
