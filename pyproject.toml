@@ -18,6 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff"]
+mlx = ["mlx-lm"]
 
 [project.scripts]
 galactus = "galactus.cli:main"

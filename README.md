@@ -326,6 +326,31 @@ def parse(response_text: str) -> list[dict]:
     ...
 ```
 
+## Local LLM (MLX)
+
+The `standardize --step llm` substep (and the `standardize_llm` Airflow task) calls a local [`mlx_lm.server`](https://github.com/ml-explore/mlx-lm) over its OpenAI-compatible `/v1/chat/completions` endpoint to merge near-duplicate canonical product names. Apple Silicon only.
+
+```bash
+# 1. Install the optional mlx extra into .venv
+uv sync --extra mlx
+
+# 2. Start the server (defaults: model gemma-3-4b-it-qat-4bit on :8081)
+./llm/start_mlx_server.sh
+
+# 3. In another shell, run the LLM refinement step
+uv run galactus supermercados standardize --step llm --limit 50
+```
+
+Client config (read in `src/galactus/llm.py`):
+
+| Env var | Default |
+|---------|---------|
+| `GALACTUS_MLX_URL` | `http://localhost:8081` |
+| `GALACTUS_MLX_MODEL` | `mlx-community/gemma-3-4b-it-qat-4bit` |
+| `GALACTUS_LLM_TIMEOUT` | `60` |
+
+When the `standardize_llm` task runs inside the Airflow Docker container, `localhost` resolves to the container — set `GALACTUS_MLX_URL=http://host.docker.internal:8081` in the airflow service env to reach an MLX server running on the Mac host.
+
 ## Orchestration (Airflow)
 
 Daily per-source runs are orchestrated by Airflow, packaged alongside Postgres in the same `docker-compose.yml`.
