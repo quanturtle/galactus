@@ -5,7 +5,6 @@ from airflow.operators.bash import BashOperator
 
 NOTICIAS_SOURCES = [
     "abc_color",
-    "adndigital",
     "elnacional",
     "hoy",
     "lanacion",
@@ -31,9 +30,16 @@ with DAG(
     tags=["scraper", "noticias"],
 ) as dag:
     for source in NOTICIAS_SOURCES:
-        BashOperator(
-            task_id=f"run_{source}",
+        scrape = BashOperator(
+            task_id=f"scrape_{source}",
             bash_command=(
-                f"cd /opt/galactus && galactus noticias run-all --source {source}"
+                f"cd /opt/galactus && galactus noticias scrape --source {source}"
             ),
         )
+        transform = BashOperator(
+            task_id=f"transform_{source}",
+            bash_command=(
+                f"cd /opt/galactus && galactus noticias transform --source {source}"
+            ),
+        )
+        scrape >> transform

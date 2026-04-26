@@ -27,9 +27,16 @@ with DAG(
     tags=["scraper", "supermercados"],
 ) as dag:
     for source in SUPERMERCADOS_SOURCES:
-        BashOperator(
-            task_id=f"run_{source}",
+        scrape = BashOperator(
+            task_id=f"scrape_{source}",
             bash_command=(
-                f"cd /opt/galactus && galactus supermercados run-all --source {source}"
+                f"cd /opt/galactus && galactus supermercados scrape --source {source}"
             ),
         )
+        transform = BashOperator(
+            task_id=f"transform_{source}",
+            bash_command=(
+                f"cd /opt/galactus && galactus supermercados transform --source {source}"
+            ),
+        )
+        scrape >> transform
