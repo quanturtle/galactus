@@ -23,7 +23,8 @@ def walk_imports(package_root: Path) -> list[tuple[Path, str]]:
 
 
 def test_core_has_no_forbidden_imports() -> None:
-    # core/ must not import any other galactus subpackage
+    # core/ must not import any other galactus subpackage except via Protocols.
+    # core.deps imports galactus.core.interfaces only, which is allowed.
     forbidden_prefixes = (
         "galactus.infra",
         "galactus.extract",
@@ -37,24 +38,27 @@ def test_core_has_no_forbidden_imports() -> None:
     assert not bad, f"core/ has forbidden imports: {bad}"
 
 
-def test_domain_imports_register_plugins() -> None:
-    # the domain registry is the single entry point: importing the parsers package
-    # registers the domain, and pipeline.import_domain walks the spec to load plugins
-    from galactus.core.domain_registry import get_domain, import_domain, registered_domains
-    from galactus.extract.registry import registered_scrapers
-    from galactus.transform.registry import registered_parsers
+def test_plugin_modules_register_strategies() -> None:
+    # importing each plugin module fires its @SCRAPERS.register / @PARSERS.register
+    # decorator, populating the registries.
+    from galactus.extract.registry import SCRAPERS
+    from galactus.transform.registry import PARSERS
 
-    import_domain("noticias")
-    import_domain("supermercados")
+    for mod in (
+        "galactus.extract.scrapers.noticias.abc_color",
+        "galactus.extract.scrapers.noticias.ultimahora",
+        "galactus.extract.scrapers.supermercados.biggie",
+        "galactus.extract.scrapers.supermercados.stock",
+        "galactus.transform.parsers.noticias.abc_color",
+        "galactus.transform.parsers.noticias.ultimahora",
+        "galactus.transform.parsers.supermercados.biggie",
+        "galactus.transform.parsers.supermercados.stock",
+    ):
+        importlib.import_module(mod)
 
-    assert {"noticias", "supermercados"}.issubset(set(registered_domains()))
-    assert get_domain("noticias").silver_table == "silver.articles"
-    assert get_domain("supermercados").silver_table == "silver.products"
-
-    scrapers = set(registered_scrapers())
-    parsers = set(registered_parsers())
-    assert {"ultimahora", "abc_color", "biggie", "stock"}.issubset(scrapers)
-    assert {"ultimahora", "abc_color", "biggie", "stock"}.issubset(parsers)
+    expected = {"abc_color", "ultimahora", "biggie", "stock"}
+    assert expected.issubset(set(SCRAPERS.names()))
+    assert expected.issubset(set(PARSERS.names()))
 
 
 def test_all_subpackages_import() -> None:

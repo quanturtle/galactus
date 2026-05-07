@@ -3,6 +3,8 @@ from typing import Any
 
 import httpx
 
+from galactus.config import HttpConfig
+
 
 class HttpxResponse:
     """Adapter wrapping httpx.Response to satisfy core.HttpResponse Protocol."""
@@ -47,3 +49,16 @@ class HttpxClient:
     async def aclose(self) -> None:
         await self._client.aclose()
         return
+
+
+def make_http_client(config: HttpConfig) -> HttpxClient:
+    """Construct an HttpxClient from an HttpConfig.
+
+    HttpConfig is the right scoped slice for the constructor — this is the one
+    allowed factory that takes a config sub-model rather than the whole
+    PipelineConfig.
+    """
+    return HttpxClient(
+        timeout=config.timeout_seconds,
+        headers={"User-Agent": config.user_agent},
+    )

@@ -1,8 +1,11 @@
-from collections.abc import Iterable, Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
+from contextlib import asynccontextmanager
 from typing import Any
 
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
+
+from galactus.config import DatabaseConfig
 
 
 class Database:
@@ -47,3 +50,18 @@ class Database:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.executemany(sql, list(rows))
         return
+
+
+@asynccontextmanager
+async def open_db(config: DatabaseConfig) -> AsyncIterator[Database]:
+    """Open a Database pool from config and close it on exit. Used per-source by stages."""
+    db = Database(
+        dsn=config.dsn,
+        min_size=config.min_pool_size,
+        max_size=config.max_pool_size,
+    )
+    await db.open()
+    try:
+        yield db
+    finally:
+        await db.close()

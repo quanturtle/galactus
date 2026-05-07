@@ -5,83 +5,102 @@ import yaml
 
 from galactus.config import HttpConfig, HttpOverride, load_config, resolve_http
 
-
-CONFIGS = Path(__file__).resolve().parents[2] / "configs"
-
-
-def test_noticias_config_loads() -> None:
-    config = load_config(CONFIGS / "noticias.yaml")
-    assert config.domain == "noticias"
-    names = [s.name for s in config.sources]
-    assert "ultimahora" in names and "abc_color" in names
+REPO_ROOT = Path(__file__).resolve().parents[2]
+GALACTUS_YAML = REPO_ROOT / "galactus.yaml"
 
 
-def test_supermercados_config_loads() -> None:
-    config = load_config(CONFIGS / "supermercados.yaml")
-    assert config.domain == "supermercados"
-    names = [s.name for s in config.sources]
-    assert "biggie" in names and "stock" in names
+def test_galactus_yaml_loads() -> None:
+    config = load_config(GALACTUS_YAML)
+    names = {s.name for s in config.sources}
+    assert {"abc_color", "ultimahora", "biggie", "stock"}.issubset(names)
+
+
+def test_each_source_has_bronze_and_silver_table() -> None:
+    config = load_config(GALACTUS_YAML)
+    for src in config.sources:
+        assert src.bronze_table
+        assert src.silver_table
+
+
+def test_each_extract_source_has_module() -> None:
+    config = load_config(GALACTUS_YAML)
+    for src in config.sources:
+        if src.extract is not None:
+            assert src.extract.module
+        if src.transform is not None:
+            assert src.transform.module
 
 
 def test_default_concurrency_is_one() -> None:
-    config = load_config(CONFIGS / "noticias.yaml")
-    for source in config.sources:
-        assert source.extract is not None
-        assert source.extract.concurrency >= 1
+    config = load_config(GALACTUS_YAML)
+    for src in config.sources:
+        if src.extract is not None:
+            assert src.extract.concurrency >= 1
 
 
 def test_explicit_concurrency_parses(tmp_path: Path) -> None:
-    domain = tmp_path / "demo.yaml"
-    domain.write_text(
+    config_file = tmp_path / "demo.yaml"
+    config_file.write_text(
         yaml.safe_dump(
             {
-                "domain": "demo",
                 "database": {"dsn": "postgresql://x/y"},
+                "sources": [
+                    {
+                        "name": "alpha",
+                        "bronze_table": "bronze.x",
+                        "silver_table": "silver.x",
+                        "extract": {
+                            "module": "pkg.alpha",
+                            "scraper": "alpha",
+                            "concurrency": 7,
+                        },
+                    }
+                ],
             }
         )
     )
-    sources_dir = tmp_path / "demo"
-    sources_dir.mkdir()
-    (sources_dir / "alpha.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "name": "alpha",
-                "extract": {"scraper": "x", "concurrency": 7, "options": {}},
-            }
-        )
-    )
-    config = load_config(domain)
+    config = load_config(config_file)
     assert config.sources[0].extract is not None
     assert config.sources[0].extract.concurrency == 7
 
 
-def test_missing_sources_dir_raises(tmp_path: Path) -> None:
-    domain = tmp_path / "lonely.yaml"
-    domain.write_text(
+def test_concurrency_zero_rejected(tmp_path: Path) -> None:
+    config_file = tmp_path / "bad.yaml"
+    config_file.write_text(
         yaml.safe_dump(
             {
-                "domain": "lonely",
                 "database": {"dsn": "postgresql://x/y"},
+                "sources": [
+                    {
+                        "name": "src",
+                        "bronze_table": "bronze.x",
+                        "silver_table": "silver.x",
+                        "extract": {
+                            "module": "pkg.x",
+                            "scraper": "x",
+                            "concurrency": 0,
+                        },
+                    }
+                ],
             }
         )
     )
-    with pytest.raises(ValueError, match="sources directory not found"):
-        load_config(domain)
+    with pytest.raises(Exception):  # noqa: B017
+        load_config(config_file)
 
 
-def test_empty_sources_dir_raises(tmp_path: Path) -> None:
-    domain = tmp_path / "empty.yaml"
-    domain.write_text(
+def test_source_missing_bronze_table_rejected(tmp_path: Path) -> None:
+    config_file = tmp_path / "bad.yaml"
+    config_file.write_text(
         yaml.safe_dump(
             {
-                "domain": "empty",
                 "database": {"dsn": "postgresql://x/y"},
+                "sources": [{"name": "x", "silver_table": "silver.x"}],
             }
         )
     )
-    (tmp_path / "empty").mkdir()
-    with pytest.raises(ValueError, match="no source files"):
-        load_config(domain)
+    with pytest.raises(Exception):  # noqa: B017
+        load_config(config_file)
 
 
 def test_resolve_http_no_override_returns_domain() -> None:
@@ -106,53 +125,26 @@ def test_resolve_http_full_override() -> None:
 
 
 def test_source_http_override_loads(tmp_path: Path) -> None:
-    domain = tmp_path / "demo.yaml"
-    domain.write_text(
+    config_file = tmp_path / "demo.yaml"
+    config_file.write_text(
         yaml.safe_dump(
             {
-                "domain": "demo",
                 "database": {"dsn": "postgresql://x/y"},
                 "http": {"timeout_seconds": 30.0, "user_agent": "ua/1"},
+                "sources": [
+                    {
+                        "name": "alpha",
+                        "bronze_table": "bronze.x",
+                        "silver_table": "silver.x",
+                        "http": {"timeout_seconds": 90.0},
+                        "extract": {"module": "pkg.x", "scraper": "x"},
+                    }
+                ],
             }
         )
     )
-    sources_dir = tmp_path / "demo"
-    sources_dir.mkdir()
-    (sources_dir / "alpha.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "name": "alpha",
-                "http": {"timeout_seconds": 90.0},
-                "extract": {"scraper": "x", "options": {}},
-            }
-        )
-    )
-    config = load_config(domain)
+    config = load_config(config_file)
     assert config.sources[0].http is not None
     merged = resolve_http(config.http, config.sources[0].http)
     assert merged.timeout_seconds == 90.0
     assert merged.user_agent == "ua/1"
-
-
-def test_concurrency_zero_rejected(tmp_path: Path) -> None:
-    domain = tmp_path / "bad.yaml"
-    domain.write_text(
-        yaml.safe_dump(
-            {
-                "domain": "bad",
-                "database": {"dsn": "postgresql://x/y"},
-            }
-        )
-    )
-    sources_dir = tmp_path / "bad"
-    sources_dir.mkdir()
-    (sources_dir / "src.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "name": "src",
-                "extract": {"scraper": "x", "concurrency": 0, "options": {}},
-            }
-        )
-    )
-    with pytest.raises(Exception):
-        load_config(domain)

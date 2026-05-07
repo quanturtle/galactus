@@ -1,9 +1,0 @@
-domain: supermercados
-log_level: INFO
-
-database:
-  dsn: postgresql://galactus:galactus@localhost:5432/galactus
-
-http:
-  timeout_seconds: 30.0
-  user_agent: "galactus/0.2"

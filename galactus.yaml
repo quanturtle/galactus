@@ -1,0 +1,72 @@
+log_level: INFO
+
+database:
+  dsn: postgresql://galactus:galactus@localhost:5432/galactus
+  min_pool_size: 1
+  max_pool_size: 10
+
+http:
+  timeout_seconds: 30.0
+  user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
+
+sources:
+  - name: abc_color
+    bronze_table: bronze.html_snapshots
+    silver_table: silver.articles
+    extract:
+      module: galactus.extract.scrapers.noticias.abc_color
+      scraper: abc_color
+      concurrency: 1
+      options:
+        home_url: https://www.abc.com.py
+        max_pages: 500
+    transform:
+      module: galactus.transform.parsers.noticias.abc_color
+      parser: abc_color
+      options: {}
+
+  - name: ultimahora
+    bronze_table: bronze.html_snapshots
+    silver_table: silver.articles
+    extract:
+      module: galactus.extract.scrapers.noticias.ultimahora
+      scraper: ultimahora
+      concurrency: 1
+      options:
+        home_url: https://www.ultimahora.com
+        scrape_pattern: ".*-n[0-9]+$"
+        max_pages: 500
+    transform:
+      module: galactus.transform.parsers.noticias.ultimahora
+      parser: ultimahora
+      options: {}
+
+  - name: biggie
+    bronze_table: bronze.api_snapshots
+    silver_table: silver.products
+    extract:
+      module: galactus.extract.scrapers.supermercados.biggie
+      scraper: biggie
+      concurrency: 1
+      options:
+        base_url: https://api.biggie.com.py
+        page_size: 100
+    transform:
+      module: galactus.transform.parsers.supermercados.biggie
+      parser: biggie
+      options: {}
+
+  - name: stock
+    bronze_table: bronze.api_snapshots
+    silver_table: silver.products
+    extract:
+      module: galactus.extract.scrapers.supermercados.stock
+      scraper: stock
+      concurrency: 1
+      options:
+        base_url: https://api.stock.com.py
+        page_size: 100
+    transform:
+      module: galactus.transform.parsers.supermercados.stock
+      parser: stock
+      options: {}
