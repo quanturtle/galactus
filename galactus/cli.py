@@ -2,10 +2,20 @@ import argparse
 import asyncio
 import logging
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from functools import partial
 
-from galactus.config import PipelineConfig, load_config
+from galactus.config import (
+    DatabaseConfig,
+    HttpConfig,
+    PipelineConfig,
+    load_config,
+    resolve_http,
+)
 from galactus.core.domain_registry import get_domain, import_domain
 from galactus.core.errors import PipelineError
+from galactus.core.interfaces import BronzeRepo, GoldRepo, HttpClient, SilverRepo
 from galactus.core.pipeline import Pipeline
 from galactus.extract.registry import get_scraper
 from galactus.extract.stage import ExtractSourceSpec, ExtractStage
@@ -42,24 +52,91 @@ def validate_config_against_registries(config: PipelineConfig) -> None:
     return
 
 
-def build_extract_stage(
-    *, config: PipelineConfig, http: HttpxClient, bronze: PsycopgRepo, clock: SystemClock
-) -> ExtractStage:
+def make_http_client(http_config: HttpConfig) -> HttpClient:
+    return HttpxClient(
+        timeout=http_config.timeout_seconds,
+        headers={"User-Agent": http_config.user_agent},
+    )
+
+
+def open_database(db_config: DatabaseConfig) -> Database:
+    return Database(
+        dsn=db_config.dsn,
+        min_size=db_config.min_pool_size,
+        max_size=db_config.max_pool_size,
+    )
+
+
+@asynccontextmanager
+async def bronze_lifecycle(db_config: DatabaseConfig) -> AsyncIterator[BronzeRepo]:
+    db = open_database(db_config)
+    await db.open()
+    try:
+        yield PsycopgRepo(
+            db,
+            RepoConfig(table="bronze.html_snapshots", conflict_keys=("source", "source_url")),
+        )
+    finally:
+        await db.close()
+
+
+@asynccontextmanager
+async def transform_repos_lifecycle(
+    db_config: DatabaseConfig, silver_table: str
+) -> AsyncIterator[tuple[BronzeRepo, SilverRepo]]:
+    db = open_database(db_config)
+    await db.open()
+    try:
+        bronze = PsycopgRepo(
+            db,
+            RepoConfig(table="bronze.html_snapshots", conflict_keys=("source", "source_url")),
+        )
+        silver = PsycopgRepo(
+            db, RepoConfig(table=silver_table, conflict_keys=("source", "source_url"))
+        )
+        yield bronze, silver
+    finally:
+        await db.close()
+
+
+@asynccontextmanager
+async def load_repos_lifecycle(
+    db_config: DatabaseConfig, silver_table: str
+) -> AsyncIterator[tuple[SilverRepo, GoldRepo]]:
+    db = open_database(db_config)
+    await db.open()
+    try:
+        silver = PsycopgRepo(
+            db, RepoConfig(table=silver_table, conflict_keys=("source", "source_url"))
+        )
+        gold = PsycopgRepo(db, RepoConfig(table="gold.unused"))
+        yield silver, gold
+    finally:
+        await db.close()
+
+
+def build_extract_stage(*, config: PipelineConfig, clock: SystemClock) -> ExtractStage:
     specs = [
         ExtractSourceSpec(
             name=source.name,
             scraper=source.extract.scraper,
             concurrency=source.extract.concurrency,
+            http=resolve_http(config.http, source.http),
             options=dict(source.extract.options),
         )
         for source in config.sources
         if source.extract is not None
     ]
-    return ExtractStage(http=http, bronze=bronze, clock=clock, sources=specs)
+    return ExtractStage(
+        clock=clock,
+        sources=specs,
+        http_factory=make_http_client,
+        bronze_factory=partial(bronze_lifecycle, config.database),
+    )
 
 
 def build_transform_stage(
-    *, config: PipelineConfig, bronze: PsycopgRepo, silver: PsycopgRepo, clock: SystemClock
+    *, config: PipelineConfig, silver_table: str, clock: SystemClock
 ) -> TransformStage:
     specs = [
         TransformSourceSpec(
@@ -70,48 +147,33 @@ def build_transform_stage(
         for source in config.sources
         if source.transform is not None
     ]
-    return TransformStage(bronze=bronze, silver=silver, clock=clock, sources=specs)
+    return TransformStage(
+        clock=clock,
+        sources=specs,
+        repos_factory=partial(transform_repos_lifecycle, config.database, silver_table),
+    )
+
+
+def build_load_stage(*, config: PipelineConfig, silver_table: str) -> LoadStage:
+    return LoadStage(repos_factory=partial(load_repos_lifecycle, config.database, silver_table))
 
 
 async def run(config: PipelineConfig, stage: str | None) -> None:
-    # initialize infra
+    # initialize stateless infra (clock, plugin registry); db pools are per-source
     clock = SystemClock()
-    http = HttpxClient(
-        timeout=config.http.timeout_seconds,
-        headers={"User-Agent": config.http.user_agent},
-    )
-    db = Database(
-        dsn=config.database.dsn,
-        min_size=config.database.min_pool_size,
-        max_size=config.database.max_pool_size,
-    )
-    await db.open()
 
     # register domain plugins (must precede silver wiring — registry owns the table name)
     import_domain(config.domain)
     validate_config_against_registries(config)
-
-    # build repositories — same class, configured per layer
-    bronze_html = PsycopgRepo(
-        db, RepoConfig(table="bronze.html_snapshots", conflict_keys=("source", "source_url"))
-    )
     silver_table = get_domain(config.domain).silver_table
-    silver = PsycopgRepo(db, RepoConfig(table=silver_table, conflict_keys=("source", "source_url")))
-    gold = PsycopgRepo(db, RepoConfig(table="gold.unused"))
 
-    # assemble stages
-    extract = build_extract_stage(config=config, http=http, bronze=bronze_html, clock=clock)
-    transform = build_transform_stage(config=config, bronze=bronze_html, silver=silver, clock=clock)
-    load = LoadStage(silver=silver, gold=gold)
+    # assemble stages — each source opens/closes its own http client and db pool
+    extract = build_extract_stage(config=config, clock=clock)
+    transform = build_transform_stage(config=config, silver_table=silver_table, clock=clock)
+    load = build_load_stage(config=config, silver_table=silver_table)
 
     pipeline = Pipeline(stages=[extract, transform, load])
-
-    # execute, then cleanly tear down
-    try:
-        await pipeline.run(stage)
-    finally:
-        await http.aclose()
-        await db.close()
+    await pipeline.run(stage)
     return
 
 

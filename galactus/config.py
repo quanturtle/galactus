@@ -24,12 +24,32 @@ class TransformConfig(BaseModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
+class HttpConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    timeout_seconds: float = 30.0
+    user_agent: str = "galactus/0.2"
+
+
+class HttpOverride(BaseModel):
+    """Per-source override of HttpConfig fields. Unset fields fall back to the domain default."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    timeout_seconds: float | None = None
+    user_agent: str | None = None
+
+
 class SourceConfig(BaseModel):
-    """One source declares both its extract and transform blocks (either may be omitted)."""
+    """One source declares both its extract and transform blocks (either may be omitted).
+
+    `http` may override individual fields of the domain-level HttpConfig per-key.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
+    http: HttpOverride | None = None
     extract: ExtractConfig | None = None
     transform: TransformConfig | None = None
 
@@ -40,13 +60,6 @@ class DatabaseConfig(BaseModel):
     dsn: str
     min_pool_size: int = 1
     max_pool_size: int = 10
-
-
-class HttpConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    timeout_seconds: float = 30.0
-    user_agent: str = "galactus/0.2"
 
 
 class BlobStoreConfig(BaseModel):
@@ -68,6 +81,20 @@ class PipelineConfig(BaseModel):
     http: HttpConfig = Field(default_factory=HttpConfig)
     blob_store: BlobStoreConfig | None = None
     log_level: str = "INFO"
+
+
+def resolve_http(domain: HttpConfig, override: HttpOverride | None) -> HttpConfig:
+    """Deep-merge an HttpOverride onto the domain HttpConfig per-key.
+
+    Unset (None) override fields fall through to the domain values. Returns a
+    fresh frozen HttpConfig — neither input is mutated.
+    """
+    if override is None:
+        return domain
+    fields = domain.model_dump()
+    for key, value in override.model_dump(exclude_none=True).items():
+        fields[key] = value
+    return HttpConfig.model_validate(fields)
 
 
 def load_config(path: str | Path) -> PipelineConfig:
