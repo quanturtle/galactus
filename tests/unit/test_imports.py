@@ -1,4 +1,4 @@
-"""Smoke tests: import graph compiles and core/ has no infra/stage/domain imports."""
+"""Smoke tests: import graph compiles and core/ has no other-layer imports."""
 
 import ast
 import importlib
@@ -29,7 +29,6 @@ def test_core_has_no_forbidden_imports() -> None:
         "galactus.extract",
         "galactus.transform",
         "galactus.load",
-        "galactus.domains",
         "galactus.pipeline",
         "galactus.config",
     )
@@ -39,12 +38,14 @@ def test_core_has_no_forbidden_imports() -> None:
 
 
 def test_domain_imports_register_plugins() -> None:
-    # importing a domain package triggers registration via decorators
+    # importing the per-domain scraper/parser packages fires the registration decorators
     from galactus.extract.registry import registered_scrapers
     from galactus.transform.registry import registered_parsers
 
-    importlib.import_module("galactus.domains.noticias")
-    importlib.import_module("galactus.domains.supermercados")
+    importlib.import_module("galactus.extract.scrapers.noticias")
+    importlib.import_module("galactus.extract.scrapers.supermercados")
+    importlib.import_module("galactus.transform.parsers.noticias")
+    importlib.import_module("galactus.transform.parsers.supermercados")
 
     scrapers = set(registered_scrapers())
     parsers = set(registered_parsers())

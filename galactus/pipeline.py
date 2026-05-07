@@ -34,12 +34,21 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def resolve_silver_table(schema_module: str) -> str:
+    """Look up SILVER_TABLE from the domain's schema module."""
+    module = importlib.import_module(schema_module)
+    return module.SILVER_TABLE
+
+
 def import_domain(domain_name: str) -> None:
     """Importing a domain triggers the @register_scraper / @register_parser decorators.
 
-    After this call, the registries contain every scraper/parser the domain ships.
+    Scrapers live under galactus.extract.scrapers.<domain>; parsers live under
+    galactus.transform.parsers.<domain>. Both packages are imported so a single
+    call populates both registries for the domain.
     """
-    importlib.import_module(f"galactus.domains.{domain_name}")
+    importlib.import_module(f"galactus.extract.scrapers.{domain_name}")
+    importlib.import_module(f"galactus.transform.parsers.{domain_name}")
     return
 
 
@@ -81,12 +90,6 @@ def build_transform_stage(
         if source.transform is not None
     ]
     return TransformStage(bronze=bronze, silver=silver, clock=clock, sources=specs)
-
-
-def resolve_silver_table(schema_module: str) -> str:
-    """Look up SILVER_TABLE from the domain's schema module."""
-    module = importlib.import_module(schema_module)
-    return module.SILVER_TABLE
 
 
 class Pipeline:

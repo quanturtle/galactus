@@ -1,5 +1,5 @@
 domain: supermercados
-schema_module: galactus.domains.supermercados.schema
+schema_module: galactus.transform.parsers.supermercados.schema
 log_level: INFO
 
 database:

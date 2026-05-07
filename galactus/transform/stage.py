@@ -42,12 +42,6 @@ class TransformStage:
         self.sources = sources
         self.batch_size = batch_size
 
-    async def run(self) -> None:
-        # iterate sources
-        for spec in self.sources:
-            await self._run_one(spec)
-        return
-
     async def _run_one(self, spec: TransformSourceSpec) -> None:
         # resolve strategy
         cls = get_parser(spec.parser)
@@ -78,4 +72,10 @@ class TransformStage:
     async def _flush(self, batch: list[ParsedRecord]) -> None:
         await self.silver.upsert_many(batch)
         await self.bronze.mark_parsed(r.bronze_id for r in batch)
+        return
+
+    async def run(self) -> None:
+        # iterate sources
+        for spec in self.sources:
+            await self._run_one(spec)
         return

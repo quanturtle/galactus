@@ -1,5 +1,5 @@
 domain: noticias
-schema_module: galactus.domains.noticias.schema
+schema_module: galactus.transform.parsers.noticias.schema
 log_level: INFO
 
 database:

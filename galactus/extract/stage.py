@@ -39,12 +39,6 @@ class ExtractStage:
         self.clock = clock
         self.sources = sources
 
-    async def run(self) -> None:
-        # iterate sources
-        for spec in self.sources:
-            await self._run_one(spec)
-        return
-
     async def _run_one(self, spec: ExtractSourceSpec) -> None:
         # resolve strategy
         cls = get_scraper(spec.scraper)
@@ -64,4 +58,10 @@ class ExtractStage:
             return
         except Exception as exc:
             raise ExtractError(f"source {spec.name!r} aborted") from exc
+        return
+
+    async def run(self) -> None:
+        # iterate sources
+        for spec in self.sources:
+            await self._run_one(spec)
         return
