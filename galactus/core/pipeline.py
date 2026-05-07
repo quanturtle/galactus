@@ -19,7 +19,7 @@ class Pipeline:
     Empty `stage_name` means all stages run in order.
     """
 
-    def __init__(self, *, stages: list[PipelineStage]) -> None:
+    def __init__(self, stages: list[PipelineStage]) -> None:
         self.stages = stages
         self._stage_index = {s.name: s for s in stages}
         if not stages:
@@ -27,7 +27,7 @@ class Pipeline:
         if len(self._stage_index) != len(stages):
             raise ValueError("duplicate stage names in pipeline")
 
-    async def run(self, *, stage_name: str | None = None) -> None:
+    async def run(self, stage_name: str | None = None) -> None:
         if stage_name is None:
             for stage in self.stages:
                 await stage.run()

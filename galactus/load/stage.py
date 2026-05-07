@@ -16,7 +16,7 @@ class LoadStage(PipelineStage):
 
     name: str = "load"
 
-    def __init__(self, *, config: PipelineConfig) -> None:
+    def __init__(self, config: PipelineConfig) -> None:
         self.config = config
 
     async def run(self) -> None:

@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+
 class HttpResponse:
     """Adapter exposing the fields scrapers read from an httpx.Response."""
 
@@ -29,7 +30,6 @@ class HttpClient:
 
     def __init__(
         self,
-        *,
         timeout: float = 30.0,
         headers: Mapping[str, str] | None = None,
         follow_redirects: bool = True,
@@ -43,7 +43,6 @@ class HttpClient:
     async def get(
         self,
         url: str,
-        *,
         headers: Mapping[str, str] | None = None,
         params: Mapping[str, Any] | None = None,
     ) -> HttpResponse:
@@ -56,7 +55,7 @@ class HttpClient:
 
 
 @asynccontextmanager
-async def open_http(*, timeout_seconds: float, user_agent: str) -> AsyncIterator[HttpClient]:
+async def open_http(timeout_seconds: float, user_agent: str) -> AsyncIterator[HttpClient]:
     """Open an HttpClient and close it on exit. Used per-source by stages."""
     client = HttpClient(
         timeout=timeout_seconds,

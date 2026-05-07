@@ -16,7 +16,6 @@ class Scraper(ABC):
 
     def __init__(
         self,
-        *,
         source: SourceName,
         http: HttpClient,
         options: dict[str, Any],

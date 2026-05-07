@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from galactus.config import PipelineConfig, load_config
+from galactus.config import load_config
 from galactus.core.errors import ConfigError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

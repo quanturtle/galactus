@@ -14,7 +14,6 @@ class Parser(ABC):
 
     def __init__(
         self,
-        *,
         source: SourceName,
         options: dict[str, Any],
     ) -> None:

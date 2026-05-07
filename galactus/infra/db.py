@@ -20,7 +20,7 @@ class Database:
     are finalized in migrations/.
     """
 
-    def __init__(self, *, dsn: str, min_size: int = 1, max_size: int = 10) -> None:
+    def __init__(self, dsn: str, min_size: int = 1, max_size: int = 10) -> None:
         self._pool = AsyncConnectionPool(
             conninfo=dsn,
             min_size=min_size,
@@ -39,42 +39,36 @@ class Database:
     async def insert(
         self,
         records: RawRecord | Iterable[RawRecord],
-        *,
         table: str,
     ) -> None:
         """Idempotent insert of one or many RawRecords into `table`.
 
-        Bronze conflict policy is fixed by table schema (no per-call
-        conflict_keys parameter, intentionally). Accepts a single record or any
-        iterable.
+        Bronze conflict policy is fixed by the table schema. Accepts a single
+        record or any iterable.
         """
         raise NotImplementedError
 
     async def upsert(
         self,
         records: ParsedRecord | Iterable[ParsedRecord],
-        *,
         table: str,
-        conflict_keys: tuple[str, ...],
     ) -> None:
         """Idempotent upsert of one or many ParsedRecords into `table`.
 
-        INSERT ... ON CONFLICT (conflict_keys) DO UPDATE. Accepts a single
-        record or any iterable.
+        INSERT ... ON CONFLICT DO UPDATE. Accepts a single record or any iterable.
         """
         raise NotImplementedError
 
     async def load_unparsed(
         self,
         source: SourceName,
-        *,
         table: str,
     ) -> AsyncIterator[RawRecord]:
         """Stream RawRecords from `table` that have not yet been marked parsed."""
         raise NotImplementedError
         yield  # makes this an async generator; without it Python treats load_unparsed() as a plain coroutine
 
-    async def mark_parsed(self, ids: Iterable[BronzeId], *, table: str) -> None:
+    async def mark_parsed(self, ids: Iterable[BronzeId], table: str) -> None:
         """Flag the given bronze rows in `table` as parsed."""
         raise NotImplementedError
 
@@ -99,9 +93,9 @@ class Database:
 
 
 @asynccontextmanager
-async def open_db(*, dsn: str) -> AsyncIterator[Database]:
+async def open_db(dsn: str) -> AsyncIterator[Database]:
     """Open a Database pool and close it on exit. Used per-source by stages."""
-    db = Database(dsn=dsn)
+    db = Database(dsn)
     await db.open()
     try:
         yield db

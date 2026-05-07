@@ -23,7 +23,7 @@ class TransformStage(PipelineStage):
 
     name: str = "transform"
 
-    def __init__(self, *, config: PipelineConfig, batch_size: int = 100) -> None:
+    def __init__(self, config: PipelineConfig, batch_size: int = 100) -> None:
         self.config = config
         self.batch_size = batch_size
 
@@ -31,11 +31,10 @@ class TransformStage(PipelineStage):
         self,
         batch: list[ParsedRecord],
         db: Database,
-        *,
         bronze_table: str,
         silver_table: str,
     ) -> None:
-        await db.upsert(batch, table=silver_table, conflict_keys=("source", "source_url"))
+        await db.upsert(batch, table=silver_table)
         await db.mark_parsed([r.bronze_id for r in batch], table=bronze_table)
         return
 

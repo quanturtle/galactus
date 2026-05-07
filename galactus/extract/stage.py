@@ -22,7 +22,7 @@ class ExtractStage(PipelineStage):
 
     name: str = "extract"
 
-    def __init__(self, *, config: PipelineConfig) -> None:
+    def __init__(self, config: PipelineConfig) -> None:
         self.config = config
 
     async def run(self) -> None:

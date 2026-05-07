@@ -55,7 +55,7 @@ def build_pipeline(config: PipelineConfig) -> Pipeline:
     )
 
 
-async def run(config: PipelineConfig, *, stage: str | None) -> None:
+async def run(config: PipelineConfig, stage: str | None) -> None:
     pipeline = build_pipeline(config)
     await pipeline.run(stage_name=stage)
     return
