@@ -4,7 +4,7 @@ import logging
 from galactus.config import PipelineConfig
 from galactus.core.errors import ExtractError
 from galactus.core.pipeline import PipelineStage
-from galactus.extract.base import Scraper
+from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.db import open_db
 from galactus.infra.http import open_http
 
@@ -36,7 +36,7 @@ class ExtractStage(PipelineStage):
         ):
             # resolve strategy
             mod = importlib.import_module(f"galactus.extract.scrapers.{ext.scraper}")
-            scraper: Scraper = mod.Scraper(
+            scraper: BaseScraper = mod.Scraper(
                 source=self.config.name,
                 http=client,
                 options=dict(ext.options),
@@ -45,7 +45,7 @@ class ExtractStage(PipelineStage):
 
             # fetch and store
             try:
-                async for record in scraper.fetch():
+                async for record in scraper.run():
                     await db.insert(record, table=self.config.bronze_table)
             except Exception as exc:
                 raise ExtractError(f"source {self.config.name!r} aborted") from exc

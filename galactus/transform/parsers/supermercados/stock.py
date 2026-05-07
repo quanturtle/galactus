@@ -6,7 +6,7 @@ from galactus.transform.base import Parser as BaseParser
 class Parser(BaseParser):
     """Parses an ApiSnapshot from stock.com.py into a Product entity."""
 
-    def parse(self, record: RawRecord) -> ParsedRecord:
+    def run(self, record: RawRecord) -> ParsedRecord:
         if not isinstance(record, ApiSnapshot):
             raise ParserError(f"stock parser expects ApiSnapshot, got {type(record).__name__}")
         raise NotImplementedError

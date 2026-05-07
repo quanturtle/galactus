@@ -57,7 +57,7 @@ class TransformStage(PipelineStage):
                     self.config.name, table=self.config.bronze_table
                 ):
                     try:
-                        batch.append(parser.parse(raw))
+                        batch.append(parser.run(raw))
                     except ParserError as exc:
                         logger.warning(
                             "parse failed for %s %s: %s",

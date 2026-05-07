@@ -1,9 +1,16 @@
-from galactus.extract.scrapers.bfs import BfsScraper
+from galactus.core.records import RawRecord
+from galactus.extract.base_scraper import BaseScraper
+from galactus.infra.http import HttpResponse
 
 
-class Scraper(BfsScraper):
-    """Scraper for ultimahora.com — BFS crawl of the news site.
+class Scraper(BaseScraper):
+    """Scraper for ultimahora.com — BFS crawl."""
 
-    Concrete URL pattern and content-page predicate provided via options;
-    inherits the generic BFS crawl logic from BfsScraper.
-    """
+    def seeds(self) -> list[str]:
+        return [self.options["home_url"]]
+
+    def extract_links(self, url: str, response: HttpResponse) -> list[str]:
+        return []  # placeholder — parse <a href> links in follow-up
+
+    def build_record(self, url: str, response: HttpResponse) -> RawRecord:
+        raise NotImplementedError  # placeholder

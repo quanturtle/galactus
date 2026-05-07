@@ -6,7 +6,7 @@ from galactus.transform.base import Parser as BaseParser
 class Parser(BaseParser):
     """Parses an HtmlSnapshot from ultimahora.com into an Article entity."""
 
-    def parse(self, record: RawRecord) -> ParsedRecord:
+    def run(self, record: RawRecord) -> ParsedRecord:
         if not isinstance(record, HtmlSnapshot):
             raise ParserError(
                 f"ultimahora parser expects HtmlSnapshot, got {type(record).__name__}"

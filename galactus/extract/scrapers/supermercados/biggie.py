@@ -1,5 +1,16 @@
-from galactus.extract.scrapers.api import ApiScraper
+from galactus.core.records import RawRecord
+from galactus.extract.base_scraper import BaseScraper
+from galactus.infra.http import HttpResponse
 
 
-class Scraper(ApiScraper):
+class Scraper(BaseScraper):
     """Scraper for biggie.com.py — paginated JSON API."""
+
+    def seeds(self) -> list[str]:
+        return [self.options["base_url"]]  # placeholder
+
+    def extract_links(self, url: str, response: HttpResponse) -> list[str]:
+        return []  # placeholder — parse next-page URL from JSON body
+
+    def build_record(self, url: str, response: HttpResponse) -> RawRecord:
+        raise NotImplementedError  # placeholder
