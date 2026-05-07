@@ -3,8 +3,7 @@ bronze_table: bronze.api_snapshots
 silver_table: silver.products
 log_level: INFO
 extract:
-  module: galactus.extract.scrapers.supermercados.biggie
-  scraper: biggie
+  scraper: supermercados.biggie
   concurrency: 1
   timeout_seconds: 30.0
   user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
@@ -12,6 +11,5 @@ extract:
     base_url: https://api.biggie.com.py
     page_size: 100
 transform:
-  module: galactus.transform.parsers.supermercados.biggie
-  parser: biggie
+  parser: supermercados.biggie
   options: {}

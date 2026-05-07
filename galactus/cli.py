@@ -10,11 +10,9 @@ from dotenv import load_dotenv
 from galactus.config import PipelineConfig, load_config
 from galactus.core.errors import ConfigError, PipelineError
 from galactus.core.pipeline import Pipeline
-from galactus.extract.registry import SCRAPERS
 from galactus.extract.stage import ExtractStage
 from galactus.infra.logging import setup_logging
 from galactus.load.stage import LoadStage
-from galactus.transform.registry import PARSERS
 from galactus.transform.stage import TransformStage
 
 logger = logging.getLogger(__name__)
@@ -27,21 +25,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def import_plugins(config: PipelineConfig) -> None:
-    """Import the source's plugin modules so their @register decorators fire.
-
-    Also validates that the configured scraper/parser names resolve in the
-    registries — raises ConfigError if a module or name is unknown.
-    """
+def validate_plugins(config: PipelineConfig) -> None:
+    """Fail fast if the configured scraper/parser modules can't be imported."""
     try:
         if config.extract is not None:
-            importlib.import_module(config.extract.module)
-            SCRAPERS.get(config.extract.scraper)
+            importlib.import_module(f"galactus.extract.scrapers.{config.extract.scraper}")
         if config.transform is not None:
-            importlib.import_module(config.transform.module)
-            PARSERS.get(config.transform.parser)
-    except (ImportError, KeyError) as exc:
-        raise ConfigError(f"plugin wiring failed for {config.name!r}: {exc}") from exc
+            importlib.import_module(f"galactus.transform.parsers.{config.transform.parser}")
+    except ImportError as exc:
+        raise ConfigError(f"plugin load failed for {config.name!r}: {exc}") from exc
     return
 
 
@@ -77,7 +69,7 @@ def main() -> int:
 
     # wire plugins and run pipeline
     try:
-        import_plugins(config)
+        validate_plugins(config)
         asyncio.run(run(config, stage=args.stage))
     except ConfigError as exc:
         logger.error("%s", exc)

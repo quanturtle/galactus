@@ -38,27 +38,26 @@ def test_core_has_no_forbidden_imports() -> None:
     assert not bad, f"core/ has forbidden imports: {bad}"
 
 
-def test_plugin_modules_register_strategies() -> None:
-    # importing each plugin module fires its @SCRAPERS.register / @PARSERS.register
-    # decorator, populating the registries.
-    from galactus.extract.registry import SCRAPERS
-    from galactus.transform.registry import PARSERS
-
-    for mod in (
+def test_plugin_modules_export_strategy_class() -> None:
+    # each plugin module must expose a Scraper or Parser attribute
+    scraper_mods = (
         "galactus.extract.scrapers.noticias.abc_color",
         "galactus.extract.scrapers.noticias.ultimahora",
         "galactus.extract.scrapers.supermercados.biggie",
         "galactus.extract.scrapers.supermercados.stock",
+    )
+    parser_mods = (
         "galactus.transform.parsers.noticias.abc_color",
         "galactus.transform.parsers.noticias.ultimahora",
         "galactus.transform.parsers.supermercados.biggie",
         "galactus.transform.parsers.supermercados.stock",
-    ):
-        importlib.import_module(mod)
-
-    expected = {"abc_color", "ultimahora", "biggie", "stock"}
-    assert expected.issubset(set(SCRAPERS.names()))
-    assert expected.issubset(set(PARSERS.names()))
+    )
+    for name in scraper_mods:
+        mod = importlib.import_module(name)
+        assert hasattr(mod, "Scraper"), f"{name} missing Scraper"
+    for name in parser_mods:
+        mod = importlib.import_module(name)
+        assert hasattr(mod, "Parser"), f"{name} missing Parser"
 
 
 def test_all_subpackages_import() -> None:

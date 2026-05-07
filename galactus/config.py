@@ -15,7 +15,6 @@ class ExtractConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    module: str
     scraper: str
     concurrency: int = Field(default=1, ge=1)
     timeout_seconds: float = 30.0
@@ -28,7 +27,6 @@ class TransformConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    module: str
     parser: str
     options: dict[str, Any] = Field(default_factory=dict)
 

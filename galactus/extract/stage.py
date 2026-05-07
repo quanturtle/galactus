@@ -1,10 +1,10 @@
+import importlib
 import logging
 
 from galactus.config import PipelineConfig
 from galactus.core.errors import ExtractError
 from galactus.core.pipeline import PipelineStage
 from galactus.extract.base import Scraper
-from galactus.extract.registry import SCRAPERS
 from galactus.infra.db import open_db
 from galactus.infra.http import open_http
 
@@ -35,8 +35,8 @@ class ExtractStage(PipelineStage):
             open_db(dsn=self.config.dsn) as db,
         ):
             # resolve strategy
-            cls = SCRAPERS.get(ext.scraper)
-            scraper: Scraper = cls(
+            mod = importlib.import_module(f"galactus.extract.scrapers.{ext.scraper}")
+            scraper: Scraper = mod.Scraper(
                 source=self.config.name,
                 http=client,
                 options=dict(ext.options),

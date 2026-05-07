@@ -1,3 +1,4 @@
+import importlib
 import logging
 
 from galactus.config import PipelineConfig
@@ -6,7 +7,6 @@ from galactus.core.pipeline import PipelineStage
 from galactus.core.records import ParsedRecord
 from galactus.infra.db import Database, open_db
 from galactus.transform.base import Parser
-from galactus.transform.registry import PARSERS
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,8 @@ class TransformStage(PipelineStage):
         # open per-run db pool
         async with open_db(dsn=self.config.dsn) as db:
             # resolve strategy
-            cls = PARSERS.get(self.config.transform.parser)
-            parser: Parser = cls(
+            mod = importlib.import_module(f"galactus.transform.parsers.{self.config.transform.parser}")
+            parser: Parser = mod.Parser(
                 source=self.config.name,
                 options=dict(self.config.transform.options),
             )

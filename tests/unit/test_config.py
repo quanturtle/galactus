@@ -28,15 +28,15 @@ def test_each_source_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.silver_table
 
 
-def test_each_extract_source_has_module(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_each_extract_source_has_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
     configs_dir = REPO_ROOT / "configs"
     for yaml_file in sorted(configs_dir.glob("*.yaml")):
         config = load_config(yaml_file)
         if config.extract is not None:
-            assert config.extract.module
+            assert config.extract.scraper
         if config.transform is not None:
-            assert config.transform.module
+            assert config.transform.parser
 
 
 def test_default_concurrency_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,8 +58,7 @@ def test_explicit_concurrency_parses(
                 "bronze_table": "bronze.x",
                 "silver_table": "silver.x",
                 "extract": {
-                    "module": "pkg.alpha",
-                    "scraper": "alpha",
+                    "scraper": "pkg.alpha",
                     "concurrency": 7,
                 },
             }
@@ -82,8 +81,7 @@ def test_concurrency_zero_rejected(
                 "bronze_table": "bronze.x",
                 "silver_table": "silver.x",
                 "extract": {
-                    "module": "pkg.x",
-                    "scraper": "x",
+                    "scraper": "pkg.x",
                     "concurrency": 0,
                 },
             }
@@ -132,7 +130,7 @@ def test_extract_http_defaults(
                 "name": "alpha",
                 "bronze_table": "bronze.x",
                 "silver_table": "silver.x",
-                "extract": {"module": "pkg.x", "scraper": "x"},
+                "extract": {"scraper": "pkg.x"},
             }
         )
     )
