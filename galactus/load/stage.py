@@ -12,6 +12,8 @@ class LoadStage:
     finalized; until then run() is a no-op.
     """
 
+    name: str = "load"
+
     def __init__(self, *, silver: SilverRepo, gold: GoldRepo) -> None:
         self.silver = silver
         self.gold = gold

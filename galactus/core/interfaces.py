@@ -74,3 +74,12 @@ class Clock(Protocol):
     """Time seam — pass instead of calling datetime.now() directly in domain code."""
 
     def now(self) -> datetime: ...
+
+
+@runtime_checkable
+class PipelineStage(Protocol):
+    """One pipeline stage. Pipeline holds an ordered list of these and dispatches by `name`."""
+
+    name: str
+
+    async def run(self) -> None: ...

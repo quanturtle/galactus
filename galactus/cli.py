@@ -1,13 +1,12 @@
 import argparse
 import asyncio
-import importlib
 import logging
 import sys
-from typing import get_args
 
 from galactus.config import PipelineConfig, load_config
+from galactus.core.domain_registry import get_domain, import_domain
 from galactus.core.errors import PipelineError
-from galactus.core.types import Stage
+from galactus.core.pipeline import Pipeline
 from galactus.extract.registry import get_scraper
 from galactus.extract.stage import ExtractSourceSpec, ExtractStage
 from galactus.infra.clock import SystemClock
@@ -27,29 +26,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("config", help="path to YAML config file")
     parser.add_argument(
         "--stage",
-        choices=list(get_args(Stage)),
         default=None,
-        help="run only one stage (default: extract then transform; load is stubbed)",
+        help="run only one stage by name (default: run all stages in order)",
     )
     return parser.parse_args(argv)
-
-
-def resolve_silver_table(schema_module: str) -> str:
-    """Look up SILVER_TABLE from the domain's schema module."""
-    module = importlib.import_module(schema_module)
-    return module.SILVER_TABLE
-
-
-def import_domain(domain_name: str) -> None:
-    """Importing a domain triggers the @register_scraper / @register_parser decorators.
-
-    Scrapers live under galactus.extract.scrapers.<domain>; parsers live under
-    galactus.transform.parsers.<domain>. Both packages are imported so a single
-    call populates both registries for the domain.
-    """
-    importlib.import_module(f"galactus.extract.scrapers.{domain_name}")
-    importlib.import_module(f"galactus.transform.parsers.{domain_name}")
-    return
 
 
 def validate_config_against_registries(config: PipelineConfig) -> None:
@@ -69,6 +49,7 @@ def build_extract_stage(
         ExtractSourceSpec(
             name=source.name,
             scraper=source.extract.scraper,
+            concurrency=source.extract.concurrency,
             options=dict(source.extract.options),
         )
         for source in config.sources
@@ -92,43 +73,7 @@ def build_transform_stage(
     return TransformStage(bronze=bronze, silver=silver, clock=clock, sources=specs)
 
 
-class Pipeline:
-    """Composition root — owns the constructed stages and runs them in order.
-
-    Pipeline is the only place that knows about both stage interfaces and
-    infra implementations. Stages are constructed once and reused for the run.
-    """
-
-    def __init__(
-        self,
-        *,
-        extract: ExtractStage,
-        transform: TransformStage,
-        load: LoadStage,
-    ) -> None:
-        self.extract = extract
-        self.transform = transform
-        self.load = load
-
-    async def run(self, stage: Stage | None = None) -> None:
-        if stage is None:
-            await self.extract.run()
-            await self.transform.run()
-            await self.load.run()
-            return
-        if stage == "extract":
-            await self.extract.run()
-            return
-        if stage == "transform":
-            await self.transform.run()
-            return
-        if stage == "load":
-            await self.load.run()
-            return
-        return
-
-
-async def run(config: PipelineConfig, stage: Stage | None) -> None:
+async def run(config: PipelineConfig, stage: str | None) -> None:
     # initialize infra
     clock = SystemClock()
     http = HttpxClient(
@@ -142,24 +87,24 @@ async def run(config: PipelineConfig, stage: Stage | None) -> None:
     )
     await db.open()
 
+    # register domain plugins (must precede silver wiring — registry owns the table name)
+    import_domain(config.domain)
+    validate_config_against_registries(config)
+
     # build repositories — same class, configured per layer
     bronze_html = PsycopgRepo(
         db, RepoConfig(table="bronze.html_snapshots", conflict_keys=("source", "source_url"))
     )
-    silver_table = resolve_silver_table(config.schema_module)
+    silver_table = get_domain(config.domain).silver_table
     silver = PsycopgRepo(db, RepoConfig(table=silver_table, conflict_keys=("source", "source_url")))
     gold = PsycopgRepo(db, RepoConfig(table="gold.unused"))
-
-    # register domain plugins
-    import_domain(config.domain)
-    validate_config_against_registries(config)
 
     # assemble stages
     extract = build_extract_stage(config=config, http=http, bronze=bronze_html, clock=clock)
     transform = build_transform_stage(config=config, bronze=bronze_html, silver=silver, clock=clock)
     load = LoadStage(silver=silver, gold=gold)
 
-    pipeline = Pipeline(extract=extract, transform=transform, load=load)
+    pipeline = Pipeline(stages=[extract, transform, load])
 
     # execute, then cleanly tear down
     try:
@@ -180,6 +125,3 @@ def main() -> int:
         logger.error("pipeline failed: %s", exc)
         return 1
     return 0
-
-
-main()

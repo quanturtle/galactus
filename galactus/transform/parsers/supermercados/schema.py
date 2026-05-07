@@ -3,8 +3,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-SILVER_TABLE = "silver.products"
-
 
 class Product(BaseModel):
     """Silver entity: a single supermarket product offering at a point in time.

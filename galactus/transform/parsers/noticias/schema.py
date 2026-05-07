@@ -2,8 +2,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-SILVER_TABLE = "silver.articles"
-
 
 class Article(BaseModel):
     """Silver entity: a single news article.

@@ -18,6 +18,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["ruff", "pytest", "pytest-asyncio"]
 
+[project.scripts]
+galactus = "galactus.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

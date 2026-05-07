@@ -1,6 +1,4 @@
-from typing import Literal, NewType
-
-Stage = Literal["extract", "transform", "load"]
+from typing import NewType
 
 SourceName = NewType("SourceName", str)
 SourceUrl = NewType("SourceUrl", str)
