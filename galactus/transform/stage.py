@@ -25,7 +25,10 @@ class TransformStage:
 
     For each enabled source, reads unparsed RawRecords, runs the configured parser,
     and upserts ParsedRecords into the silver repo. Marks bronze rows as parsed.
+    Sources run sequentially — cross-source parallelism is owned by Airflow.
     """
+
+    name: str = "transform"
 
     def __init__(
         self,
@@ -42,40 +45,37 @@ class TransformStage:
         self.sources = sources
         self.batch_size = batch_size
 
-    async def _run_one(self, spec: TransformSourceSpec) -> None:
-        # resolve strategy
-        cls = get_parser(spec.parser)
-        parser: Parser = cls(
-            source=SourceName(spec.name),
-            clock=self.clock,
-            options=spec.options,
-        )
-
-        # parse and persist
-        batch: list[ParsedRecord] = []
-        try:
-            async for raw in self.bronze.load_unparsed(SourceName(spec.name)):
-                try:
-                    batch.append(parser.parse(raw))
-                except ParserError as exc:
-                    logger.warning("parse failed for %s %s: %s", spec.name, raw.source_url, exc)
-                    continue
-                if len(batch) >= self.batch_size:
-                    await self._flush(batch)
-                    batch = []
-            if batch:
-                await self._flush(batch)
-        except Exception as exc:
-            raise TransformError(f"source {spec.name!r} aborted") from exc
-        return
-
     async def _flush(self, batch: list[ParsedRecord]) -> None:
         await self.silver.upsert_many(batch)
         await self.bronze.mark_parsed(r.bronze_id for r in batch)
         return
 
     async def run(self) -> None:
-        # iterate sources
+        # iterate sources sequentially
         for spec in self.sources:
-            await self._run_one(spec)
+
+            # resolve strategy
+            cls = get_parser(spec.parser)
+            parser: Parser = cls(
+                source=SourceName(spec.name),
+                clock=self.clock,
+                options=spec.options,
+            )
+
+            # parse and persist
+            batch: list[ParsedRecord] = []
+            try:
+                async for raw in self.bronze.load_unparsed(SourceName(spec.name)):
+                    try:
+                        batch.append(parser.parse(raw))
+                    except ParserError as exc:
+                        logger.warning("parse failed for %s %s: %s", spec.name, raw.source_url, exc)
+                        continue
+                    if len(batch) >= self.batch_size:
+                        await self._flush(batch)
+                        batch = []
+                if batch:
+                    await self._flush(batch)
+            except Exception as exc:
+                raise TransformError(f"source {spec.name!r} aborted") from exc
         return

@@ -11,6 +11,7 @@ class ExtractConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     scraper: str
+    concurrency: int = Field(default=1, ge=1)
     options: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -62,7 +63,6 @@ class PipelineConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     domain: str
-    schema_module: str
     sources: list[SourceConfig]
     database: DatabaseConfig
     http: HttpConfig = Field(default_factory=HttpConfig)
@@ -71,10 +71,20 @@ class PipelineConfig(BaseModel):
 
 
 def load_config(path: str | Path) -> PipelineConfig:
-    """Read a YAML config file and parse it into a frozen PipelineConfig.
+    """Read a domain YAML and per-source YAMLs and parse them into a frozen PipelineConfig.
 
-    Called exactly once at program startup; nothing else in the codebase reads
-    files or env vars to derive runtime configuration (rule 6).
+    Layout: `configs/<domain>.yaml` holds domain-level settings; per-source
+    files live in `configs/<domain>/*.yaml`. Called exactly once at program
+    startup; nothing else in the codebase reads files or env vars to derive
+    runtime configuration (rule 6).
     """
-    raw = yaml.safe_load(Path(path).read_text())
+    domain_path = Path(path)
+    raw = yaml.safe_load(domain_path.read_text())
+    sources_dir = domain_path.parent / domain_path.stem
+    if not sources_dir.is_dir():
+        raise ValueError(f"sources directory not found: {sources_dir}")
+    source_files = sorted(sources_dir.glob("*.yaml"))
+    if not source_files:
+        raise ValueError(f"no source files in {sources_dir}")
+    raw["sources"] = [yaml.safe_load(f.read_text()) for f in source_files]
     return PipelineConfig.model_validate(raw)

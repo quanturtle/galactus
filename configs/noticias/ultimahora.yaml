@@ -1,0 +1,11 @@
+name: ultimahora
+extract:
+  scraper: ultimahora
+  concurrency: 1
+  options:
+    home_url: https://www.ultimahora.com
+    scrape_pattern: ".*-n[0-9]+$"
+    max_pages: 500
+transform:
+  parser: ultimahora
+  options: {}

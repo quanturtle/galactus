@@ -21,11 +21,13 @@ class Scraper(ABC):
         http: HttpClient,
         clock: Clock,
         options: dict[str, Any],
+        concurrency: int = 1,
     ) -> None:
         self.source = source
         self.http = http
         self.clock = clock
         self.options = options
+        self.concurrency = concurrency
 
     @abstractmethod
     def fetch(self) -> AsyncIterator[RawRecord]:

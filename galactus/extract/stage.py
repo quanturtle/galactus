@@ -15,6 +15,7 @@ class ExtractSourceSpec:
 
     name: str
     scraper: str
+    concurrency: int
     options: dict
 
 
@@ -23,8 +24,11 @@ class ExtractStage:
 
     Iterates over enabled sources, instantiates the configured scraper strategy,
     and pipes RawRecords into BronzeRepo. Per-source ScraperErrors are logged and
-    skipped; anything else aborts with ExtractError.
+    skipped; anything else aborts with ExtractError. Sources run sequentially —
+    cross-source parallelism is owned by Airflow.
     """
+
+    name: str = "extract"
 
     def __init__(
         self,
@@ -39,29 +43,27 @@ class ExtractStage:
         self.clock = clock
         self.sources = sources
 
-    async def _run_one(self, spec: ExtractSourceSpec) -> None:
-        # resolve strategy
-        cls = get_scraper(spec.scraper)
-        scraper: Scraper = cls(
-            source=spec.name,  # type: ignore[arg-type]
-            http=self.http,
-            clock=self.clock,
-            options=spec.options,
-        )
-
-        # fetch and store
-        try:
-            async for record in scraper.fetch():
-                await self.bronze.store(record)
-        except ScraperError as exc:
-            logger.warning("source %s failed: %s", spec.name, exc)
-            return
-        except Exception as exc:
-            raise ExtractError(f"source {spec.name!r} aborted") from exc
-        return
-
     async def run(self) -> None:
-        # iterate sources
+        # iterate sources sequentially
         for spec in self.sources:
-            await self._run_one(spec)
+
+            # resolve strategy
+            cls = get_scraper(spec.scraper)
+            scraper: Scraper = cls(
+                source=spec.name,  # type: ignore[arg-type]
+                http=self.http,
+                clock=self.clock,
+                options=spec.options,
+                concurrency=spec.concurrency,
+            )
+
+            # fetch and store
+            try:
+                async for record in scraper.fetch():
+                    await self.bronze.store(record)
+            except ScraperError as exc:
+                logger.warning("source %s failed: %s", spec.name, exc)
+                continue
+            except Exception as exc:
+                raise ExtractError(f"source {spec.name!r} aborted") from exc
         return
