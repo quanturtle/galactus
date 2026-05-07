@@ -88,3 +88,8 @@ def test_pipeline_unknown_stage_name_raises_with_available_list() -> None:
 def test_pipeline_rejects_duplicate_stage_names() -> None:
     with pytest.raises(ValueError, match="duplicate stage names"):
         Pipeline(stages=[FakeStage("a"), FakeStage("a")])
+
+
+def test_pipeline_rejects_empty_stages() -> None:
+    with pytest.raises(ValueError, match="at least one stage"):
+        Pipeline(stages=[])

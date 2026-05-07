@@ -23,6 +23,8 @@ class Pipeline:
     def __init__(self, *, stages: list[PipelineStage]) -> None:
         self.stages = stages
         self._by_name = {s.name: s for s in stages}
+        if not stages:
+            raise ValueError("pipeline needs at least one stage")
         if len(self._by_name) != len(stages):
             raise ValueError("duplicate stage names in pipeline")
 

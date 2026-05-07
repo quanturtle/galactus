@@ -13,9 +13,15 @@ class HttpResponse:
     def __init__(self, response: httpx.Response) -> None:
         self._response = response
         self.status_code = response.status_code
-        self.headers = response.headers
-        self.content = response.content
-        self.text = response.text
+        self.headers: dict[str, str] = dict(response.headers)
+
+    @property
+    def content(self) -> bytes:
+        return self._response.content
+
+    @property
+    def text(self) -> str:
+        return self._response.text
 
     def json(self) -> Any:
         return self._response.json()

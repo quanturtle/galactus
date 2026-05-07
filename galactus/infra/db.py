@@ -22,7 +22,6 @@ class Database:
     """
 
     def __init__(self, *, dsn: str, min_size: int = 1, max_size: int = 10) -> None:
-        self._dsn = dsn
         self._pool = AsyncConnectionPool(
             conninfo=dsn,
             min_size=min_size,
@@ -74,7 +73,7 @@ class Database:
     ) -> AsyncIterator[RawRecord]:
         """Stream RawRecords from `table` that have not yet been marked parsed."""
         raise NotImplementedError
-        yield  # pragma: no cover
+        yield  # makes this an async generator; without it Python treats load_unparsed() as a plain coroutine
 
     async def mark_parsed(self, ids: Iterable[BronzeId], *, table: str) -> None:
         """Flag the given bronze rows in `table` as parsed."""

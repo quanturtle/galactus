@@ -14,4 +14,4 @@ class BfsScraper(Scraper):
     async def fetch(self) -> AsyncIterator[RawRecord]:
         # placeholder — concrete BFS logic ported from v1 later
         return
-        yield  # pragma: no cover
+        yield  # makes this an async generator; without it Python treats fetch() as a plain coroutine

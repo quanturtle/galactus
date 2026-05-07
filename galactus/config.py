@@ -2,7 +2,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from galactus.core.errors import ConfigError
 
 
 class ExtractConfig(BaseModel):
@@ -68,14 +70,6 @@ class DatabaseConfig(BaseModel):
     max_pool_size: int = 10
 
 
-class BlobStoreConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    bucket: str
-    region: str | None = None
-    prefix: str = ""
-
-
 class PipelineConfig(BaseModel):
     """Frozen, fully-typed runtime configuration. Loaded once at program startup."""
 
@@ -84,7 +78,6 @@ class PipelineConfig(BaseModel):
     sources: list[SourceConfig]
     database: DatabaseConfig
     http: HttpConfig = Field(default_factory=HttpConfig)
-    blob_store: BlobStoreConfig | None = None
     log_level: str = "INFO"
 
 
@@ -109,5 +102,12 @@ def load_config(path: str | Path) -> PipelineConfig:
     files or env vars to derive runtime configuration (rule 6).
     """
     config_path = Path(path)
-    raw = yaml.safe_load(config_path.read_text())
-    return PipelineConfig.model_validate(raw)
+    try:
+        raw = yaml.safe_load(config_path.read_text())
+        return PipelineConfig.model_validate(raw)
+    except FileNotFoundError as exc:
+        raise ConfigError(f"config file not found: {config_path}") from exc
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"YAML parse error in {config_path}: {exc}") from exc
+    except ValidationError as exc:
+        raise ConfigError(f"invalid config: {exc}") from exc

@@ -22,3 +22,8 @@ class TransformError(PipelineError):
 
 class LoadError(PipelineError):
     """LoadStage could not complete."""
+
+
+# raised at startup by load_config and import_plugins
+class ConfigError(PipelineError):
+    """Bad or missing configuration: file not found, YAML parse error, validation failure, unknown plugin."""

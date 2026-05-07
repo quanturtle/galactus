@@ -38,7 +38,7 @@ class TransformStage(PipelineStage):
         silver_table: str,
     ) -> None:
         await db.upsert(batch, table=silver_table, conflict_keys=("source", "source_url"))
-        await db.mark_parsed((r.bronze_id for r in batch), table=bronze_table)
+        await db.mark_parsed([r.bronze_id for r in batch], table=bronze_table)
         return
 
     async def run(self, *, sources: list[str] | None = None) -> None:
