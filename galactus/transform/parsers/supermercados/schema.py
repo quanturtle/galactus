@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class Product(BaseModel):
     """Silver entity: a single supermarket product offering at a point in time.
 
-    Persistence is handled by SilverRepo, not by this model.
+    Persistence is handled by Database.upsert, not by this model.
     """
 
     source: str

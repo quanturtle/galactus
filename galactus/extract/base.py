@@ -2,9 +2,9 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
 
-from galactus.core.interfaces import Clock, HttpClient
 from galactus.core.records import RawRecord
 from galactus.core.types import SourceName
+from galactus.infra.http import HttpxClient
 
 
 class Scraper(ABC):
@@ -18,14 +18,12 @@ class Scraper(ABC):
         self,
         *,
         source: SourceName,
-        http: HttpClient,
-        clock: Clock,
+        http: HttpxClient,
         options: dict[str, Any],
         concurrency: int = 1,
     ) -> None:
         self.source = source
         self.http = http
-        self.clock = clock
         self.options = options
         self.concurrency = concurrency
 

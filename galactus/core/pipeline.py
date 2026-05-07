@@ -1,10 +1,20 @@
-from galactus.core.interfaces import PipelineStage
+from abc import ABC, abstractmethod
+
+
+class PipelineStage(ABC):
+    """Base for pipeline stages. Subclasses set a `name: str` class attribute
+    and implement `async def run(*, source)`. Pipeline holds an ordered list
+    of these and dispatches by `name`."""
+
+    name: str
+
+    @abstractmethod
+    async def run(self, *, source: str | None = None) -> None: ...
 
 
 class Pipeline:
     """Composition root — owns an ordered list of stages and runs them in order.
 
-    Stages satisfy `PipelineStage` (a `name: str` and `async def run(*, source)`).
     Adding a 4th stage means appending it to `stages`; dispatch is by name.
     The optional `source` filter is threaded through to each stage so a single
     source can be run end-to-end.

@@ -1,41 +1,43 @@
 import logging
 
 from galactus.config import PipelineConfig
-from galactus.core.deps import Deps
 from galactus.core.errors import ParserError, TransformError
-from galactus.core.interfaces import BronzeRepo, SilverRepo
+from galactus.core.pipeline import PipelineStage
 from galactus.core.records import ParsedRecord
 from galactus.core.types import SourceName
-from galactus.infra.db import open_db
-from galactus.infra.repositories import PsycopgRepo
+from galactus.infra.db import Database, open_db
 from galactus.transform.base import Parser
 from galactus.transform.registry import PARSERS
 
 logger = logging.getLogger(__name__)
 
 
-class TransformStage:
+class TransformStage(PipelineStage):
     """Stage 2 — bronze -> silver.
 
     For each enabled source, reads unparsed RawRecords, runs the configured parser,
-    and upserts ParsedRecords into the silver repo. Marks bronze rows as parsed.
+    and upserts ParsedRecords via Database.upsert. Marks bronze rows as parsed.
     Sources run sequentially — cross-source parallelism is owned by Airflow.
-    Each source opens its own DB pool (bronze + silver share one pool) and closes
-    it before the next source starts.
+    Each source opens its own DB pool and closes it before the next source starts.
     """
 
     name: str = "transform"
 
-    def __init__(self, *, config: PipelineConfig, deps: Deps, batch_size: int = 100) -> None:
+    def __init__(self, *, config: PipelineConfig, batch_size: int = 100) -> None:
         self.config = config
-        self.deps = deps
         self.batch_size = batch_size
 
     async def _flush(
-        self, batch: list[ParsedRecord], bronze: BronzeRepo, silver: SilverRepo
+        self,
+        batch: list[ParsedRecord],
+        db: Database,
+        *,
+        bronze_table: str,
+        silver_table: str,
+        silver_conflict_keys: tuple[str, ...],
     ) -> None:
-        await silver.upsert_many(batch)
-        await bronze.mark_parsed(r.bronze_id for r in batch)
+        await db.upsert(batch, table=silver_table, conflict_keys=silver_conflict_keys)
+        await db.mark_parsed((r.bronze_id for r in batch), table=bronze_table)
         return
 
     async def run(self, *, source: str | None = None) -> None:
@@ -46,27 +48,21 @@ class TransformStage:
             if source is not None and src.name != source:
                 continue
 
-            # open per-source bronze + silver (shared db pool); closed before next source
+            # open per-source db pool; closed before next source
             async with open_db(self.config.database) as db:
-                bronze = PsycopgRepo(
-                    db, table=src.bronze_table, conflict_keys=src.bronze_conflict_keys
-                )
-                silver = PsycopgRepo(
-                    db, table=src.silver_table, conflict_keys=src.silver_conflict_keys
-                )
-
                 # resolve strategy
                 cls = PARSERS.get(src.transform.parser)
                 parser: Parser = cls(
                     source=SourceName(src.name),
-                    clock=self.deps.clock,
                     options=dict(src.transform.options),
                 )
 
                 # parse and persist
                 batch: list[ParsedRecord] = []
                 try:
-                    async for raw in bronze.load_unparsed(SourceName(src.name)):
+                    async for raw in db.load_unparsed(
+                        SourceName(src.name), table=src.bronze_table
+                    ):
                         try:
                             batch.append(parser.parse(raw))
                         except ParserError as exc:
@@ -75,10 +71,22 @@ class TransformStage:
                             )
                             continue
                         if len(batch) >= self.batch_size:
-                            await self._flush(batch, bronze, silver)
+                            await self._flush(
+                                batch,
+                                db,
+                                bronze_table=src.bronze_table,
+                                silver_table=src.silver_table,
+                                silver_conflict_keys=src.silver_conflict_keys,
+                            )
                             batch = []
                     if batch:
-                        await self._flush(batch, bronze, silver)
+                        await self._flush(
+                            batch,
+                            db,
+                            bronze_table=src.bronze_table,
+                            silver_table=src.silver_table,
+                            silver_conflict_keys=src.silver_conflict_keys,
+                        )
                 except Exception as exc:
                     raise TransformError(f"source {src.name!r} aborted") from exc
         return

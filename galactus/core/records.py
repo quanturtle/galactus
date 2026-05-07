@@ -59,7 +59,7 @@ class ParsedRecord:
     """Silver-layer record: a typed domain entity plus its bronze provenance.
 
     `entity` is a pydantic model (Article, Product, ...) defined in the domain's
-    schema module. SilverRepo upserts by (source, source_url).
+    schema module. Database.upsert is keyed by (source, source_url).
     """
 
     source: SourceName

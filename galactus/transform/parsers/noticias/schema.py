@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class Article(BaseModel):
     """Silver entity: a single news article.
 
-    Persistence is handled by SilverRepo, not by this model.
+    Persistence is handled by Database.upsert, not by this model.
     """
 
     source: str

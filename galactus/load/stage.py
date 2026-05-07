@@ -1,12 +1,12 @@
 import logging
 
 from galactus.config import PipelineConfig
-from galactus.core.deps import Deps
+from galactus.core.pipeline import PipelineStage
 
 logger = logging.getLogger(__name__)
 
 
-class LoadStage:
+class LoadStage(PipelineStage):
     """Stage 3 — silver -> gold.
 
     Stubbed for now. Aggregation logic will be ported once the silver schema is
@@ -16,9 +16,8 @@ class LoadStage:
 
     name: str = "load"
 
-    def __init__(self, *, config: PipelineConfig, deps: Deps) -> None:
+    def __init__(self, *, config: PipelineConfig) -> None:
         self.config = config
-        self.deps = deps
 
     async def run(self, *, source: str | None = None) -> None:
         logger.info("LoadStage.run() — no-op (stub)")

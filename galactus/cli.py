@@ -6,12 +6,10 @@ import sys
 from pathlib import Path
 
 from galactus.config import PipelineConfig, load_config
-from galactus.core.deps import Deps
 from galactus.core.errors import PipelineError
 from galactus.core.pipeline import Pipeline
 from galactus.extract.registry import SCRAPERS
 from galactus.extract.stage import ExtractStage
-from galactus.infra.clock import SystemClock
 from galactus.infra.logging import setup_logging
 from galactus.load.stage import LoadStage
 from galactus.transform.registry import PARSERS
@@ -48,19 +46,18 @@ def import_plugins(config: PipelineConfig) -> None:
     return
 
 
-def build_pipeline(config: PipelineConfig, deps: Deps) -> Pipeline:
+def build_pipeline(config: PipelineConfig) -> Pipeline:
     return Pipeline(
         stages=[
-            ExtractStage(config=config, deps=deps),
-            TransformStage(config=config, deps=deps),
-            LoadStage(config=config, deps=deps),
+            ExtractStage(config=config),
+            TransformStage(config=config),
+            LoadStage(config=config),
         ]
     )
 
 
 async def run(config: PipelineConfig, *, source: str | None, stage: str | None) -> None:
-    deps = Deps(clock=SystemClock())
-    pipeline = build_pipeline(config, deps)
+    pipeline = build_pipeline(config)
     await pipeline.run(source=source, stage_name=stage)
     return
 

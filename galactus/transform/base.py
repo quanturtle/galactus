@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from galactus.core.interfaces import Clock
 from galactus.core.records import ParsedRecord, RawRecord
 from galactus.core.types import SourceName
 
@@ -17,11 +16,9 @@ class Parser(ABC):
         self,
         *,
         source: SourceName,
-        clock: Clock,
         options: dict[str, Any],
     ) -> None:
         self.source = source
-        self.clock = clock
         self.options = options
 
     @abstractmethod

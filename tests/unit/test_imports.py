@@ -23,8 +23,8 @@ def walk_imports(package_root: Path) -> list[tuple[Path, str]]:
 
 
 def test_core_has_no_forbidden_imports() -> None:
-    # core/ must not import any other galactus subpackage except via Protocols.
-    # core.deps imports galactus.core.interfaces only, which is allowed.
+    # core/ must not import any other galactus subpackage. Stages and adapters
+    # depend on core; core depends on nothing outside itself.
     forbidden_prefixes = (
         "galactus.infra",
         "galactus.extract",

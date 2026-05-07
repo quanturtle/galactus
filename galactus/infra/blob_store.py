@@ -2,10 +2,7 @@ import aioboto3
 
 
 class S3BlobStore:
-    """BlobStore implementation backed by aioboto3.
-
-    Concrete put/get use S3's standard idempotent put-by-key semantics.
-    """
+    """S3-backed object store. put/get use S3's idempotent put-by-key semantics."""
 
     def __init__(self, *, bucket: str, region: str | None = None, prefix: str = "") -> None:
         self.bucket = bucket

@@ -7,7 +7,7 @@ from galactus.config import HttpConfig
 
 
 class HttpxResponse:
-    """Adapter wrapping httpx.Response to satisfy core.HttpResponse Protocol."""
+    """Adapter exposing the fields scrapers read from an httpx.Response."""
 
     def __init__(self, response: httpx.Response) -> None:
         self._response = response
@@ -21,7 +21,7 @@ class HttpxResponse:
 
 
 class HttpxClient:
-    """Default HttpClient backed by httpx.AsyncClient."""
+    """HTTP client backed by httpx.AsyncClient. Used by scrapers."""
 
     def __init__(
         self,
