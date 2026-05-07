@@ -3,7 +3,6 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from galactus.core.records import RawRecord
-from galactus.core.types import SourceName
 from galactus.infra.http import HttpClient
 
 
@@ -16,7 +15,7 @@ class Scraper(ABC):
 
     def __init__(
         self,
-        source: SourceName,
+        source: str,
         http: HttpClient,
         options: dict[str, Any],
         concurrency: int = 1,

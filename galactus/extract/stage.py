@@ -3,7 +3,6 @@ import logging
 from galactus.config import PipelineConfig
 from galactus.core.errors import ExtractError
 from galactus.core.pipeline import PipelineStage
-from galactus.core.types import SourceName
 from galactus.extract.base import Scraper
 from galactus.extract.registry import SCRAPERS
 from galactus.infra.db import open_db
@@ -38,7 +37,7 @@ class ExtractStage(PipelineStage):
             # resolve strategy
             cls = SCRAPERS.get(ext.scraper)
             scraper: Scraper = cls(
-                source=SourceName(self.config.name),
+                source=self.config.name,
                 http=client,
                 options=dict(ext.options),
                 concurrency=ext.concurrency,

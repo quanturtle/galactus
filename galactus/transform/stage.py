@@ -4,7 +4,6 @@ from galactus.config import PipelineConfig
 from galactus.core.errors import ParserError, TransformError
 from galactus.core.pipeline import PipelineStage
 from galactus.core.records import ParsedRecord
-from galactus.core.types import SourceName
 from galactus.infra.db import Database, open_db
 from galactus.transform.base import Parser
 from galactus.transform.registry import PARSERS
@@ -47,7 +46,7 @@ class TransformStage(PipelineStage):
             # resolve strategy
             cls = PARSERS.get(self.config.transform.parser)
             parser: Parser = cls(
-                source=SourceName(self.config.name),
+                source=self.config.name,
                 options=dict(self.config.transform.options),
             )
 
@@ -55,7 +54,7 @@ class TransformStage(PipelineStage):
             batch: list[ParsedRecord] = []
             try:
                 async for raw in db.load_unparsed(
-                    SourceName(self.config.name), table=self.config.bronze_table
+                    self.config.name, table=self.config.bronze_table
                 ):
                     try:
                         batch.append(parser.parse(raw))

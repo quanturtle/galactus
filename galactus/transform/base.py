@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from galactus.core.records import ParsedRecord, RawRecord
-from galactus.core.types import SourceName
 
 
 class Parser(ABC):
@@ -14,7 +13,7 @@ class Parser(ABC):
 
     def __init__(
         self,
-        source: SourceName,
+        source: str,
         options: dict[str, Any],
     ) -> None:
         self.source = source

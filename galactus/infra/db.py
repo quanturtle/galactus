@@ -6,7 +6,6 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from galactus.core.records import ParsedRecord, RawRecord
-from galactus.core.types import BronzeId, SourceName
 
 
 class Database:
@@ -61,14 +60,14 @@ class Database:
 
     async def load_unparsed(
         self,
-        source: SourceName,
+        source: str,
         table: str,
     ) -> AsyncIterator[RawRecord]:
         """Stream RawRecords from `table` that have not yet been marked parsed."""
         raise NotImplementedError
         yield  # makes this an async generator; without it Python treats load_unparsed() as a plain coroutine
 
-    async def mark_parsed(self, ids: Iterable[BronzeId], table: str) -> None:
+    async def mark_parsed(self, ids: Iterable[int], table: str) -> None:
         """Flag the given bronze rows in `table` as parsed."""
         raise NotImplementedError
 
