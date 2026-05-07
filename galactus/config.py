@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any
 
@@ -6,20 +7,24 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from galactus.core.errors import ConfigError
 
+DSN_ENV_VAR = "GALACTUS_DSN"
+
 
 class ExtractConfig(BaseModel):
-    """Extract block of one source: which scraper strategy + its options."""
+    """Extract block: which scraper strategy, HTTP knobs, and its options."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     module: str
     scraper: str
     concurrency: int = Field(default=1, ge=1)
+    timeout_seconds: float = 30.0
+    user_agent: str = "galactus/0.2"
     options: dict[str, Any] = Field(default_factory=dict)
 
 
 class TransformConfig(BaseModel):
-    """Transform block of one source: which parser strategy + its options."""
+    """Transform block: which parser strategy and its options."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -28,82 +33,33 @@ class TransformConfig(BaseModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
-class HttpConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    timeout_seconds: float = 30.0
-    user_agent: str = "galactus/0.2"
-
-
-class HttpOverride(BaseModel):
-    """Per-source override of HttpConfig fields. Unset fields fall back to the domain default."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    timeout_seconds: float | None = None
-    user_agent: str | None = None
-
-
-class SourceConfig(BaseModel):
-    """One source declares its own bronze/silver targets and its extract/transform blocks.
-
-    Sources are explicit about their schema (bronze/silver tables and conflict
-    keys) rather than inheriting them from a domain — this is the single place
-    that owns the per-source persistence shape.
-    """
+class PipelineConfig(BaseModel):
+    """One source, fully configured for one pipeline run."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     bronze_table: str
     silver_table: str
-    http: HttpOverride | None = None
+    dsn: str
+    log_level: str = "INFO"
     extract: ExtractConfig | None = None
     transform: TransformConfig | None = None
 
 
-class DatabaseConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    dsn: str
-    min_pool_size: int = 1
-    max_pool_size: int = 10
-
-
-class PipelineConfig(BaseModel):
-    """Frozen, fully-typed runtime configuration. Loaded once at program startup."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    sources: list[SourceConfig]
-    database: DatabaseConfig
-    http: HttpConfig = Field(default_factory=HttpConfig)
-    log_level: str = "INFO"
-
-
-def resolve_http(domain: HttpConfig, override: HttpOverride | None) -> HttpConfig:
-    """Deep-merge an HttpOverride onto the domain HttpConfig per-key.
-
-    Unset (None) override fields fall through to the domain values. Returns a
-    fresh frozen HttpConfig — neither input is mutated.
-    """
-    if override is None:
-        return domain
-    fields = domain.model_dump()
-    for key, value in override.model_dump(exclude_none=True).items():
-        fields[key] = value
-    return HttpConfig.model_validate(fields)
-
-
 def load_config(path: str | Path) -> PipelineConfig:
-    """Read the single YAML config file and parse it into a frozen PipelineConfig.
+    """Read a per-source YAML file and return a frozen PipelineConfig.
 
-    Called exactly once at program startup; nothing else in the codebase reads
-    files or env vars to derive runtime configuration (rule 6).
+    DSN is injected from the GALACTUS_DSN env var — it must not appear in the
+    yaml file. Called exactly once at program startup (rule 6).
     """
     config_path = Path(path)
+    dsn = os.environ.get(DSN_ENV_VAR)
+    if not dsn:
+        raise ConfigError(f"{DSN_ENV_VAR} env var is required")
     try:
-        raw = yaml.safe_load(config_path.read_text())
+        raw = yaml.safe_load(config_path.read_text()) or {}
+        raw["dsn"] = dsn
         return PipelineConfig.model_validate(raw)
     except FileNotFoundError as exc:
         raise ConfigError(f"config file not found: {config_path}") from exc

@@ -19,6 +19,6 @@ class LoadStage(PipelineStage):
     def __init__(self, *, config: PipelineConfig) -> None:
         self.config = config
 
-    async def run(self, *, sources: list[str] | None = None) -> None:
+    async def run(self) -> None:
         logger.info("LoadStage.run() — no-op (stub)")
         return

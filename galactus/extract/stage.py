@@ -1,6 +1,6 @@
 import logging
 
-from galactus.config import PipelineConfig, resolve_http
+from galactus.config import PipelineConfig
 from galactus.core.errors import ExtractError
 from galactus.core.pipeline import PipelineStage
 from galactus.core.types import SourceName
@@ -15,12 +15,9 @@ logger = logging.getLogger(__name__)
 class ExtractStage(PipelineStage):
     """Stage 1 — internet -> bronze.
 
-    Iterates over enabled sources, instantiates the configured scraper strategy,
-    and pipes RawRecords into Database.insert. Per-source failures are fatal:
-    they are wrapped as ExtractError and abort the whole stage. Sources run
-    sequentially — cross-source parallelism is owned by Airflow. Each source
-    opens its own HTTP client and DB pool and closes them before the next source
-    begins.
+    Instantiates the configured scraper strategy and pipes RawRecords into
+    Database.insert. Opens its own HTTP client and DB pool; both close when the
+    stage completes. Failures are wrapped as ExtractError and abort the stage.
     """
 
     name: str = "extract"
@@ -28,30 +25,29 @@ class ExtractStage(PipelineStage):
     def __init__(self, *, config: PipelineConfig) -> None:
         self.config = config
 
-    async def run(self, *, sources: list[str] | None = None) -> None:
-        # iterate sources sequentially
-        for src in self.config.sources:
-            if src.extract is None:
-                continue
-            if sources and src.name not in sources:
-                continue
+    async def run(self) -> None:
+        if self.config.extract is None:
+            return
+        ext = self.config.extract
 
-            # open per-source http + db; both close before the next source starts
-            http_cfg = resolve_http(self.config.http, src.http)
-            async with open_http(http_cfg) as client, open_db(self.config.database) as db:
-                # resolve strategy
-                cls = SCRAPERS.get(src.extract.scraper)
-                scraper: Scraper = cls(
-                    source=SourceName(src.name),
-                    http=client,
-                    options=dict(src.extract.options),
-                    concurrency=src.extract.concurrency,
-                )
+        # open http + db for this run
+        async with (
+            open_http(timeout_seconds=ext.timeout_seconds, user_agent=ext.user_agent) as client,
+            open_db(dsn=self.config.dsn) as db,
+        ):
+            # resolve strategy
+            cls = SCRAPERS.get(ext.scraper)
+            scraper: Scraper = cls(
+                source=SourceName(self.config.name),
+                http=client,
+                options=dict(ext.options),
+                concurrency=ext.concurrency,
+            )
 
-                # fetch and store
-                try:
-                    async for record in scraper.fetch():
-                        await db.insert(record, table=src.bronze_table)
-                except Exception as exc:
-                    raise ExtractError(f"source {src.name!r} aborted") from exc
+            # fetch and store
+            try:
+                async for record in scraper.fetch():
+                    await db.insert(record, table=self.config.bronze_table)
+            except Exception as exc:
+                raise ExtractError(f"source {self.config.name!r} aborted") from exc
         return

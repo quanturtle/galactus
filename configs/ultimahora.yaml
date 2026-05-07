@@ -1,0 +1,18 @@
+name: ultimahora
+bronze_table: bronze.html_snapshots
+silver_table: silver.articles
+log_level: INFO
+extract:
+  module: galactus.extract.scrapers.noticias.ultimahora
+  scraper: ultimahora
+  concurrency: 1
+  timeout_seconds: 30.0
+  user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
+  options:
+    home_url: https://www.ultimahora.com
+    scrape_pattern: ".*-n[0-9]+$"
+    max_pages: 500
+transform:
+  module: galactus.transform.parsers.noticias.ultimahora
+  parser: ultimahora
+  options: {}

@@ -5,6 +5,8 @@ import logging
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from galactus.config import PipelineConfig, load_config
 from galactus.core.errors import ConfigError, PipelineError
 from galactus.core.pipeline import Pipeline
@@ -17,40 +19,29 @@ from galactus.transform.stage import TransformStage
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG = Path("galactus.yaml")
-
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="galactus")
-    parser.add_argument(
-        "--config", default=None, help="path to YAML config (default: ./galactus.yaml)"
-    )
-    parser.add_argument(
-        "--source",
-        action="append",
-        default=[],
-        help="run only the named source (repeat to run several; default: all)",
-    )
+    parser.add_argument("--config", required=True, help="path to per-source YAML config")
     parser.add_argument("--stage", default=None, help="run only one stage by name")
     return parser.parse_args(argv)
 
 
 def import_plugins(config: PipelineConfig) -> None:
-    """Import each source's plugin modules so their @register decorators fire.
+    """Import the source's plugin modules so their @register decorators fire.
 
     Also validates that the configured scraper/parser names resolve in the
     registries — raises ConfigError if a module or name is unknown.
     """
-    for src in config.sources:
-        try:
-            if src.extract is not None:
-                importlib.import_module(src.extract.module)
-                SCRAPERS.get(src.extract.scraper)
-            if src.transform is not None:
-                importlib.import_module(src.transform.module)
-                PARSERS.get(src.transform.parser)
-        except (ImportError, KeyError) as exc:
-            raise ConfigError(f"plugin wiring failed for {src.name!r}: {exc}") from exc
+    try:
+        if config.extract is not None:
+            importlib.import_module(config.extract.module)
+            SCRAPERS.get(config.extract.scraper)
+        if config.transform is not None:
+            importlib.import_module(config.transform.module)
+            PARSERS.get(config.transform.parser)
+    except (ImportError, KeyError) as exc:
+        raise ConfigError(f"plugin wiring failed for {config.name!r}: {exc}") from exc
     return
 
 
@@ -64,18 +55,19 @@ def build_pipeline(config: PipelineConfig) -> Pipeline:
     )
 
 
-async def run(config: PipelineConfig, *, sources: list[str], stage: str | None) -> None:
+async def run(config: PipelineConfig, *, stage: str | None) -> None:
     pipeline = build_pipeline(config)
-    await pipeline.run(sources=sources, stage_name=stage)
+    await pipeline.run(stage_name=stage)
     return
 
 
 def main() -> int:
+    load_dotenv()
     args = parse_args(sys.argv[1:])
 
     # load and validate config
     try:
-        config = load_config(Path(args.config) if args.config else DEFAULT_CONFIG)
+        config = load_config(Path(args.config))
     except ConfigError as exc:
         logging.basicConfig()
         logging.getLogger(__name__).error("%s", exc)
@@ -86,7 +78,7 @@ def main() -> int:
     # wire plugins and run pipeline
     try:
         import_plugins(config)
-        asyncio.run(run(config, sources=args.source, stage=args.stage))
+        asyncio.run(run(config, stage=args.stage))
     except ConfigError as exc:
         logger.error("%s", exc)
         return 2

@@ -5,7 +5,6 @@ from typing import Any
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from galactus.config import DatabaseConfig
 from galactus.core.records import ParsedRecord, RawRecord
 from galactus.core.types import BronzeId, SourceName
 
@@ -100,13 +99,9 @@ class Database:
 
 
 @asynccontextmanager
-async def open_db(config: DatabaseConfig) -> AsyncIterator[Database]:
-    """Open a Database pool from config and close it on exit. Used per-source by stages."""
-    db = Database(
-        dsn=config.dsn,
-        min_size=config.min_pool_size,
-        max_size=config.max_pool_size,
-    )
+async def open_db(*, dsn: str) -> AsyncIterator[Database]:
+    """Open a Database pool and close it on exit. Used per-source by stages."""
+    db = Database(dsn=dsn)
     await db.open()
     try:
         yield db

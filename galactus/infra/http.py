@@ -4,9 +4,6 @@ from typing import Any
 
 import httpx
 
-from galactus.config import HttpConfig
-
-
 class HttpResponse:
     """Adapter exposing the fields scrapers read from an httpx.Response."""
 
@@ -59,11 +56,11 @@ class HttpClient:
 
 
 @asynccontextmanager
-async def open_http(config: HttpConfig) -> AsyncIterator[HttpClient]:
-    """Open an HttpClient from config and close it on exit. Used per-source by stages."""
+async def open_http(*, timeout_seconds: float, user_agent: str) -> AsyncIterator[HttpClient]:
+    """Open an HttpClient and close it on exit. Used per-source by stages."""
     client = HttpClient(
-        timeout=config.timeout_seconds,
-        headers={"User-Agent": config.user_agent},
+        timeout=timeout_seconds,
+        headers={"User-Agent": user_agent},
     )
     try:
         yield client

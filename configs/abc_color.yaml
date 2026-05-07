@@ -1,0 +1,17 @@
+name: abc_color
+bronze_table: bronze.html_snapshots
+silver_table: silver.articles
+log_level: INFO
+extract:
+  module: galactus.extract.scrapers.noticias.abc_color
+  scraper: abc_color
+  concurrency: 1
+  timeout_seconds: 30.0
+  user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
+  options:
+    home_url: https://www.abc.com.py
+    max_pages: 500
+transform:
+  module: galactus.transform.parsers.noticias.abc_color
+  parser: abc_color
+  options: {}
