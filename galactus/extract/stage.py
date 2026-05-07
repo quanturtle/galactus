@@ -7,7 +7,7 @@ from galactus.config import HttpConfig
 from galactus.core.errors import ExtractError, ScraperError
 from galactus.core.interfaces import BronzeRepo, Clock, HttpClient
 from galactus.extract.base import Scraper
-from galactus.extract.registry import get_scraper
+from galactus.extract.registry import SCRAPERS
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +58,12 @@ class ExtractStage:
     async def run(self) -> None:
         # iterate sources sequentially
         for spec in self.sources:
-
             # open per-source http + bronze; both close before the next source starts
             client = self.http_factory(spec.http)
             try:
                 async with self.bronze_factory() as bronze:
-
                     # resolve strategy
-                    cls = get_scraper(spec.scraper)
+                    cls = SCRAPERS.get(spec.scraper)
                     scraper: Scraper = cls(
                         source=spec.name,  # type: ignore[arg-type]
                         http=client,

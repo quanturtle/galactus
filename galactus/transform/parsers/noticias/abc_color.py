@@ -1,10 +1,10 @@
 from galactus.core.errors import ParserError
 from galactus.core.records import HtmlSnapshot, ParsedRecord, RawRecord
 from galactus.transform.base import Parser
-from galactus.transform.registry import register_parser
+from galactus.transform.registry import PARSERS
 
 
-@register_parser("abc_color")
+@PARSERS.register("abc_color")
 class AbcColorParser(Parser):
     """Parses an HtmlSnapshot from abc.com.py into an Article entity."""
 

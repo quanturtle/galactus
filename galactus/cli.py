@@ -17,7 +17,7 @@ from galactus.core.domain_registry import get_domain, import_domain
 from galactus.core.errors import PipelineError
 from galactus.core.interfaces import BronzeRepo, GoldRepo, HttpClient, SilverRepo
 from galactus.core.pipeline import Pipeline
-from galactus.extract.registry import get_scraper
+from galactus.extract.registry import SCRAPERS
 from galactus.extract.stage import ExtractSourceSpec, ExtractStage
 from galactus.infra.clock import SystemClock
 from galactus.infra.db import Database
@@ -25,7 +25,7 @@ from galactus.infra.http import HttpxClient
 from galactus.infra.logging import setup_logging
 from galactus.infra.repositories import PsycopgRepo, RepoConfig
 from galactus.load.stage import LoadStage
-from galactus.transform.registry import get_parser
+from galactus.transform.registry import PARSERS
 from galactus.transform.stage import TransformSourceSpec, TransformStage
 
 logger = logging.getLogger(__name__)
@@ -46,9 +46,9 @@ def validate_config_against_registries(config: PipelineConfig) -> None:
     """Fail fast if the YAML references unknown scraper or parser names."""
     for source in config.sources:
         if source.extract is not None:
-            get_scraper(source.extract.scraper)
+            SCRAPERS.get(source.extract.scraper)
         if source.transform is not None:
-            get_parser(source.transform.parser)
+            PARSERS.get(source.transform.parser)
     return
 
 

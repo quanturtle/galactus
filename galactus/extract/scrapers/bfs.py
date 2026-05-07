@@ -2,10 +2,8 @@ from collections.abc import AsyncIterator
 
 from galactus.core.records import RawRecord
 from galactus.extract.base import Scraper
-from galactus.extract.registry import register_scraper
 
 
-@register_scraper("bfs")
 class BfsScraper(Scraper):
     """Generic BFS HTML crawler.
 

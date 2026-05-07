@@ -63,7 +63,7 @@ def import_domain(name: str) -> DomainSpec:
 
     Importing `galactus.transform.parsers.<name>` runs `register_domain(...)` for
     that domain. The returned DomainSpec lists each scraper and parser module by
-    dotted path; importing them fires the @register_scraper / @register_parser
+    dotted path; importing them fires the @SCRAPERS.register / @PARSERS.register
     decorators so the plugin registries are populated.
     """
     importlib.import_module(f"galactus.transform.parsers.{name}")

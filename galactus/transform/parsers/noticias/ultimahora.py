@@ -1,10 +1,10 @@
 from galactus.core.errors import ParserError
 from galactus.core.records import HtmlSnapshot, ParsedRecord, RawRecord
 from galactus.transform.base import Parser
-from galactus.transform.registry import register_parser
+from galactus.transform.registry import PARSERS
 
 
-@register_parser("ultimahora")
+@PARSERS.register("ultimahora")
 class UltimaHoraParser(Parser):
     """Parses an HtmlSnapshot from ultimahora.com into an Article entity."""
 

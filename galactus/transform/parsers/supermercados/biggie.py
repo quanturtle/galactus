@@ -1,10 +1,10 @@
 from galactus.core.errors import ParserError
 from galactus.core.records import ApiSnapshot, ParsedRecord, RawRecord
 from galactus.transform.base import Parser
-from galactus.transform.registry import register_parser
+from galactus.transform.registry import PARSERS
 
 
-@register_parser("biggie")
+@PARSERS.register("biggie")
 class BiggieParser(Parser):
     """Parses an ApiSnapshot from biggie.com.py into a Product entity."""
 

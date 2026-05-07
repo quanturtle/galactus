@@ -1,8 +1,8 @@
-from galactus.extract.registry import register_scraper
+from galactus.extract.registry import SCRAPERS
 from galactus.extract.scrapers.bfs import BfsScraper
 
 
-@register_scraper("ultimahora")
+@SCRAPERS.register("ultimahora")
 class UltimaHoraScraper(BfsScraper):
     """Scraper for ultimahora.com — BFS crawl of the news site.
 

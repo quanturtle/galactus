@@ -8,7 +8,7 @@ from galactus.core.interfaces import BronzeRepo, Clock, SilverRepo
 from galactus.core.records import ParsedRecord
 from galactus.core.types import SourceName
 from galactus.transform.base import Parser
-from galactus.transform.registry import get_parser
+from galactus.transform.registry import PARSERS
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +57,10 @@ class TransformStage:
     async def run(self) -> None:
         # iterate sources sequentially
         for spec in self.sources:
-
             # open per-source bronze + silver (shared db pool); closed before next source
             async with self.repos_factory() as (bronze, silver):
-
                 # resolve strategy
-                cls = get_parser(spec.parser)
+                cls = PARSERS.get(spec.parser)
                 parser: Parser = cls(
                     source=SourceName(spec.name),
                     clock=self.clock,
