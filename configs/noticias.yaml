@@ -1,0 +1,34 @@
+domain: noticias
+schema_module: galactus.domains.noticias.schema
+log_level: INFO
+
+database:
+  dsn: postgresql://galactus:galactus@localhost:5432/galactus
+  min_pool_size: 1
+  max_pool_size: 10
+
+http:
+  timeout_seconds: 30.0
+  user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
+
+sources:
+  - name: ultimahora
+    extract:
+      scraper: ultimahora
+      options:
+        home_url: https://www.ultimahora.com
+        scrape_pattern: ".*-n[0-9]+$"
+        max_pages: 500
+    transform:
+      parser: ultimahora
+      options: {}
+
+  - name: abc_color
+    extract:
+      scraper: abc_color
+      options:
+        home_url: https://www.abc.com.py
+        max_pages: 500
+    transform:
+      parser: abc_color
+      options: {}
