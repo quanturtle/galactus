@@ -55,8 +55,6 @@ class SourceConfig(BaseModel):
     name: str
     bronze_table: str
     silver_table: str
-    bronze_conflict_keys: tuple[str, ...] = ("source", "source_url")
-    silver_conflict_keys: tuple[str, ...] = ("source", "source_url")
     http: HttpOverride | None = None
     extract: ExtractConfig | None = None
     transform: TransformConfig | None = None

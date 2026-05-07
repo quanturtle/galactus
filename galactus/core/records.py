@@ -1,12 +1,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
 from galactus.core.types import BronzeId, SourceName, SourceUrl
-
-BronzeKind = Literal["api_snapshot", "html_snapshot"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,9 +47,6 @@ class HtmlSnapshot:
 
 # Discriminated union — every bronze row is one or the other.
 RawRecord = ApiSnapshot | HtmlSnapshot
-
-
-Entity = TypeVar("Entity", bound=BaseModel)
 
 
 @dataclass(frozen=True, slots=True)

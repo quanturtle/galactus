@@ -4,7 +4,7 @@ from typing import Any
 
 from galactus.core.records import RawRecord
 from galactus.core.types import SourceName
-from galactus.infra.http import HttpxClient
+from galactus.infra.http import HttpClient
 
 
 class Scraper(ABC):
@@ -18,7 +18,7 @@ class Scraper(ABC):
         self,
         *,
         source: SourceName,
-        http: HttpxClient,
+        http: HttpClient,
         options: dict[str, Any],
         concurrency: int = 1,
     ) -> None:

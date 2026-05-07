@@ -17,8 +17,10 @@ class TransformStage(PipelineStage):
 
     For each enabled source, reads unparsed RawRecords, runs the configured parser,
     and upserts ParsedRecords via Database.upsert. Marks bronze rows as parsed.
-    Sources run sequentially — cross-source parallelism is owned by Airflow.
-    Each source opens its own DB pool and closes it before the next source starts.
+    Per-record ParserError is logged and skipped; per-source failure is fatal
+    (wrapped as TransformError). Sources run sequentially — cross-source
+    parallelism is owned by Airflow. Each source opens its own DB pool and
+    closes it before the next source starts.
     """
 
     name: str = "transform"
@@ -34,18 +36,17 @@ class TransformStage(PipelineStage):
         *,
         bronze_table: str,
         silver_table: str,
-        silver_conflict_keys: tuple[str, ...],
     ) -> None:
-        await db.upsert(batch, table=silver_table, conflict_keys=silver_conflict_keys)
+        await db.upsert(batch, table=silver_table, conflict_keys=("source", "source_url"))
         await db.mark_parsed((r.bronze_id for r in batch), table=bronze_table)
         return
 
-    async def run(self, *, source: str | None = None) -> None:
+    async def run(self, *, sources: list[str] | None = None) -> None:
         # iterate sources sequentially
         for src in self.config.sources:
             if src.transform is None:
                 continue
-            if source is not None and src.name != source:
+            if sources and src.name not in sources:
                 continue
 
             # open per-source db pool; closed before next source
@@ -76,7 +77,6 @@ class TransformStage(PipelineStage):
                                 db,
                                 bronze_table=src.bronze_table,
                                 silver_table=src.silver_table,
-                                silver_conflict_keys=src.silver_conflict_keys,
                             )
                             batch = []
                     if batch:
@@ -85,7 +85,6 @@ class TransformStage(PipelineStage):
                             db,
                             bronze_table=src.bronze_table,
                             silver_table=src.silver_table,
-                            silver_conflict_keys=src.silver_conflict_keys,
                         )
                 except Exception as exc:
                     raise TransformError(f"source {src.name!r} aborted") from exc

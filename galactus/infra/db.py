@@ -46,8 +46,9 @@ class Database:
     ) -> None:
         """Idempotent insert of one or many RawRecords into `table`.
 
-        Bronze writes are ON CONFLICT DO NOTHING keyed by (source, source_url,
-        fetched_at_date). Accepts a single record or any iterable.
+        Bronze conflict policy is fixed by table schema (no per-call
+        conflict_keys parameter, intentionally). Accepts a single record or any
+        iterable.
         """
         raise NotImplementedError
 

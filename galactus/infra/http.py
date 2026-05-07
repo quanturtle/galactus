@@ -1,4 +1,5 @@
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -6,7 +7,7 @@ import httpx
 from galactus.config import HttpConfig
 
 
-class HttpxResponse:
+class HttpResponse:
     """Adapter exposing the fields scrapers read from an httpx.Response."""
 
     def __init__(self, response: httpx.Response) -> None:
@@ -20,8 +21,8 @@ class HttpxResponse:
         return self._response.json()
 
 
-class HttpxClient:
-    """HTTP client backed by httpx.AsyncClient. Used by scrapers."""
+class HttpClient:
+    """HTTP client used by scrapers. Backed by httpx.AsyncClient internally."""
 
     def __init__(
         self,
@@ -42,23 +43,23 @@ class HttpxClient:
         *,
         headers: Mapping[str, str] | None = None,
         params: Mapping[str, Any] | None = None,
-    ) -> HttpxResponse:
+    ) -> HttpResponse:
         response = await self._client.get(url, headers=headers, params=params)
-        return HttpxResponse(response)
+        return HttpResponse(response)
 
     async def aclose(self) -> None:
         await self._client.aclose()
         return
 
 
-def make_http_client(config: HttpConfig) -> HttpxClient:
-    """Construct an HttpxClient from an HttpConfig.
-
-    HttpConfig is the right scoped slice for the constructor — this is the one
-    allowed factory that takes a config sub-model rather than the whole
-    PipelineConfig.
-    """
-    return HttpxClient(
+@asynccontextmanager
+async def open_http(config: HttpConfig) -> AsyncIterator[HttpClient]:
+    """Open an HttpClient from config and close it on exit. Used per-source by stages."""
+    client = HttpClient(
         timeout=config.timeout_seconds,
         headers={"User-Agent": config.user_agent},
     )
+    try:
+        yield client
+    finally:
+        await client.aclose()

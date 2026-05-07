@@ -25,7 +25,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--config", default=None, help="path to YAML config (default: ./galactus.yaml)"
     )
-    parser.add_argument("--source", default=None, help="run only one source by name")
+    parser.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        help="run only the named source (repeat to run several; default: all)",
+    )
     parser.add_argument("--stage", default=None, help="run only one stage by name")
     return parser.parse_args(argv)
 
@@ -56,9 +61,9 @@ def build_pipeline(config: PipelineConfig) -> Pipeline:
     )
 
 
-async def run(config: PipelineConfig, *, source: str | None, stage: str | None) -> None:
+async def run(config: PipelineConfig, *, sources: list[str], stage: str | None) -> None:
     pipeline = build_pipeline(config)
-    await pipeline.run(source=source, stage_name=stage)
+    await pipeline.run(sources=sources, stage_name=stage)
     return
 
 
@@ -69,7 +74,7 @@ def main() -> int:
     setup_logging(config.log_level)
     import_plugins(config)
     try:
-        asyncio.run(run(config, source=args.source, stage=args.stage))
+        asyncio.run(run(config, sources=args.source, stage=args.stage))
     except PipelineError as exc:
         logger.error("pipeline failed: %s", exc)
         return 1

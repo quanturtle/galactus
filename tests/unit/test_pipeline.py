@@ -9,13 +9,13 @@ from galactus.core.pipeline import Pipeline
 @dataclass
 class FakeStage:
     name: str
-    runs: list[tuple[str, str | None]] = field(default_factory=list)
+    runs: list[tuple[str, list[str] | None]] = field(default_factory=list)
     delay: float = 0.0
 
-    async def run(self, *, source: str | None = None) -> None:
+    async def run(self, *, sources: list[str] | None = None) -> None:
         if self.delay:
             await asyncio.sleep(self.delay)
-        self.runs.append((self.name, source))
+        self.runs.append((self.name, sources))
         return
 
 
@@ -43,26 +43,35 @@ def test_pipeline_runs_single_stage_by_name() -> None:
     assert b.runs == [("b", None)]
 
 
-def test_pipeline_threads_source_filter_to_stages() -> None:
+def test_pipeline_threads_sources_filter_to_stages() -> None:
     a = FakeStage("a")
     b = FakeStage("b")
     pipeline = Pipeline(stages=[a, b])
 
-    asyncio.run(pipeline.run(source="ultimahora"))
+    asyncio.run(pipeline.run(sources=["ultimahora"]))
 
-    assert a.runs == [("a", "ultimahora")]
-    assert b.runs == [("b", "ultimahora")]
+    assert a.runs == [("a", ["ultimahora"])]
+    assert b.runs == [("b", ["ultimahora"])]
 
 
-def test_pipeline_threads_source_filter_to_single_stage() -> None:
+def test_pipeline_threads_multiple_sources_filter() -> None:
+    a = FakeStage("a")
+    pipeline = Pipeline(stages=[a])
+
+    asyncio.run(pipeline.run(sources=["ultimahora", "abc_color"]))
+
+    assert a.runs == [("a", ["ultimahora", "abc_color"])]
+
+
+def test_pipeline_threads_sources_filter_to_single_stage() -> None:
     a = FakeStage("a")
     b = FakeStage("b")
     pipeline = Pipeline(stages=[a, b])
 
-    asyncio.run(pipeline.run(source="ultimahora", stage_name="b"))
+    asyncio.run(pipeline.run(sources=["ultimahora"], stage_name="b"))
 
     assert a.runs == []
-    assert b.runs == [("b", "ultimahora")]
+    assert b.runs == [("b", ["ultimahora"])]
 
 
 def test_pipeline_unknown_stage_name_raises_with_available_list() -> None:
