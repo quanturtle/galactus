@@ -4,6 +4,7 @@ import pytest
 import yaml
 
 from galactus.config import HttpConfig, HttpOverride, load_config, resolve_http
+from galactus.core.errors import ConfigError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GALACTUS_YAML = REPO_ROOT / "galactus.yaml"
@@ -85,7 +86,7 @@ def test_concurrency_zero_rejected(tmp_path: Path) -> None:
             }
         )
     )
-    with pytest.raises(Exception):  # noqa: B017
+    with pytest.raises(ConfigError):
         load_config(config_file)
 
 
@@ -99,7 +100,7 @@ def test_source_missing_bronze_table_rejected(tmp_path: Path) -> None:
             }
         )
     )
-    with pytest.raises(Exception):  # noqa: B017
+    with pytest.raises(ConfigError):
         load_config(config_file)
 
 

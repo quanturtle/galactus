@@ -1,3 +1,23 @@
+from collections.abc import Callable
+from functools import partial
+
+
+def _register_cls(
+    items: dict[str, type],
+    base: type,
+    label: str,
+    name: str,
+    cls: type,
+) -> type:
+    if not issubclass(cls, base):
+        raise TypeError(f"{cls.__name__} must subclass {base.__name__}")
+    existing = items.get(name)
+    if existing is not None and existing is not cls:
+        raise ValueError(f"{label} {name!r} already registered to {existing.__name__}")
+    items[name] = cls
+    return cls
+
+
 class ClassRegistry[T]:
     """Name → type[T] mapping with a decorator-style register method.
 
@@ -15,19 +35,8 @@ class ClassRegistry[T]:
         self._base = base
         self._items: dict[str, type[T]] = {}
 
-    def register(self, name: str):
-        def decorator(cls: type[T]) -> type[T]:
-            if not issubclass(cls, self._base):
-                raise TypeError(f"{cls.__name__} must subclass {self._base.__name__}")
-            existing = self._items.get(name)
-            if existing is not None and existing is not cls:
-                raise ValueError(
-                    f"{self._label} {name!r} already registered to {existing.__name__}"
-                )
-            self._items[name] = cls
-            return cls
-
-        return decorator
+    def register(self, name: str) -> Callable[[type[T]], type[T]]:
+        return partial(_register_cls, self._items, self._base, self._label, name)
 
     def get(self, name: str) -> type[T]:
         try:
