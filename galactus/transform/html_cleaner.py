@@ -16,21 +16,9 @@ class HtmlParser:
       3. blocklist_attributes — delete these attributes from every remaining tag
     """
 
-    def __init__(
-        self,
-        blocklist_tags: tuple[str, ...] = (),
-        blocklist_attributes: tuple[str, ...] = (),
-    ) -> None:
-        self.blocklist_tags = blocklist_tags
-        self.blocklist_attributes = blocklist_attributes
-
-    @classmethod
-    def from_options(cls, options: dict[str, Any]) -> "HtmlParser":
-        """Build from a raw options dict (transform.options in YAML)."""
-        return cls(
-            blocklist_tags=tuple(options.get("blocklist_tags", ())),
-            blocklist_attributes=tuple(options.get("blocklist_attributes", ())),
-        )
+    def __init__(self, options: dict[str, Any]) -> None:
+        self.blocklist_tags: tuple[str, ...] = tuple(options.get("blocklist_tags", ()))
+        self.blocklist_attributes: tuple[str, ...] = tuple(options.get("blocklist_attributes", ()))
 
     def _strip_comments(self, soup: BeautifulSoup) -> None:
         for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):

@@ -35,7 +35,7 @@ class BaseParser(ABC):
         self.bronze_table = bronze_table
         self.silver_table = silver_table
         self.batch_size = batch_size
-        self.html_parser = HtmlParser.from_options(options)
+        self.html_parser = HtmlParser(options)
 
     @abstractmethod
     def parse(self, record: RawRecord) -> ParsedRecord | list[ParsedRecord]:
