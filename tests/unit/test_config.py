@@ -60,6 +60,7 @@ def test_explicit_concurrency_parses(
                 "extract": {
                     "scraper": "pkg.alpha",
                     "concurrency": 7,
+                    "options": {"base_url": "https://example.com"},
                 },
             }
         )
@@ -83,6 +84,7 @@ def test_concurrency_zero_rejected(
                 "extract": {
                     "scraper": "pkg.x",
                     "concurrency": 0,
+                    "options": {"base_url": "https://example.com"},
                 },
             }
         )
@@ -130,7 +132,10 @@ def test_extract_http_defaults(
                 "name": "alpha",
                 "bronze_table": "bronze.x",
                 "silver_table": "silver.x",
-                "extract": {"scraper": "pkg.x"},
+                "extract": {
+                    "scraper": "pkg.x",
+                    "options": {"base_url": "https://example.com"},
+                },
             }
         )
     )
