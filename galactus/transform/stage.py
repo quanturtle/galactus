@@ -6,7 +6,7 @@ from galactus.core.errors import ParserError, TransformError
 from galactus.core.pipeline import PipelineStage
 from galactus.core.records import ParsedRecord
 from galactus.infra.db import Database, open_db
-from galactus.transform.base import Parser
+from galactus.transform.base_parser import BaseParser
 
 logger = logging.getLogger(__name__)
 

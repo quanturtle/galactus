@@ -1,6 +1,6 @@
 from galactus.core.errors import ParserError
 from galactus.core.records import HtmlSnapshot, ParsedRecord, RawRecord
-from galactus.transform.base import Parser as BaseParser
+from galactus.transform.base_parser import BaseParser
 
 
 class Parser(BaseParser):
