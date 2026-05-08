@@ -4,7 +4,7 @@ import logging
 from galactus.config import PipelineConfig
 from galactus.core.errors import TransformError
 from galactus.core.pipeline import PipelineStage
-from galactus.infra.db import open_db
+from galactus.infra.db import Database
 from galactus.transform.base_parser import BaseParser
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class TransformStage(PipelineStage):
             return
 
         # open per-run db pool
-        async with open_db(database_url=self.config.database_url) as db:
+        async with Database(database_url=self.config.database_url) as db:
             # resolve strategy
             mod = importlib.import_module(f"galactus.transform.parsers.{self.config.transform.parser}")
             parser: BaseParser = mod.Parser(

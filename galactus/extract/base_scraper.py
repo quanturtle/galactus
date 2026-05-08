@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
+from sqlmodel import SQLModel
+
 from galactus.config import ExtractOptions
-from sql.a_bronze import RawRecord
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
 
@@ -40,11 +41,11 @@ class BaseScraper(ABC):
         ...
 
     @abstractmethod
-    def build_record(self, url: str, response: HttpResponse) -> RawRecord:
+    def build_record(self, url: str, response: HttpResponse) -> SQLModel:
         """Wrap the response into the appropriate snapshot record type."""
         ...
 
     async def run(self) -> None:
-        """Lifecycle: BFS over seeds(); fetch each URL, build a RawRecord, insert into bronze."""
+        """Lifecycle: BFS over seeds(); fetch each URL, build a snapshot, insert into bronze."""
         # placeholder — BFS + concurrency loop ported from v1 later
         raise NotImplementedError

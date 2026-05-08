@@ -1,103 +1,140 @@
-from collections.abc import AsyncIterator, Iterable, Sequence
-from contextlib import asynccontextmanager
-from typing import Any
+from collections.abc import AsyncIterator, Iterable
+from typing import TypeVar
 
-from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
+from sqlalchemy import func, update
+from sqlalchemy.dialects import registry
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlmodel import SQLModel, select
 
-from sql.a_bronze import RawRecord
-from sql.b_silver import ParsedRecord
+# mirror migrations/env.py: route bare postgresql:// to psycopg3
+registry.register("postgresql", "sqlalchemy.dialects.postgresql.psycopg", "dialect")
+
+
+M = TypeVar("M", bound=SQLModel)
 
 
 class Database:
-    """Async psycopg-backed persistence.
+    """Async SQLAlchemy/SQLModel-backed persistence.
 
-    Owns a single AsyncConnectionPool and exposes domain-flavored persistence
-    ops (`insert`, `upsert`, `load_unparsed`, `mark_parsed`); table names and
-    conflict keys are passed per call rather than carried per instance.
-
-    Concrete SQL is left as TODOs to fill in once the bronze/silver schemas
-    are finalized in migrations/.
+    Owns one AsyncEngine and a sessionmaker; methods accept a SQLModel class
+    and one or many record instances of that class.
     """
 
-    def __init__(self, database_url: str, min_size: int = 1, max_size: int = 10) -> None:
-        self._pool = AsyncConnectionPool(
-            conninfo=database_url,
-            min_size=min_size,
-            max_size=max_size,
-            open=False,
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        pool_size: int = 5,
+        max_overflow: int = 5,
+    ) -> None:
+        self._engine: AsyncEngine = create_async_engine(
+            database_url,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+        )
+        self._sessionmaker = async_sessionmaker(
+            self._engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
         )
 
     async def open(self) -> None:
-        await self._pool.open()
+        # surface bad URLs / unreachable DB at startup, not lazily
+        async with self._engine.connect():
+            pass
         return
 
     async def close(self) -> None:
-        await self._pool.close()
+        await self._engine.dispose()
         return
 
-    async def insert(
-        self,
-        records: RawRecord | Iterable[RawRecord],
-        table: str,
-    ) -> None:
-        """Idempotent insert of one or many RawRecords into `table`.
+    async def __aenter__(self) -> "Database":
+        await self.open()
+        return self
 
-        Bronze conflict policy is fixed by the table schema. Accepts a single
-        record or any iterable.
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.close()
+        return
+
+    async def insert(self, model: type[M], records: M | Iterable[M]) -> None:
+        """Idempotent insert of one or many bronze records.
+
+        ON CONFLICT (source, source_url, fetched_at) DO NOTHING.
         """
-        raise NotImplementedError
+        rows = _to_rows(records, exclude={"bronze_id", "parsed_at"})
+        if not rows:
+            return
+        stmt = pg_insert(model).values(rows).on_conflict_do_nothing(
+            index_elements=["source", "source_url", "fetched_at"],
+        )
+        async with self._sessionmaker() as session:
+            await session.execute(stmt)
+            await session.commit()
+        return
 
-    async def upsert(
-        self,
-        records: ParsedRecord | Iterable[ParsedRecord],
-        table: str,
-    ) -> None:
-        """Idempotent upsert of one or many ParsedRecords into `table`.
+    async def upsert(self, model: type[M], records: M | Iterable[M]) -> None:
+        """Idempotent upsert of one or many silver records.
 
-        INSERT ... ON CONFLICT DO UPDATE. Accepts a single record or any iterable.
+        ON CONFLICT (source, source_url) DO UPDATE — every column except the
+        conflict key and surrogate id is overwritten with EXCLUDED.*.
         """
-        raise NotImplementedError
-
-    async def load_unparsed(
-        self,
-        source: str,
-        table: str,
-    ) -> AsyncIterator[RawRecord]:
-        """Stream RawRecords from `table` that have not yet been marked parsed."""
-        raise NotImplementedError
-        yield  # makes this an async generator; without it Python treats load_unparsed() as a plain coroutine
-
-    async def mark_parsed(self, ids: Iterable[int], table: str) -> None:
-        """Flag the given bronze rows in `table` as parsed."""
-        raise NotImplementedError
-
-    # private pool helpers — used by the public methods above
-    async def _fetch_all(self, sql: str, params: Sequence[Any] | None = None) -> list[dict]:
-        async with (
-            self._pool.connection() as conn,
-            conn.cursor(row_factory=dict_row) as cur,
-        ):
-            await cur.execute(sql, params)
-            return await cur.fetchall()
-
-    async def _execute(self, sql: str, params: Sequence[Any] | None = None) -> None:
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(sql, params)
+        rows = _to_rows(records, exclude={"id"})
+        if not rows:
+            return
+        stmt = pg_insert(model).values(rows)
+        update_set = {
+            c.name: c
+            for c in stmt.excluded
+            if c.name not in ("id", "source", "source_url")
+        }
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["source", "source_url"],
+            set_=update_set,
+        )
+        async with self._sessionmaker() as session:
+            await session.execute(stmt)
+            await session.commit()
         return
 
-    async def _execute_many(self, sql: str, rows: Iterable[Sequence[Any]]) -> None:
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.executemany(sql, list(rows))
+    async def load_unparsed(self, model: type[M], source: str) -> AsyncIterator[M]:
+        """Stream bronze rows for `source` where parsed_at IS NULL.
+
+        Server-side cursor; the transaction is held for the iterator's lifetime.
+        Callers running mark_parsed do so on a separate session.
+        """
+        stmt = (
+            select(model)
+            .where(model.parsed_at.is_(None), model.source == source)
+            .order_by(model.bronze_id)
+        )
+        async with self._sessionmaker() as session:
+            result = await session.stream_scalars(stmt)
+            async for record in result:
+                yield record
+
+    async def mark_parsed(self, model: type[M], ids: Iterable[int]) -> None:
+        """Flag bronze rows as parsed by setting parsed_at = NOW()."""
+        id_list = list(ids)
+        if not id_list:
+            return
+        stmt = (
+            update(model)
+            .where(model.bronze_id.in_(id_list))
+            .values(parsed_at=func.now())
+        )
+        async with self._sessionmaker() as session:
+            await session.execute(stmt)
+            await session.commit()
         return
 
 
-@asynccontextmanager
-async def open_db(database_url: str) -> AsyncIterator[Database]:
-    """Open a Database pool and close it on exit. Used per-source by stages."""
-    db = Database(database_url)
-    await db.open()
-    try:
-        yield db
-    finally:
-        await db.close()
+def _to_rows(records: M | Iterable[M], *, exclude: set[str]) -> list[dict]:
+    if isinstance(records, SQLModel):
+        return [records.model_dump(exclude=exclude)]
+    return [r.model_dump(exclude=exclude) for r in records]

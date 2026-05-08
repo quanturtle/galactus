@@ -5,8 +5,8 @@ from galactus.config import PipelineConfig
 from galactus.core.errors import ExtractError
 from galactus.core.pipeline import PipelineStage
 from galactus.extract.base_scraper import BaseScraper
-from galactus.infra.db import open_db
-from galactus.infra.http import open_http
+from galactus.infra.db import Database
+from galactus.infra.http import HttpClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,11 @@ class ExtractStage(PipelineStage):
 
         # open http + db for this run
         async with (
-            open_http(timeout_seconds=ext.timeout_seconds, user_agent=ext.user_agent) as client,
-            open_db(database_url=self.config.database_url) as db,
+            HttpClient(
+                timeout=ext.timeout_seconds,
+                headers={"User-Agent": ext.user_agent},
+            ) as client,
+            Database(database_url=self.config.database_url) as db,
         ):
             # resolve strategy
             mod = importlib.import_module(f"galactus.extract.scrapers.{ext.scraper}")

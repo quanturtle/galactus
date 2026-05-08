@@ -1,5 +1,4 @@
-from collections.abc import AsyncIterator, Mapping
-from contextlib import asynccontextmanager
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
@@ -53,15 +52,9 @@ class HttpClient:
         await self._client.aclose()
         return
 
+    async def __aenter__(self) -> "HttpClient":
+        return self
 
-@asynccontextmanager
-async def open_http(timeout_seconds: float, user_agent: str) -> AsyncIterator[HttpClient]:
-    """Open an HttpClient and close it on exit. Used per-source by stages."""
-    client = HttpClient(
-        timeout=timeout_seconds,
-        headers={"User-Agent": user_agent},
-    )
-    try:
-        yield client
-    finally:
-        await client.aclose()
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.aclose()
+        return

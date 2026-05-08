@@ -1,10 +1,9 @@
-from sql.a_bronze import RawRecord
-from sql.b_silver import ParsedRecord
+from sqlmodel import SQLModel
 from galactus.transform.base_parser import BaseParser
 
 
 class Parser(BaseParser):
     """Parses HtmlSnapshots from megacadena.com.py into Article entities."""
 
-    def parse_batch(self, records: list[RawRecord]) -> list[ParsedRecord]:
+    def parse_batch(self, records: list[SQLModel]) -> list[SQLModel]:
         raise NotImplementedError

@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from bs4 import BeautifulSoup
+from sqlmodel import SQLModel
 
-from sql.a_bronze import RawRecord
-from sql.b_silver import ParsedRecord
 from galactus.infra.db import Database
 from galactus.transform.html_parser import HtmlParser, decompress
 
@@ -45,7 +44,7 @@ class BaseParser(ABC):
         return self.html_parser.parse(decompress(html_bytes))
 
     @abstractmethod
-    def parse_batch(self, records: list[RawRecord]) -> list[ParsedRecord]:
+    def parse_batch(self, records: list[SQLModel]) -> list[SQLModel]:
         """Parse a batch of bronze records into silver records."""
         ...
 

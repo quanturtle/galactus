@@ -11,6 +11,7 @@ dependencies = [
     "psycopg[binary,pool]",
     "pydantic",
     "sqlmodel",
+    "greenlet",
     "alembic>=1.18.4",
     "python-dateutil",
     "aioboto3",
@@ -29,6 +30,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["galactus", "sql"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

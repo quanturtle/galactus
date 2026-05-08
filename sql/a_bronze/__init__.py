@@ -4,6 +4,4 @@ from sql.a_bronze import schema  # noqa: F401  -- must import first (DDL listene
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 
-RawRecord = ApiSnapshot | HtmlSnapshot
-
-__all__ = ["ApiSnapshot", "HtmlSnapshot", "RawRecord"]
+__all__ = ["ApiSnapshot", "HtmlSnapshot"]
