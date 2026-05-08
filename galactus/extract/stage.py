@@ -33,7 +33,7 @@ class ExtractStage(PipelineStage):
         # open http + db for this run
         async with (
             open_http(timeout_seconds=ext.timeout_seconds, user_agent=ext.user_agent) as client,
-            open_db(dsn=self.config.dsn) as db,
+            open_db(database_url=self.config.database_url) as db,
         ):
             # resolve strategy
             mod = importlib.import_module(f"galactus.extract.scrapers.{ext.scraper}")

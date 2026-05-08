@@ -20,9 +20,9 @@ class Database:
     are finalized in migrations/.
     """
 
-    def __init__(self, dsn: str, min_size: int = 1, max_size: int = 10) -> None:
+    def __init__(self, database_url: str, min_size: int = 1, max_size: int = 10) -> None:
         self._pool = AsyncConnectionPool(
-            conninfo=dsn,
+            conninfo=database_url,
             min_size=min_size,
             max_size=max_size,
             open=False,
@@ -93,9 +93,9 @@ class Database:
 
 
 @asynccontextmanager
-async def open_db(dsn: str) -> AsyncIterator[Database]:
+async def open_db(database_url: str) -> AsyncIterator[Database]:
     """Open a Database pool and close it on exit. Used per-source by stages."""
-    db = Database(dsn)
+    db = Database(database_url)
     await db.open()
     try:
         yield db

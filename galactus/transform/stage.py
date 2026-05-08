@@ -30,7 +30,7 @@ class TransformStage(PipelineStage):
             return
 
         # open per-run db pool
-        async with open_db(dsn=self.config.dsn) as db:
+        async with open_db(database_url=self.config.database_url) as db:
             # resolve strategy
             mod = importlib.import_module(f"galactus.transform.parsers.{self.config.transform.parser}")
             parser: BaseParser = mod.Parser(

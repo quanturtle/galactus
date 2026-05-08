@@ -52,7 +52,7 @@ class PipelineConfig(BaseModel):
     name: str
     bronze_table: str
     silver_table: str
-    dsn: str
+    database_url: str
     log_level: str = "INFO"
     extract: ExtractConfig | None = None
     transform: TransformConfig | None = None
@@ -61,17 +61,17 @@ class PipelineConfig(BaseModel):
 def load_config(path: str | Path) -> PipelineConfig:
     """Read a per-source YAML file and return a frozen PipelineConfig.
 
-    DSN is injected from the DATABASE_URL env var — it must not appear in the
-    yaml file. Called exactly once at program startup (rule 6).
+    database_url is injected from the DATABASE_URL env var — it must not
+    appear in the yaml file. Called exactly once at program startup (rule 6).
     """
     config_path = Path(path)
-    dsn = os.environ.get("DATABASE_URL")
-    if not dsn:
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
         raise ConfigError("DATABASE_URL env var is required")
     try:
-        raw = yaml.safe_load(config_path.read_text()) or {}
-        raw["dsn"] = dsn
-        return PipelineConfig.model_validate(raw)
+        body = yaml.safe_load(config_path.read_text()) or {}
+        body["database_url"] = database_url
+        return PipelineConfig.model_validate(body)
     except FileNotFoundError as exc:
         raise ConfigError(f"config file not found: {config_path}") from exc
     except yaml.YAMLError as exc:

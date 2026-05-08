@@ -2,13 +2,20 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool, text
+from sqlalchemy.dialects import registry
 from sqlmodel import SQLModel
 
 import sql  # noqa: F401  -- registers all tables + schema DDL hooks
 from sql.a_bronze.schema import SCHEMA as BRONZE_SCHEMA
 from sql.b_silver.schema import SCHEMA as SILVER_SCHEMA
 from sql.c_gold.schema import SCHEMA as GOLD_SCHEMA
+
+# bare postgresql:// resolves to psycopg3, not psycopg2 (which isn't installed in this venv)
+registry.register("postgresql", "sqlalchemy.dialects.postgresql.psycopg", "dialect")
+
+load_dotenv()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -19,10 +26,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-dsn = os.environ.get("DATABASE_URL")
-if not dsn:
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
     raise RuntimeError("DATABASE_URL env var is required for Alembic")
-config.set_main_option("sqlalchemy.url", dsn)
+config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = SQLModel.metadata
 SCHEMAS = (BRONZE_SCHEMA, SILVER_SCHEMA, GOLD_SCHEMA)
