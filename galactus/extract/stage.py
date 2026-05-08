@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 class ExtractStage(PipelineStage):
     """Stage 1 — internet -> bronze.
 
-    Instantiates the configured scraper strategy and pipes RawRecords into
-    Database.insert. Opens its own HTTP client and DB pool; both close when the
-    stage completes. Failures are wrapped as ExtractError and abort the stage.
+    Instantiates the configured scraper strategy and awaits scraper.run().
+    The scraper owns its own fetch/insert lifecycle. Opens the HTTP client
+    and DB pool for the run; stage-level failure is fatal (wrapped as
+    ExtractError).
     """
 
     name: str = "extract"
@@ -39,14 +40,15 @@ class ExtractStage(PipelineStage):
             scraper: BaseScraper = mod.Scraper(
                 source=self.config.name,
                 http=client,
+                db=db,
+                bronze_table=self.config.bronze_table,
                 options=ext.options,
                 concurrency=ext.concurrency,
             )
 
-            # fetch and store
+            # run the scraper lifecycle
             try:
-                async for record in scraper.run():
-                    await db.insert(record, table=self.config.bronze_table)
+                await scraper.run()
             except Exception as exc:
                 raise ExtractError(f"source {self.config.name!r} aborted") from exc
         return

@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
 
 from galactus.config import ExtractOptions
 from galactus.core.records import RawRecord
+from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
 
 
 class BaseScraper(ABC):
-    """Base class for all scrapers. Owns the BFS loop; subclasses provide three hooks.
+    """Base class for all scrapers. Owns the BFS loop and bronze insert.
 
     Concrete scrapers never override run() — they implement seeds(),
     extract_links(), and build_record() instead.
@@ -17,11 +17,15 @@ class BaseScraper(ABC):
         self,
         source: str,
         http: HttpClient,
+        db: Database,
+        bronze_table: str,
         options: ExtractOptions,
         concurrency: int = 1,
     ) -> None:
         self.source = source
         self.http = http
+        self.db = db
+        self.bronze_table = bronze_table
         self.options = options
         self.concurrency = concurrency
 
@@ -40,10 +44,7 @@ class BaseScraper(ABC):
         """Wrap the response into the appropriate snapshot record type."""
         ...
 
-    async def run(self) -> AsyncIterator[RawRecord]:
-        """BFS loop over seeds(). Calls extract_links and build_record per URL."""
-        queue: list[str] = self.seeds()
-        visited: set[str] = set()
+    async def run(self) -> None:
+        """BFS over seeds(); fetch each URL, build a RawRecord, insert into bronze."""
         # placeholder — HTTP fetch + concurrency logic ported from v1 later
         return
-        yield
