@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from galactus.core.errors import ConfigError
 
-DSN_ENV_VAR = "GALACTUS_DSN"
 
 
 class ExtractOptions(BaseModel):
@@ -62,13 +61,13 @@ class PipelineConfig(BaseModel):
 def load_config(path: str | Path) -> PipelineConfig:
     """Read a per-source YAML file and return a frozen PipelineConfig.
 
-    DSN is injected from the GALACTUS_DSN env var — it must not appear in the
+    DSN is injected from the DATABASE_URL env var — it must not appear in the
     yaml file. Called exactly once at program startup (rule 6).
     """
     config_path = Path(path)
-    dsn = os.environ.get(DSN_ENV_VAR)
+    dsn = os.environ.get("DATABASE_URL")
     if not dsn:
-        raise ConfigError(f"{DSN_ENV_VAR} env var is required")
+        raise ConfigError("DATABASE_URL env var is required")
     try:
         raw = yaml.safe_load(config_path.read_text()) or {}
         raw["dsn"] = dsn

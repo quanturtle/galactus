@@ -19,9 +19,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-dsn = os.environ.get("GALACTUS_DSN")
+dsn = os.environ.get("DATABASE_URL")
 if not dsn:
-    raise RuntimeError("GALACTUS_DSN env var is required for Alembic")
+    raise RuntimeError("DATABASE_URL env var is required for Alembic")
 config.set_main_option("sqlalchemy.url", dsn)
 
 target_metadata = SQLModel.metadata

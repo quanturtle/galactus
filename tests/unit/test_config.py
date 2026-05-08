@@ -11,7 +11,7 @@ ABC_COLOR_YAML = REPO_ROOT / "configs" / "abc_color.yaml"
 
 
 def test_abc_color_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config = load_config(ABC_COLOR_YAML)
     assert config.name == "abc_color"
     assert config.bronze_table
@@ -19,7 +19,7 @@ def test_abc_color_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_each_source_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     configs_dir = REPO_ROOT / "configs"
     for yaml_file in sorted(configs_dir.glob("*.yaml")):
         config = load_config(yaml_file)
@@ -29,7 +29,7 @@ def test_each_source_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_each_extract_source_has_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     configs_dir = REPO_ROOT / "configs"
     for yaml_file in sorted(configs_dir.glob("*.yaml")):
         config = load_config(yaml_file)
@@ -40,7 +40,7 @@ def test_each_extract_source_has_plugin(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_default_concurrency_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config = load_config(ABC_COLOR_YAML)
     if config.extract is not None:
         assert config.extract.concurrency >= 1
@@ -49,7 +49,7 @@ def test_default_concurrency_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_explicit_concurrency_parses(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "demo.yaml"
     config_file.write_text(
         yaml.safe_dump(
@@ -73,7 +73,7 @@ def test_explicit_concurrency_parses(
 def test_concurrency_zero_rejected(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "bad.yaml"
     config_file.write_text(
         yaml.safe_dump(
@@ -96,7 +96,7 @@ def test_concurrency_zero_rejected(
 def test_missing_bronze_table_rejected(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "bad.yaml"
     config_file.write_text(
         yaml.safe_dump({"name": "x", "silver_table": "silver.x"})
@@ -106,7 +106,7 @@ def test_missing_bronze_table_rejected(
 
 
 def test_missing_dsn_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.delenv("GALACTUS_DSN", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     config_file = tmp_path / "demo.yaml"
     config_file.write_text(
         yaml.safe_dump(
@@ -117,14 +117,14 @@ def test_missing_dsn_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
             }
         )
     )
-    with pytest.raises(ConfigError, match="GALACTUS_DSN"):
+    with pytest.raises(ConfigError, match="DATABASE_URL"):
         load_config(config_file)
 
 
 def test_extract_http_defaults(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("GALACTUS_DSN", "postgresql://x/y")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "demo.yaml"
     config_file.write_text(
         yaml.safe_dump(
