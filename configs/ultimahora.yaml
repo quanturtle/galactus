@@ -8,7 +8,7 @@ extract:
   timeout_seconds: 30.0
   user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
   options:
-    home_url: https://www.ultimahora.com
+    base_url: https://www.ultimahora.com
     scrape_pattern: ".*-n[0-9]+$"
     max_pages: 500
 transform:
