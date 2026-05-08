@@ -26,12 +26,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def validate_plugins(config: PipelineConfig) -> None:
-    """Fail fast if the configured scraper/parser modules can't be imported."""
+    """Fail fast if the configured scraper/parser modules can't be imported or don't expose the strategy class."""
     try:
         if config.extract is not None:
-            importlib.import_module(f"galactus.extract.scrapers.{config.extract.scraper}")
+            mod = importlib.import_module(f"galactus.extract.scrapers.{config.extract.scraper}")
+            if not hasattr(mod, "Scraper"):
+                raise ConfigError(
+                    f"plugin {config.extract.scraper!r} for {config.name!r} does not export a Scraper class"
+                )
         if config.transform is not None:
-            importlib.import_module(f"galactus.transform.parsers.{config.transform.parser}")
+            mod = importlib.import_module(f"galactus.transform.parsers.{config.transform.parser}")
+            if not hasattr(mod, "Parser"):
+                raise ConfigError(
+                    f"plugin {config.transform.parser!r} for {config.name!r} does not export a Parser class"
+                )
     except ImportError as exc:
         raise ConfigError(f"plugin load failed for {config.name!r}: {exc}") from exc
     return
