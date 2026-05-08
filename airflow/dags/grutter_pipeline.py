@@ -1,5 +1,6 @@
-from airflow import DAG
 from airflow.operators.bash import BashOperator
+
+from airflow import DAG
 
 SOURCE_TYPE = "supermercados"
 SOURCE = "grutter"

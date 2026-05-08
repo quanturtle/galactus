@@ -1,5 +1,5 @@
-from sql.base import Base
 from galactus.transform.base_parser import BaseParser
+from sql.base import Base
 
 
 class Parser(BaseParser):
