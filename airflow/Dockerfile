@@ -9,8 +9,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /home/airflow/galactus
 
-COPY --chown=airflow:root pyproject.toml uv.lock ./
+COPY --chown=airflow:root pyproject.toml uv.lock alembic.ini ./
 COPY --chown=airflow:root galactus ./galactus
+COPY --chown=airflow:root sql ./sql
+COPY --chown=airflow:root migrations ./migrations
 COPY --chown=airflow:root configs ./configs
 
 ENV UV_LINK_MODE=copy \

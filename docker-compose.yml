@@ -11,7 +11,10 @@ x-airflow-common: &airflow-common
   volumes:
     - ./pyproject.toml:/home/airflow/galactus/pyproject.toml
     - ./uv.lock:/home/airflow/galactus/uv.lock
+    - ./alembic.ini:/home/airflow/galactus/alembic.ini
     - ./galactus:/home/airflow/galactus/galactus
+    - ./sql:/home/airflow/galactus/sql
+    - ./migrations:/home/airflow/galactus/migrations
     - ./configs:/home/airflow/galactus/configs
     - ./airflow/dags:/home/airflow/dags
     - airflow_logs:/home/airflow/logs
@@ -53,6 +56,15 @@ services:
       db:
         condition: service_healthy
 
+  galactus-migrate:
+    <<: *airflow-common
+    entrypoint: /home/airflow/galactus/.venv/bin/alembic
+    command: ["upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
@@ -61,6 +73,8 @@ services:
       db:
         condition: service_healthy
       airflow-init:
+        condition: service_completed_successfully
+      galactus-migrate:
         condition: service_completed_successfully
 
   airflow-webserver:
@@ -73,6 +87,8 @@ services:
       db:
         condition: service_healthy
       airflow-init:
+        condition: service_completed_successfully
+      galactus-migrate:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
