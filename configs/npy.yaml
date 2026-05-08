@@ -6,11 +6,11 @@ extract:
   scraper: noticias.npy
   concurrency: 1
   timeout_seconds: 30.0
-  user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   options:
     base_url: https://www.npy.com.py
     scrape_url_patterns:
-      - "npy\\.com\\.py/[^/]+-[^/]+-[^/]+-[^/]+"
+      - "npy\\.com\\.py/noticias/.+/[^/]+-[^/]+-[^/]+-[^/]+"
     ignore_url_patterns: []
     page_size: 0
     max_pages: 500
