@@ -27,7 +27,7 @@ def normalize(url: str, strip_path_prefixes: list[str] | None = None) -> str:
     if strip_path_prefixes:
         for prefix in strip_path_prefixes:
             if path.startswith(prefix):
-                path = path[len(prefix) - 1:]  # keep leading /
+                path = "/" + path[len(prefix):].lstrip("/")
                 break
     return urlunparse((scheme, netloc, path, parsed.params, query, ""))
 
