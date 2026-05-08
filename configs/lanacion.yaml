@@ -1,0 +1,20 @@
+name: lanacion
+bronze_table: bronze.html_snapshots
+silver_table: silver.articles
+log_level: INFO
+extract:
+  scraper: noticias.lanacion
+  concurrency: 1
+  timeout_seconds: 30.0
+  user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
+  options:
+    base_url: https://www.lanacion.com.py
+    scrape_url_patterns: []
+    ignore_url_patterns: []
+    page_size: 0
+    max_pages: 500
+    batch_size: 20
+    request_delay: 0.0
+transform:
+  parser: noticias.lanacion
+  options: {}
