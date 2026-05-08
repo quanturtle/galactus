@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from galactus.core.errors import ParserError
 from galactus.core.records import ParsedRecord, RawRecord
 from galactus.infra.db import Database
-from galactus.transform.html_cleaner import HtmlParser, decompress
+from galactus.transform.html_parser import HtmlParser, decompress
 
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
