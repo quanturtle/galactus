@@ -45,6 +45,6 @@ class BaseScraper(ABC):
         ...
 
     async def run(self) -> None:
-        """BFS over seeds(); fetch each URL, build a RawRecord, insert into bronze."""
-        # placeholder — HTTP fetch + concurrency logic ported from v1 later
-        return
+        """Lifecycle: BFS over seeds(); fetch each URL, build a RawRecord, insert into bronze."""
+        # placeholder — BFS + concurrency loop ported from v1 later
+        raise NotImplementedError
