@@ -1,0 +1,85 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://galactus:galactus_secret@db:5432/galactus
+    AIRFLOW__CORE__DAGS_FOLDER: /home/airflow/dags
+    AIRFLOW__LOGGING__BASE_LOG_FOLDER: /home/airflow/logs
+    PYTHONWARNINGS: "ignore:section/key [core/sql_alchemy_conn] has been deprecated:FutureWarning"
+  volumes:
+    - ./pyproject.toml:/home/airflow/galactus/pyproject.toml
+    - ./uv.lock:/home/airflow/galactus/uv.lock
+    - ./galactus:/home/airflow/galactus/galactus
+    - ./configs:/home/airflow/galactus/configs
+    - ./airflow/dags:/home/airflow/dags
+    - airflow_logs:/home/airflow/logs
+  depends_on:
+    db:
+      condition: service_healthy
+  user: "${AIRFLOW_UID:-50000}:0"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-galactus}", "-d", "${POSTGRES_DB:-galactus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" \
+          --password "${_AIRFLOW_WWW_USER_PASSWORD:-admin}" \
+          --firstname Admin --lastname User --role Admin --email admin@example.com \
+          || true
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  pgdata:
+  airflow_logs:
