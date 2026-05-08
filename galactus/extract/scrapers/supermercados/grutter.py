@@ -1,16 +1,8 @@
-from sql.base import Base
 from galactus.extract.base_scraper import BaseScraper
-from galactus.infra.http import HttpResponse
+from sql.a_bronze.api_snapshots import ApiSnapshot
 
 
 class Scraper(BaseScraper):
-    """Scraper for grutter.com.py — paginated JSON API."""
+    """Scraper for grutter — paginated JSON API into bronze.api_snapshots."""
 
-    def seeds(self) -> list[str]:
-        return [self.options.base_url]  # placeholder
-
-    def extract_links(self, url: str, response: HttpResponse) -> list[str]:
-        return []  # placeholder — parse next-page URL from JSON body
-
-    def build_record(self, url: str, response: HttpResponse) -> Base:
-        raise NotImplementedError  # placeholder
+    model = ApiSnapshot

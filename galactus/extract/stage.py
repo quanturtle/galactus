@@ -35,6 +35,8 @@ class ExtractStage(PipelineStage):
             HttpClient(
                 timeout=ext.timeout_seconds,
                 headers={"User-Agent": ext.user_agent},
+                retries=ext.retries,
+                retry_delay=ext.retry_delay,
             ) as client,
             Database(database_url=self.config.database_url) as db,
         ):

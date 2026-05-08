@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from galactus.core.errors import ConfigError
 
 
-
 class ExtractOptions(BaseModel):
     """Scraper-strategy options: URLs, patterns, pagination, and rate-limiting."""
 
@@ -32,6 +31,8 @@ class ExtractConfig(BaseModel):
     concurrency: int = Field(default=1, ge=1)
     timeout_seconds: float = 30.0
     user_agent: str = "galactus/0.2"
+    retries: int = 3
+    retry_delay: float = 2.0
     options: ExtractOptions
 
 

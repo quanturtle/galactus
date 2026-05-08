@@ -1,7 +1,10 @@
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 
 import httpx
+
+from galactus.core.errors import ScraperError
 
 
 class HttpResponse:
@@ -25,19 +28,29 @@ class HttpResponse:
 
 
 class HttpClient:
-    """HTTP client used by scrapers. Backed by httpx.AsyncClient internally."""
+    """HTTP client used by scrapers. Backed by httpx.AsyncClient internally.
+
+    Concerns: opening connections, applying headers/params, retrying transient
+    failures. URL construction (scheme, normalization) is the scraper's job.
+    All terminal failures surface as ScraperError so callers can treat them
+    uniformly.
+    """
 
     def __init__(
         self,
         timeout: float = 30.0,
         headers: Mapping[str, str] | None = None,
         follow_redirects: bool = True,
+        retries: int = 3,
+        retry_delay: float = 2.0,
     ) -> None:
-        self._client = httpx.AsyncClient(
+        self.client = httpx.AsyncClient(
             timeout=timeout,
             headers=dict(headers) if headers else None,
             follow_redirects=follow_redirects,
         )
+        self.retries = retries
+        self.retry_delay = retry_delay
 
     async def get(
         self,
@@ -45,11 +58,29 @@ class HttpClient:
         headers: Mapping[str, str] | None = None,
         params: Mapping[str, Any] | None = None,
     ) -> HttpResponse:
-        response = await self._client.get(url, headers=headers, params=params)
-        return HttpResponse(response)
+        last_exc: Exception | None = None
+        last_response: httpx.Response | None = None
+
+        # retry loop: pass through on <500, retry on 5xx and transient errors
+        for attempt in range(self.retries + 1):
+            try:
+                response = await self.client.get(url, headers=headers, params=params)
+                last_response = response
+                if response.status_code < 500:
+                    return HttpResponse(response)
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                last_exc = exc
+
+            if attempt < self.retries:
+                await asyncio.sleep(self.retry_delay)
+
+        # exhausted retries — surface as ScraperError
+        if last_response is not None:
+            raise ScraperError(f"GET {url} returned {last_response.status_code} after {self.retries + 1} attempts")
+        raise ScraperError(f"GET {url} failed: {last_exc}") from last_exc
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        await self.client.aclose()
         return
 
     async def __aenter__(self) -> "HttpClient":
