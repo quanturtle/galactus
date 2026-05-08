@@ -1,5 +1,5 @@
 name: latribuna
-bronze_table: bronze.html_snapshots
+bronze_table: bronze.api_snapshots
 silver_table: silver.articles
 log_level: INFO
 extract:
@@ -11,7 +11,7 @@ extract:
     base_url: https://www.latribuna.com.py
     scrape_url_patterns: []
     ignore_url_patterns: []
-    page_size: 0
+    page_size: 100
     max_pages: 500
     batch_size: 20
     request_delay: 0.0

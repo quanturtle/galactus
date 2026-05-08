@@ -64,7 +64,9 @@ class BaseScraper:
 
     # 3. should_persist — gate: keep this response?
     def should_persist(self, url: str, response: HttpResponse) -> bool:
-        return True
+        if not self._scrape_patterns:
+            return True
+        return any(p.search(url) for p in self._scrape_patterns)
 
     # 4. build_snapshot — response -> bronze row
     def build_snapshot(self, url: str, response: HttpResponse) -> Base:
@@ -107,18 +109,40 @@ class BaseScraper:
                 out.extend(self._walk_for_urls(v))
         return out
 
+    # 5a'. _is_same_domain — netloc match against home_domain, tolerant of www. prefix
+    def _is_same_domain(self, absolute_url: str) -> bool:
+        netloc = urlparse(absolute_url).netloc
+        if not netloc:
+            return False
+        if not netloc.startswith("www."):
+            netloc = "www." + netloc
+        return netloc == self.home_domain
+
     # 5b. discover_json_links — JSON case
     def discover_json_links(self, url: str, response: HttpResponse) -> list[str]:
         try:
             payload = response.json()
         except json.JSONDecodeError:
             return []
-        return self._walk_for_urls(payload)
+        out: list[str] = []
+        for href in self._walk_for_urls(payload):
+            absolute = urljoin(url, href)
+            if self._is_same_domain(absolute):
+                out.append(absolute)
+        return out
 
     # 5c. discover_html_links — HTML case
     def discover_html_links(self, url: str, response: HttpResponse) -> list[str]:
         soup = BeautifulSoup(response.text, "html.parser")
-        return [str(a["href"]).strip() for a in soup.find_all("a", href=True)]
+        out: list[str] = []
+        for a in soup.find_all("a", href=True):
+            href = str(a["href"]).strip()
+            if not href:
+                continue
+            absolute = urljoin(url, href)
+            if self._is_same_domain(absolute):
+                out.append(absolute)
+        return out
 
     # 5. discover_links — dispatcher: response -> raw hrefs
     def discover_links(self, url: str, response: HttpResponse) -> list[str]:

@@ -9,7 +9,8 @@ extract:
   user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
   options:
     base_url: https://www.npy.com.py
-    scrape_url_patterns: []
+    scrape_url_patterns:
+      - "npy\\.com\\.py/[^/]+-[^/]+-[^/]+-[^/]+"
     ignore_url_patterns: []
     page_size: 0
     max_pages: 500

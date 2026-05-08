@@ -10,7 +10,7 @@ extract:
   options:
     base_url: https://www.ultimahora.com
     scrape_url_patterns:
-      - ".*-n[0-9]+$"
+      - "ultimahora\\.com/[^/]+-[^/]+-[^/]+-[^/]+"
     ignore_url_patterns:
       - /anuario-
       - /brand-
