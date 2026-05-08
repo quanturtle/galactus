@@ -1,7 +1,7 @@
 """Integration test fixtures.
 
 Tests isolate from the dev DB's real bronze/silver data by working against a
-parallel `scratch` schema. The 4 SQLModel classes below mirror the production
+parallel `scratch` schema. The 4 SQLAlchemy classes below mirror the production
 column shapes but live under schema=scratch; the session fixture creates the
 schema and tables, and drops them at teardown.
 
@@ -19,11 +19,12 @@ from dotenv import load_dotenv
 from sqlalchemy import LargeBinary, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlmodel import Column, Field, SQLModel
+from sqlalchemy.orm import Mapped, mapped_column
 
 # trigger psycopg3 dialect registration
 import galactus.infra.db  # noqa: F401
 from galactus.infra.db import Database
+from sql.base import Base
 
 load_dotenv()
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -31,7 +32,7 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 SCRATCH_SCHEMA = "scratch"
 
 
-class ScratchApiSnapshot(SQLModel, table=True):
+class ScratchApiSnapshot(Base):
     __tablename__ = "api_snapshots"
     __table_args__ = (
         UniqueConstraint(
@@ -41,19 +42,19 @@ class ScratchApiSnapshot(SQLModel, table=True):
         {"schema": SCRATCH_SCHEMA},
     )
 
-    bronze_id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str = Field(index=True)
-    fetched_at: datetime = Field(index=True)
-    request_url: str
-    request_params: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
-    status_code: int
-    response_headers: dict[str, str] = Field(sa_column=Column(JSONB, nullable=False))
-    body: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
-    parsed_at: datetime | None = Field(default=None, index=True)
+    bronze_id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str] = mapped_column(index=True)
+    fetched_at: Mapped[datetime] = mapped_column(index=True)
+    request_url: Mapped[str]
+    request_params: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status_code: Mapped[int]
+    response_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
+    body: Mapped[bytes] = mapped_column(LargeBinary)
+    parsed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
 
 
-class ScratchHtmlSnapshot(SQLModel, table=True):
+class ScratchHtmlSnapshot(Base):
     __tablename__ = "html_snapshots"
     __table_args__ = (
         UniqueConstraint(
@@ -63,69 +64,67 @@ class ScratchHtmlSnapshot(SQLModel, table=True):
         {"schema": SCRATCH_SCHEMA},
     )
 
-    bronze_id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str = Field(index=True)
-    fetched_at: datetime = Field(index=True)
-    status_code: int
-    content_type: str
-    response_headers: dict[str, str] = Field(sa_column=Column(JSONB, nullable=False))
-    html: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
-    is_diff: bool = Field(default=False)
-    parsed_at: datetime | None = Field(default=None, index=True)
+    bronze_id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str] = mapped_column(index=True)
+    fetched_at: Mapped[datetime] = mapped_column(index=True)
+    status_code: Mapped[int]
+    content_type: Mapped[str]
+    response_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
+    html: Mapped[bytes] = mapped_column(LargeBinary)
+    is_diff: Mapped[bool] = mapped_column(default=False)
+    parsed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
 
 
-class ScratchArticle(SQLModel, table=True):
+class ScratchArticle(Base):
     __tablename__ = "articles"
     __table_args__ = (
         UniqueConstraint("source", "source_url", name="uq_scratch_articles_source_url"),
         {"schema": SCRATCH_SCHEMA},
     )
 
-    id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str
-    title: str
-    body_html: str | None = None
-    body_text: str | None = None
-    authors: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
-    published_at: datetime | None = Field(default=None, index=True)
-    section: str | None = None
-    tags: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
-    image_urls: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str]
+    title: Mapped[str]
+    body_html: Mapped[str | None] = mapped_column(default=None)
+    body_text: Mapped[str | None] = mapped_column(default=None)
+    authors: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+    published_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
+    section: Mapped[str | None] = mapped_column(default=None)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+    image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+
+    def __init__(self, **kw) -> None:
+        kw.setdefault("authors", [])
+        kw.setdefault("tags", [])
+        kw.setdefault("image_urls", [])
+        super().__init__(**kw)
 
 
-class ScratchProduct(SQLModel, table=True):
+class ScratchProduct(Base):
     __tablename__ = "products"
     __table_args__ = (
         UniqueConstraint("source", "source_url", name="uq_scratch_products_source_url"),
         {"schema": SCRATCH_SCHEMA},
     )
 
-    id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str
-    sku: str | None = None
-    name: str
-    brand: str | None = None
-    price: Decimal | None = Field(default=None, sa_column=Column(Numeric(12, 2)))
-    currency: str | None = None
-    unit: str | None = None
-    in_stock: bool | None = None
-    observed_at: datetime | None = Field(default=None, index=True)
-    image_urls: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str]
+    sku: Mapped[str | None] = mapped_column(default=None)
+    name: Mapped[str]
+    brand: Mapped[str | None] = mapped_column(default=None)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    currency: Mapped[str | None] = mapped_column(default=None)
+    unit: Mapped[str | None] = mapped_column(default=None)
+    in_stock: Mapped[bool | None] = mapped_column(default=None)
+    observed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
+    image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+
+    def __init__(self, **kw) -> None:
+        kw.setdefault("image_urls", [])
+        super().__init__(**kw)
 
 
 SCRATCH_TABLES = (

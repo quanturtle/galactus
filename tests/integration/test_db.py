@@ -16,6 +16,11 @@ from tests.integration.conftest import (
     ScratchProduct,
 )
 
+BRONZE_CONFLICT = ("source", "source_url", "fetched_at")
+BRONZE_EXCLUDE = ("bronze_id", "parsed_at")
+SILVER_CONFLICT = ("source", "source_url")
+SILVER_EXCLUDE = ("id",)
+
 
 def _api_snapshot(
     source: str = "test_source",
@@ -52,8 +57,8 @@ def _html_snapshot(
 
 async def test_insert_bronze_html_idempotent(db, engine) -> None:
     rec = _html_snapshot()
-    await db.insert(ScratchHtmlSnapshot, rec)
-    await db.insert(ScratchHtmlSnapshot, rec)
+    await db.insert(rec, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert(rec, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
     async with engine.connect() as conn:
         result = await conn.execute(text("SELECT COUNT(*) FROM scratch.html_snapshots"))
         assert result.scalar() == 1
@@ -61,8 +66,8 @@ async def test_insert_bronze_html_idempotent(db, engine) -> None:
 
 async def test_insert_bronze_api_idempotent(db, engine) -> None:
     rec = _api_snapshot()
-    await db.insert(ScratchApiSnapshot, rec)
-    await db.insert(ScratchApiSnapshot, rec)
+    await db.insert(rec, ScratchApiSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert(rec, ScratchApiSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
     async with engine.connect() as conn:
         row = (await conn.execute(text(
             "SELECT request_params, response_headers FROM scratch.api_snapshots"
@@ -75,8 +80,8 @@ async def test_insert_accepts_single_or_iterable(db, engine) -> None:
     one = _html_snapshot(source_url="https://example.com/a")
     two = _html_snapshot(source_url="https://example.com/b")
     three = _html_snapshot(source_url="https://example.com/c")
-    await db.insert(ScratchHtmlSnapshot, one)
-    await db.insert(ScratchHtmlSnapshot, [two, three])
+    await db.insert(one, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert([two, three], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
     async with engine.connect() as conn:
         count = (await conn.execute(text("SELECT COUNT(*) FROM scratch.html_snapshots"))).scalar()
     assert count == 3
@@ -91,7 +96,7 @@ async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
         tags=["news"],
         image_urls=["https://example.com/img.jpg"],
     )
-    await db.upsert(ScratchArticle, article)
+    await db.upsert(article, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
 
     updated = ScratchArticle(
         source="test_source",
@@ -101,7 +106,7 @@ async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
         tags=["news", "updated"],
         image_urls=["https://example.com/img.jpg"],
     )
-    await db.upsert(ScratchArticle, updated)
+    await db.upsert(updated, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
 
     async with engine.connect() as conn:
         rows = (await conn.execute(
@@ -120,7 +125,7 @@ async def test_upsert_silver_products_with_decimal(db, engine) -> None:
         price=Decimal("19.99"),
         currency="USD",
     )
-    await db.upsert(ScratchProduct, product)
+    await db.upsert(product, ScratchProduct, SILVER_CONFLICT, SILVER_EXCLUDE)
     async with engine.connect() as conn:
         row = (await conn.execute(text(
             "SELECT price, currency FROM scratch.products WHERE source_url = 'https://example.com/p-1'"
@@ -132,7 +137,7 @@ async def test_upsert_silver_products_with_decimal(db, engine) -> None:
 async def test_load_unparsed_filters_by_source_and_parsed_at(db, engine) -> None:
     a = _html_snapshot(source="src_a", source_url="https://example.com/a")
     b = _html_snapshot(source="src_b", source_url="https://example.com/b")
-    await db.insert(ScratchHtmlSnapshot, [a, b])
+    await db.insert([a, b], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
 
     # mark src_a row as parsed; load_unparsed should yield only src_b
     async with engine.begin() as conn:
@@ -151,7 +156,7 @@ async def test_load_unparsed_filters_by_source_and_parsed_at(db, engine) -> None
 async def test_mark_parsed_excludes_from_subsequent_load(db, engine) -> None:
     one = _html_snapshot(source_url="https://example.com/a")
     two = _html_snapshot(source_url="https://example.com/b")
-    await db.insert(ScratchHtmlSnapshot, [one, two])
+    await db.insert([one, two], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
 
     loaded = [r async for r in db.load_unparsed(ScratchHtmlSnapshot, "test_source")]
     assert len(loaded) == 2

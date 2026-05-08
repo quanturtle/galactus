@@ -10,7 +10,7 @@ dependencies = [
     "pyyaml",
     "psycopg[binary,pool]",
     "pydantic",
-    "sqlmodel",
+    "sqlalchemy",
     "greenlet",
     "alembic>=1.18.4",
     "python-dateutil",

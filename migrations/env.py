@@ -5,11 +5,11 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool, text
 from sqlalchemy.dialects import registry
-from sqlmodel import SQLModel
 
 import sql  # noqa: F401  -- registers all tables + schema DDL hooks
 from sql.a_bronze.schema import SCHEMA as BRONZE_SCHEMA
 from sql.b_silver.schema import SCHEMA as SILVER_SCHEMA
+from sql.base import Base
 from sql.c_gold.schema import SCHEMA as GOLD_SCHEMA
 
 # bare postgresql:// resolves to psycopg3, not psycopg2 (which isn't installed in this venv)
@@ -31,7 +31,7 @@ if not database_url:
     raise RuntimeError("DATABASE_URL env var is required for Alembic")
 config.set_main_option("sqlalchemy.url", database_url)
 
-target_metadata = SQLModel.metadata
+target_metadata = Base.metadata
 SCHEMAS = (BRONZE_SCHEMA, SILVER_SCHEMA, GOLD_SCHEMA)
 
 
