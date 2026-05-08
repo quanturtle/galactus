@@ -20,6 +20,7 @@ from sql.base import Base
 SKIP_EXTENSIONS = frozenset({
     ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp",
     ".css", ".js", ".zip", ".mp4", ".mp3", ".ico", ".woff", ".woff2",
+    ".rss", ".xml", ".atom",
 })
 SKIP_PREFIXES = ("mailto:", "tel:", "javascript:", "data:", "whatsapp:", "#")
 
@@ -118,6 +119,13 @@ class BaseScraper:
             netloc = "www." + netloc
         return netloc == self.home_domain
 
+    # 5a''. _is_followable — same-domain and not a blocked file extension
+    def _is_followable(self, absolute_url: str) -> bool:
+        if not self._is_same_domain(absolute_url):
+            return False
+        ext = Path(urlparse(absolute_url).path).suffix.lower()
+        return ext not in SKIP_EXTENSIONS
+
     # 5b. discover_json_links — JSON case
     def discover_json_links(self, url: str, response: HttpResponse) -> list[str]:
         try:
@@ -127,7 +135,7 @@ class BaseScraper:
         out: list[str] = []
         for href in self._walk_for_urls(payload):
             absolute = urljoin(url, href)
-            if self._is_same_domain(absolute):
+            if self._is_followable(absolute):
                 out.append(absolute)
         return out
 
@@ -140,7 +148,7 @@ class BaseScraper:
             if not href:
                 continue
             absolute = urljoin(url, href)
-            if self._is_same_domain(absolute):
+            if self._is_followable(absolute):
                 out.append(absolute)
         return out
 
