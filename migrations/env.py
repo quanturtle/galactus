@@ -41,6 +41,13 @@ def ensure_schemas(connection) -> None:
         connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {name}"))
 
 
+def include_name(name, type_, parent_names) -> bool:
+    """Restrict autogenerate to galactus-owned schemas; ignore airflow's public."""
+    if type_ == "schema":
+        return name in SCHEMAS
+    return True
+
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
@@ -66,6 +73,8 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_schemas=True,
+        include_name=include_name,
+        version_table="galactus_alembic_version",
         version_table_schema="public",
     )
 
@@ -87,15 +96,17 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        ensure_schemas(connection)
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             include_schemas=True,
+            include_name=include_name,
+            version_table="galactus_alembic_version",
             version_table_schema="public",
         )
 
         with context.begin_transaction():
+            ensure_schemas(connection)
             context.run_migrations()
 
 
