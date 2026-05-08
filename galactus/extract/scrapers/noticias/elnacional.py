@@ -1,4 +1,4 @@
-from galactus.core.records import RawRecord
+from sql.a_bronze import RawRecord
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpResponse
 

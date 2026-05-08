@@ -3,7 +3,8 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-from galactus.core.records import ParsedRecord, RawRecord
+from sql.a_bronze import RawRecord
+from sql.b_silver import ParsedRecord
 from galactus.infra.db import Database
 from galactus.transform.html_parser import HtmlParser, decompress
 

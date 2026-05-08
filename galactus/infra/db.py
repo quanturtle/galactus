@@ -5,7 +5,8 @@ from typing import Any
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from galactus.core.records import ParsedRecord, RawRecord
+from sql.a_bronze import RawRecord
+from sql.b_silver import ParsedRecord
 
 
 class Database:

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from galactus.config import ExtractOptions
-from galactus.core.records import RawRecord
+from sql.a_bronze import RawRecord
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
 

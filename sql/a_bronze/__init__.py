@@ -1,0 +1,9 @@
+"""Bronze layer: api_snapshots, html_snapshots. Schema is registered first."""
+
+from sql.a_bronze import schema  # noqa: F401  -- must import first (DDL listener)
+from sql.a_bronze.api_snapshots import ApiSnapshot
+from sql.a_bronze.html_snapshots import HtmlSnapshot
+
+RawRecord = ApiSnapshot | HtmlSnapshot
+
+__all__ = ["ApiSnapshot", "HtmlSnapshot", "RawRecord"]
