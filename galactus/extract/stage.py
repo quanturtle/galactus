@@ -39,7 +39,7 @@ class ExtractStage(PipelineStage):
             scraper: BaseScraper = mod.Scraper(
                 source=self.config.name,
                 http=client,
-                options=dict(ext.options),
+                options=ext.options,
                 concurrency=ext.concurrency,
             )
 

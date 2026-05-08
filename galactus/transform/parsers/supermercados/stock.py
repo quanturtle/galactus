@@ -1,12 +1,9 @@
-from galactus.core.errors import ParserError
-from galactus.core.records import ApiSnapshot, ParsedRecord, RawRecord
+from galactus.core.records import ParsedRecord, RawRecord
 from galactus.transform.base_parser import BaseParser
 
 
 class Parser(BaseParser):
-    """Parses an ApiSnapshot from stock.com.py into a Product entity."""
+    """Parses ApiSnapshots from stock.com.py into Product entities."""
 
-    def run(self, record: RawRecord) -> ParsedRecord:
-        if not isinstance(record, ApiSnapshot):
-            raise ParserError(f"stock parser expects ApiSnapshot, got {type(record).__name__}")
+    def parse_batch(self, records: list[RawRecord]) -> list[ParsedRecord]:
         raise NotImplementedError

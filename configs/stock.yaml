@@ -9,7 +9,12 @@ extract:
   user_agent: "galactus/0.2 (+https://github.com/alvaro/galactus)"
   options:
     base_url: https://api.stock.com.py
+    scrape_url_patterns: []
+    ignore_url_patterns: []
     page_size: 100
+    max_pages: 0
+    batch_size: 0
+    request_delay: 0.0
 transform:
   parser: supermercados.stock
   options: {}

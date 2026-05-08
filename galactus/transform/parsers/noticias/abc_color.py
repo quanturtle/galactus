@@ -1,12 +1,9 @@
-from galactus.core.errors import ParserError
-from galactus.core.records import HtmlSnapshot, ParsedRecord, RawRecord
+from galactus.core.records import ParsedRecord, RawRecord
 from galactus.transform.base_parser import BaseParser
 
 
 class Parser(BaseParser):
-    """Parses an HtmlSnapshot from abc.com.py into an Article entity."""
+    """Parses HtmlSnapshots from abc.com.py into Article entities."""
 
-    def run(self, record: RawRecord) -> ParsedRecord:
-        if not isinstance(record, HtmlSnapshot):
-            raise ParserError(f"abc_color parser expects HtmlSnapshot, got {type(record).__name__}")
+    def parse_batch(self, records: list[RawRecord]) -> list[ParsedRecord]:
         raise NotImplementedError

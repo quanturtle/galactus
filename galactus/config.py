@@ -10,6 +10,20 @@ from galactus.core.errors import ConfigError
 DSN_ENV_VAR = "GALACTUS_DSN"
 
 
+class ExtractOptions(BaseModel):
+    """Scraper-strategy options: URLs, patterns, pagination, and rate-limiting."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    base_url: str
+    scrape_url_patterns: list[str] = []
+    ignore_url_patterns: list[str] = []
+    page_size: int = 0
+    max_pages: int = 0
+    batch_size: int = 0
+    request_delay: float = 0.0
+
+
 class ExtractConfig(BaseModel):
     """Extract block: which scraper strategy, HTTP knobs, and its options."""
 
@@ -19,7 +33,7 @@ class ExtractConfig(BaseModel):
     concurrency: int = Field(default=1, ge=1)
     timeout_seconds: float = 30.0
     user_agent: str = "galactus/0.2"
-    options: dict[str, Any] = Field(default_factory=dict)
+    options: ExtractOptions
 
 
 class TransformConfig(BaseModel):

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from typing import Any
 
+from galactus.config import ExtractOptions
 from galactus.core.records import RawRecord
 from galactus.infra.http import HttpClient, HttpResponse
 
@@ -9,7 +9,7 @@ from galactus.infra.http import HttpClient, HttpResponse
 class BaseScraper(ABC):
     """Base class for all scrapers. Owns the BFS loop; subclasses provide three hooks.
 
-    Concrete scrapers never override fetch() — they implement seeds(),
+    Concrete scrapers never override run() — they implement seeds(),
     extract_links(), and build_record() instead.
     """
 
@@ -17,7 +17,7 @@ class BaseScraper(ABC):
         self,
         source: str,
         http: HttpClient,
-        options: dict[str, Any],
+        options: ExtractOptions,
         concurrency: int = 1,
     ) -> None:
         self.source = source

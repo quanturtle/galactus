@@ -7,7 +7,7 @@ class Scraper(BaseScraper):
     """Scraper for ultimahora.com — BFS crawl."""
 
     def seeds(self) -> list[str]:
-        return [self.options["home_url"]]
+        return [self.options.base_url]
 
     def extract_links(self, url: str, response: HttpResponse) -> list[str]:
         return []  # placeholder — parse <a href> links in follow-up
