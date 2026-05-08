@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel
+from sql.base import Base
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpResponse
 
@@ -12,5 +12,5 @@ class Scraper(BaseScraper):
     def extract_links(self, url: str, response: HttpResponse) -> list[str]:
         return []  # placeholder — parse <a href> links in follow-up
 
-    def build_record(self, url: str, response: HttpResponse) -> SQLModel:
+    def build_record(self, url: str, response: HttpResponse) -> Base:
         raise NotImplementedError  # placeholder

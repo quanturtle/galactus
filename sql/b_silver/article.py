@@ -2,12 +2,13 @@ from datetime import datetime
 
 from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlmodel import Column, Field, SQLModel
+from sqlalchemy.orm import Mapped, mapped_column
 
 from sql.b_silver.schema import SCHEMA
+from sql.base import Base
 
 
-class Article(SQLModel, table=True):
+class Article(Base):
     """Silver entity: a single news article."""
 
     __tablename__ = "articles"
@@ -16,23 +17,20 @@ class Article(SQLModel, table=True):
         {"schema": SCHEMA},
     )
 
-    id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str
-    title: str
-    body_html: str | None = None
-    body_text: str | None = None
-    authors: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
-    published_at: datetime | None = Field(default=None, index=True)
-    section: str | None = None
-    tags: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
-    image_urls: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str]
+    title: Mapped[str]
+    body_html: Mapped[str | None] = mapped_column(default=None)
+    body_text: Mapped[str | None] = mapped_column(default=None)
+    authors: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+    published_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
+    section: Mapped[str | None] = mapped_column(default=None)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+    image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+
+    def __init__(self, **kw) -> None:
+        kw.setdefault("authors", [])
+        kw.setdefault("tags", [])
+        kw.setdefault("image_urls", [])
+        super().__init__(**kw)

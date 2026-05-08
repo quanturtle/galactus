@@ -2,12 +2,13 @@ from datetime import datetime
 
 from sqlalchemy import LargeBinary, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Column, Field, SQLModel
+from sqlalchemy.orm import Mapped, mapped_column
 
 from sql.a_bronze.schema import SCHEMA
+from sql.base import Base
 
 
-class HtmlSnapshot(SQLModel, table=True):
+class HtmlSnapshot(Base):
     """bronze.html_snapshots — first-full-then-diff HTML captures."""
 
     __tablename__ = "html_snapshots"
@@ -19,13 +20,13 @@ class HtmlSnapshot(SQLModel, table=True):
         {"schema": SCHEMA},
     )
 
-    bronze_id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str = Field(index=True)
-    fetched_at: datetime = Field(index=True)
-    status_code: int
-    content_type: str
-    response_headers: dict[str, str] = Field(sa_column=Column(JSONB, nullable=False))
-    html: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
-    is_diff: bool = Field(default=False)
-    parsed_at: datetime | None = Field(default=None, index=True)
+    bronze_id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str] = mapped_column(index=True)
+    fetched_at: Mapped[datetime] = mapped_column(index=True)
+    status_code: Mapped[int]
+    content_type: Mapped[str]
+    response_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
+    html: Mapped[bytes] = mapped_column(LargeBinary)
+    is_diff: Mapped[bool] = mapped_column(default=False)
+    parsed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)

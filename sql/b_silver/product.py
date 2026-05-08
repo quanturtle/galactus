@@ -3,12 +3,13 @@ from decimal import Decimal
 
 from sqlalchemy import Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlmodel import Column, Field, SQLModel
+from sqlalchemy.orm import Mapped, mapped_column
 
 from sql.b_silver.schema import SCHEMA
+from sql.base import Base
 
 
-class Product(SQLModel, table=True):
+class Product(Base):
     """Silver entity: one supermarket product offering at a point in time."""
 
     __tablename__ = "products"
@@ -17,18 +18,19 @@ class Product(SQLModel, table=True):
         {"schema": SCHEMA},
     )
 
-    id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str
-    sku: str | None = None
-    name: str
-    brand: str | None = None
-    price: Decimal | None = Field(default=None, sa_column=Column(Numeric(12, 2)))
-    currency: str | None = None
-    unit: str | None = None
-    in_stock: bool | None = None
-    observed_at: datetime | None = Field(default=None, index=True)
-    image_urls: list[str] = Field(
-        default_factory=list,
-        sa_column=Column(ARRAY(String), nullable=False, server_default="{}"),
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str]
+    sku: Mapped[str | None] = mapped_column(default=None)
+    name: Mapped[str]
+    brand: Mapped[str | None] = mapped_column(default=None)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
+    currency: Mapped[str | None] = mapped_column(default=None)
+    unit: Mapped[str | None] = mapped_column(default=None)
+    in_stock: Mapped[bool | None] = mapped_column(default=None)
+    observed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
+    image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+
+    def __init__(self, **kw) -> None:
+        kw.setdefault("image_urls", [])
+        super().__init__(**kw)

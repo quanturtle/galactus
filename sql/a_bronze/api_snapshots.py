@@ -3,12 +3,13 @@ from typing import Any
 
 from sqlalchemy import LargeBinary, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Column, Field, SQLModel
+from sqlalchemy.orm import Mapped, mapped_column
 
 from sql.a_bronze.schema import SCHEMA
+from sql.base import Base
 
 
-class ApiSnapshot(SQLModel, table=True):
+class ApiSnapshot(Base):
     """bronze.api_snapshots — raw API response captures."""
 
     __tablename__ = "api_snapshots"
@@ -20,13 +21,13 @@ class ApiSnapshot(SQLModel, table=True):
         {"schema": SCHEMA},
     )
 
-    bronze_id: int | None = Field(default=None, primary_key=True)
-    source: str = Field(index=True)
-    source_url: str = Field(index=True)
-    fetched_at: datetime = Field(index=True)
-    request_url: str
-    request_params: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
-    status_code: int
-    response_headers: dict[str, str] = Field(sa_column=Column(JSONB, nullable=False))
-    body: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
-    parsed_at: datetime | None = Field(default=None, index=True)
+    bronze_id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(index=True)
+    source_url: Mapped[str] = mapped_column(index=True)
+    fetched_at: Mapped[datetime] = mapped_column(index=True)
+    request_url: Mapped[str]
+    request_params: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status_code: Mapped[int]
+    response_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
+    body: Mapped[bytes] = mapped_column(LargeBinary)
+    parsed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)

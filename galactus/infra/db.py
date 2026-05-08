@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator, Iterable
 from typing import TypeVar
 
-from sqlalchemy import func, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects import registry
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import (
@@ -10,26 +10,26 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlmodel import SQLModel, select
+
+from sql.base import Base
 
 # mirror migrations/env.py: route bare postgresql:// to psycopg3
 registry.register("postgresql", "sqlalchemy.dialects.postgresql.psycopg", "dialect")
 
 
-M = TypeVar("M", bound=SQLModel)
+M = TypeVar("M", bound=Base)
 
 
 class Database:
-    """Async SQLAlchemy/SQLModel-backed persistence.
+    """Async SQLAlchemy-backed persistence.
 
-    Owns one AsyncEngine and a sessionmaker; methods accept a SQLModel class
+    Owns one AsyncEngine and a sessionmaker; methods accept a mapped model class
     and one or many record instances of that class.
     """
 
     def __init__(
         self,
         database_url: str,
-        *,
         pool_size: int = 5,
         max_overflow: int = 5,
     ) -> None:
@@ -62,43 +62,60 @@ class Database:
         await self.close()
         return
 
-    async def insert(self, model: type[M], records: M | Iterable[M]) -> None:
-        """Idempotent insert of one or many bronze records.
+    async def insert(
+        self,
+        records: M | Iterable[M],
+        model: type[M],
+        conflict_columns: Iterable[str],
+        exclude_columns: Iterable[str] = (),
+    ) -> None:
+        """Idempotent insert: ON CONFLICT (conflict_columns) DO NOTHING.
 
-        ON CONFLICT (source, source_url, fetched_at) DO NOTHING.
+        `exclude_columns` lists model attributes to drop from the row dict
+        (typically server-managed columns like surrogate ids and auto timestamps).
         """
-        rows = _to_rows(records, exclude={"bronze_id", "parsed_at"})
+        if isinstance(records, Base):
+            records = [records]
+        excluded = frozenset(exclude_columns)
+        rows = [r.to_dict(excluded) for r in records]
         if not rows:
             return
-        stmt = pg_insert(model).values(rows).on_conflict_do_nothing(
-            index_elements=["source", "source_url", "fetched_at"],
+        stmt = pg_insert(model).on_conflict_do_nothing(
+            index_elements=list(conflict_columns),
         )
         async with self._sessionmaker() as session:
-            await session.execute(stmt)
+            await session.execute(stmt, rows)
             await session.commit()
         return
 
-    async def upsert(self, model: type[M], records: M | Iterable[M]) -> None:
-        """Idempotent upsert of one or many silver records.
+    async def upsert(
+        self,
+        records: M | Iterable[M],
+        model: type[M],
+        conflict_columns: Iterable[str],
+        exclude_columns: Iterable[str] = (),
+    ) -> None:
+        """Idempotent upsert: ON CONFLICT (conflict_columns) DO UPDATE.
 
-        ON CONFLICT (source, source_url) DO UPDATE — every column except the
-        conflict key and surrogate id is overwritten with EXCLUDED.*.
+        Every column except `conflict_columns` and `exclude_columns` is
+        overwritten with the EXCLUDED.* row value.
         """
-        rows = _to_rows(records, exclude={"id"})
+        if isinstance(records, Base):
+            records = [records]
+        excluded = frozenset(exclude_columns)
+        rows = [r.to_dict(excluded) for r in records]
         if not rows:
             return
-        stmt = pg_insert(model).values(rows)
-        update_set = {
-            c.name: c
-            for c in stmt.excluded
-            if c.name not in ("id", "source", "source_url")
-        }
+        conflict = list(conflict_columns)
+        immutable = excluded | set(conflict)
+        stmt = pg_insert(model)
+        update_set = {c.name: c for c in stmt.excluded if c.name not in immutable}
         stmt = stmt.on_conflict_do_update(
-            index_elements=["source", "source_url"],
+            index_elements=conflict,
             set_=update_set,
         )
         async with self._sessionmaker() as session:
-            await session.execute(stmt)
+            await session.execute(stmt, rows)
             await session.commit()
         return
 
@@ -132,9 +149,3 @@ class Database:
             await session.execute(stmt)
             await session.commit()
         return
-
-
-def _to_rows(records: M | Iterable[M], *, exclude: set[str]) -> list[dict]:
-    if isinstance(records, SQLModel):
-        return [records.model_dump(exclude=exclude)]
-    return [r.model_dump(exclude=exclude) for r in records]

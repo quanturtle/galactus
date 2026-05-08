@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
 
-from sqlmodel import SQLModel
-
 from galactus.config import ExtractOptions
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
+from sql.base import Base
 
 
 class BaseScraper(ABC):
@@ -41,7 +40,7 @@ class BaseScraper(ABC):
         ...
 
     @abstractmethod
-    def build_record(self, url: str, response: HttpResponse) -> SQLModel:
+    def build_record(self, url: str, response: HttpResponse) -> Base:
         """Wrap the response into the appropriate snapshot record type."""
         ...
 
