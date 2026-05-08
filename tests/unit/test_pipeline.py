@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from galactus.core.errors import PipelineError
 from galactus.core.pipeline import Pipeline
 
 
@@ -46,7 +47,7 @@ def test_pipeline_runs_single_stage_by_name() -> None:
 def test_pipeline_unknown_stage_name_raises_with_available_list() -> None:
     pipeline = Pipeline(stages=[FakeStage("a"), FakeStage("b")])
 
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(PipelineError) as excinfo:
         asyncio.run(pipeline.run(stage_name="missing"))
 
     msg = str(excinfo.value)
@@ -55,10 +56,10 @@ def test_pipeline_unknown_stage_name_raises_with_available_list() -> None:
 
 
 def test_pipeline_rejects_duplicate_stage_names() -> None:
-    with pytest.raises(ValueError, match="duplicate stage names"):
+    with pytest.raises(PipelineError, match="duplicate stage names"):
         Pipeline(stages=[FakeStage("a"), FakeStage("a")])
 
 
 def test_pipeline_rejects_empty_stages() -> None:
-    with pytest.raises(ValueError, match="at least one stage"):
+    with pytest.raises(PipelineError, match="at least one stage"):
         Pipeline(stages=[])

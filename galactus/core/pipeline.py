@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from galactus.core.errors import PipelineError
+
 
 class PipelineStage(ABC):
     """Base for pipeline stages. Subclasses set a `name: str` class attribute
@@ -23,9 +25,9 @@ class Pipeline:
         self.stages = stages
         self._stage_index = {s.name: s for s in stages}
         if not stages:
-            raise ValueError("pipeline needs at least one stage")
+            raise PipelineError("pipeline needs at least one stage")
         if len(self._stage_index) != len(stages):
-            raise ValueError("duplicate stage names in pipeline")
+            raise PipelineError("duplicate stage names in pipeline")
 
     async def run(self, stage_name: str | None = None) -> None:
         if stage_name is None:
@@ -36,6 +38,6 @@ class Pipeline:
             stage = self._stage_index[stage_name]
         except KeyError:
             known = ", ".join(s.name for s in self.stages) or "<none>"
-            raise ValueError(f"unknown stage {stage_name!r}; available: {known}") from None
+            raise PipelineError(f"unknown stage {stage_name!r}; available: {known}") from None
         await stage.run()
         return
