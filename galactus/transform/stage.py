@@ -21,25 +21,24 @@ class TransformStage(PipelineStage):
 
     name: str = "transform"
 
-    def __init__(self, config: PipelineConfig, batch_size: int = 100) -> None:
+    def __init__(self, config: PipelineConfig) -> None:
         self.config = config
-        self.batch_size = batch_size
 
     async def run(self) -> None:
         if self.config.transform is None:
             return
+        tr = self.config.transform
 
         # open per-run db pool
         async with Database(database_url=self.config.database_url) as db:
             # resolve strategy
-            mod = importlib.import_module(f"galactus.transform.parsers.{self.config.transform.parser}")
+            mod = importlib.import_module(f"galactus.transform.parsers.{tr.parser}")
             parser: BaseParser = mod.Parser(
                 source=self.config.name,
                 db=db,
                 bronze_table=self.config.bronze_table,
                 silver_table=self.config.silver_table,
-                options=dict(self.config.transform.options),
-                batch_size=self.batch_size,
+                options=tr.options,
             )
 
             # run the parser lifecycle

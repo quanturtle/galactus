@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -36,13 +35,23 @@ class ExtractConfig(BaseModel):
     options: ExtractOptions
 
 
+class TransformOptions(BaseModel):
+    """Parser-strategy options: HTML cleaning rules and batching."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    blocklist_tags: list[str] = []
+    blocklist_attributes: list[str] = []
+    batch_size: int = 100
+
+
 class TransformConfig(BaseModel):
     """Transform block: which parser strategy and its options."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     parser: str
-    options: dict[str, Any] = Field(default_factory=dict)
+    options: TransformOptions = Field(default_factory=TransformOptions)
 
 
 class PipelineConfig(BaseModel):

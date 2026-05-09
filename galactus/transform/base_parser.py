@@ -1,23 +1,28 @@
-from abc import ABC, abstractmethod
-from typing import Any
+import json
+from abc import abstractmethod
+from collections.abc import AsyncIterator
+from typing import Any, ClassVar
 
-from bs4 import BeautifulSoup
-
+from galactus.config import TransformOptions
 from galactus.infra.db import Database
 from galactus.transform.html_parser import HtmlParser, decompress
+from sql.a_bronze.api_snapshots import ApiSnapshot
+from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
 
 
-class BaseParser(ABC):
-    """Base class for all parsers. Owns the bronze->silver lifecycle.
+class BaseParser:
+    """Template Method base for all parsers.
 
-    Subclasses implement parse_batch(); the concrete run() loads unparsed
-    records, accumulates them into batches, calls parse_batch(), upserts,
-    and marks them parsed.
-
-    HTML sources call self.clean() and self.soup() inside parse_batch().
-    API sources call decompress() + json.loads() directly.
+    run() owns the bronze->silver lifecycle: stream unparsed bronze rows,
+    decode each, build silver entities, batch-upsert into silver, then
+    mark bronze rows parsed. Concrete parsers override hooks; only
+    build_entities() is abstract.
     """
+
+    bronze_model: ClassVar[type[Base]]
+    silver_model: ClassVar[type[Base]]
+    conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url")
 
     def __init__(
         self,
@@ -25,30 +30,66 @@ class BaseParser(ABC):
         db: Database,
         bronze_table: str,
         silver_table: str,
-        options: dict[str, Any],
-        batch_size: int = 100,
+        options: TransformOptions,
     ) -> None:
         self.source = source
         self.db = db
         self.bronze_table = bronze_table
         self.silver_table = silver_table
-        self.batch_size = batch_size
-        self.html_parser = HtmlParser(options)
+        self.options = options
+        self.batch_size = options.batch_size
+        self.html_parser = HtmlParser(
+            {
+                "blocklist_tags": options.blocklist_tags,
+                "blocklist_attributes": options.blocklist_attributes,
+            }
+        )
 
-    def clean(self, html_bytes: bytes) -> str:
-        """Decompress and clean a bronze html blob. For use inside parse_batch()."""
-        return self.html_parser.clean(decompress(html_bytes))
+    # 1. load_records — stream of unparsed bronze rows
+    def load_records(self) -> AsyncIterator[Base]:
+        return self.db.load_unparsed(self.bronze_model, self.source)
 
-    def soup(self, html_bytes: bytes) -> BeautifulSoup:
-        """Decompress a bronze html blob and return a filtered BeautifulSoup tree."""
-        return self.html_parser.parse(decompress(html_bytes))
+    # 2. decode — bronze row -> parsed payload (BeautifulSoup for HTML, dict for JSON)
+    def decode(self, record: Base) -> Any:
+        if self.bronze_model is HtmlSnapshot:
+            return self.html_parser.parse(decompress(record.html))
+        if self.bronze_model is ApiSnapshot:
+            return json.loads(decompress(record.body))
+        raise NotImplementedError(f"No default decode for {self.bronze_model}")
 
+    # 3. build_entities — bronze row + decoded payload -> silver records
     @abstractmethod
-    def parse_batch(self, records: list[Base]) -> list[Base]:
-        """Parse a batch of bronze records into silver records."""
-        ...
+    def build_entities(self, record: Base, decoded: Any) -> list[Base]: ...
 
     async def run(self) -> None:
-        """Lifecycle: load unparsed, parse in batches, upsert, mark parsed."""
-        # placeholder — batch loop ported from v1 later
-        raise NotImplementedError
+        """Lifecycle: stream unparsed bronze; decode + build silver; upsert in batches; mark parsed."""
+        # init batch buffers
+        bronze_ids: list[int] = []
+        silver_batch: list[Base] = []
+
+        # stream and accumulate
+        async for record in self.load_records():
+            decoded = self.decode(record)
+            entities = self.build_entities(record, decoded)
+            silver_batch.extend(entities)
+            bronze_ids.append(record.bronze_id)
+
+            # flush when batch is full
+            if len(bronze_ids) >= self.batch_size:
+                await self._flush(silver_batch, bronze_ids)
+                silver_batch = []
+                bronze_ids = []
+
+        # flush trailing partial batch
+        if bronze_ids:
+            await self._flush(silver_batch, bronze_ids)
+
+        return
+
+    async def _flush(self, silver: list[Base], bronze_ids: list[int]) -> None:
+        if silver:
+            await self.db.upsert(
+                silver, model=self.silver_model, conflict_columns=self.conflict_columns
+            )
+        await self.db.mark_parsed(self.bronze_model, bronze_ids)
+        return
