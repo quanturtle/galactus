@@ -17,7 +17,6 @@ class ExtractOptions(BaseModel):
     ignore_url_patterns: list[str] = []
     page_size: int = 0
     max_pages: int = 0
-    batch_size: int = 0
     request_delay: float = 0.0
 
 
@@ -32,6 +31,7 @@ class ExtractConfig(BaseModel):
     user_agent: str = "galactus/0.2"
     retries: int = 3
     retry_delay: float = 2.0
+    http_pool_size: int = Field(default=100, ge=1)
     options: ExtractOptions
 
 
@@ -64,6 +64,7 @@ class PipelineConfig(BaseModel):
     silver_table: str
     database_url: str
     log_level: str = "INFO"
+    db_pool_size: int = Field(default=5, ge=1)
     extract: ExtractConfig | None = None
     transform: TransformConfig | None = None
 

@@ -73,7 +73,6 @@ class BaseScraper:
         self.bronze_table = bronze_table
         self.config = config
         self.options = config.options
-        self.concurrency = config.concurrency
         self.home_domain: str = urlparse(self.options.base_url).netloc
         self._scrape_patterns: list[re.Pattern] = [
             re.compile(p) for p in self.options.scrape_url_patterns

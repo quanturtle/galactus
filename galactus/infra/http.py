@@ -43,14 +43,21 @@ class HttpClient:
         follow_redirects: bool = True,
         retries: int = 3,
         retry_delay: float = 2.0,
+        concurrency: int = 1,
+        pool_size: int = 100,
     ) -> None:
         self.client = httpx.AsyncClient(
             timeout=timeout,
             headers=dict(headers) if headers else None,
             follow_redirects=follow_redirects,
+            limits=httpx.Limits(
+                max_connections=pool_size,
+                max_keepalive_connections=pool_size,
+            ),
         )
         self.retries = retries
         self.retry_delay = retry_delay
+        self._semaphore = asyncio.Semaphore(concurrency)
 
     async def get(
         self,
@@ -64,7 +71,8 @@ class HttpClient:
         # retry loop: pass through on <500, retry on 5xx and transient errors
         for attempt in range(self.retries + 1):
             try:
-                response = await self.client.get(url, headers=headers, params=params)
+                async with self._semaphore:
+                    response = await self.client.get(url, headers=headers, params=params)
                 last_response = response
                 if response.status_code < 500:
                     return HttpResponse(response)
@@ -76,7 +84,9 @@ class HttpClient:
 
         # exhausted retries — surface as ScraperError
         if last_response is not None:
-            raise ScraperError(f"GET {url} returned {last_response.status_code} after {self.retries + 1} attempts")
+            raise ScraperError(
+                f"GET {url} returned {last_response.status_code} after {self.retries + 1} attempts"
+            )
         raise ScraperError(f"GET {url} failed: {last_exc}") from last_exc
 
     async def aclose(self) -> None:

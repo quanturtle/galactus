@@ -46,9 +46,7 @@ def test_default_concurrency_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.extract.concurrency >= 1
 
 
-def test_explicit_concurrency_parses(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_explicit_concurrency_parses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "demo.yaml"
     config_file.write_text(
@@ -70,9 +68,7 @@ def test_explicit_concurrency_parses(
     assert config.extract.concurrency == 7
 
 
-def test_concurrency_zero_rejected(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_concurrency_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "bad.yaml"
     config_file.write_text(
@@ -93,14 +89,10 @@ def test_concurrency_zero_rejected(
         load_config(config_file)
 
 
-def test_missing_bronze_table_rejected(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_missing_bronze_table_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "bad.yaml"
-    config_file.write_text(
-        yaml.safe_dump({"name": "x", "silver_table": "silver.x"})
-    )
+    config_file.write_text(yaml.safe_dump({"name": "x", "silver_table": "silver.x"}))
     with pytest.raises(ConfigError):
         load_config(config_file)
 
@@ -121,9 +113,7 @@ def test_missing_dsn_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         load_config(config_file)
 
 
-def test_extract_http_defaults(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_extract_http_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "demo.yaml"
     config_file.write_text(
@@ -143,3 +133,70 @@ def test_extract_http_defaults(
     assert config.extract is not None
     assert config.extract.timeout_seconds == 30.0
     assert config.extract.user_agent == "galactus/0.2"
+    assert config.extract.http_pool_size == 100
+
+
+def test_pool_size_defaults_and_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
+    config_file = tmp_path / "demo.yaml"
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "name": "alpha",
+                "bronze_table": "bronze.x",
+                "silver_table": "silver.x",
+                "db_pool_size": 12,
+                "extract": {
+                    "scraper": "pkg.x",
+                    "http_pool_size": 25,
+                    "options": {"base_url": "https://example.com"},
+                },
+            }
+        )
+    )
+    config = load_config(config_file)
+    assert config.db_pool_size == 12
+    assert config.extract is not None
+    assert config.extract.http_pool_size == 25
+
+
+def test_db_pool_size_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
+    config_file = tmp_path / "bad.yaml"
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "name": "alpha",
+                "bronze_table": "bronze.x",
+                "silver_table": "silver.x",
+                "db_pool_size": 0,
+            }
+        )
+    )
+    with pytest.raises(ConfigError):
+        load_config(config_file)
+
+
+def test_batch_size_in_extract_options_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
+    config_file = tmp_path / "bad.yaml"
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "name": "alpha",
+                "bronze_table": "bronze.x",
+                "silver_table": "silver.x",
+                "extract": {
+                    "scraper": "pkg.x",
+                    "options": {
+                        "base_url": "https://example.com",
+                        "batch_size": 20,
+                    },
+                },
+            }
+        )
+    )
+    with pytest.raises(ConfigError):
+        load_config(config_file)

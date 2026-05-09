@@ -37,8 +37,13 @@ class ExtractStage(PipelineStage):
                 headers={"User-Agent": ext.user_agent},
                 retries=ext.retries,
                 retry_delay=ext.retry_delay,
+                concurrency=ext.concurrency,
+                pool_size=ext.http_pool_size,
             ) as client,
-            Database(database_url=self.config.database_url) as db,
+            Database(
+                database_url=self.config.database_url,
+                pool_size=self.config.db_pool_size,
+            ) as db,
         ):
             # resolve strategy
             mod = importlib.import_module(f"galactus.extract.scrapers.{ext.scraper}")

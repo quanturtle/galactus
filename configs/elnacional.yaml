@@ -16,7 +16,6 @@ extract:
       - /autor/
     page_size: 0
     max_pages: 500
-    batch_size: 20
     request_delay: 0.0
 transform:
   parser: noticias.elnacional

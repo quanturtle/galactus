@@ -13,7 +13,6 @@ extract:
     ignore_url_patterns: []
     page_size: 100
     max_pages: 500
-    batch_size: 20
     request_delay: 0.0
 transform:
   parser: noticias.megacadena
