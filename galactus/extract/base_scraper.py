@@ -214,35 +214,64 @@ class BaseScraper:
             return False
         return not any(p.search(url) for p in self._ignore_patterns)
 
+    async def _process_url(
+        self,
+        url: str,
+        frontier: deque[str],
+        seen: set[str],
+        state: dict[str, int],
+    ) -> None:
+        """Fetch one URL, persist if eligible, then expand frontier with discovered links."""
+        response = await self.fetch(url)
+
+        # persist
+        if self.should_persist(url, response):
+            record = self.build_snapshot(url, response)
+            await self.db.insert(
+                record, model=self.bronze_model, conflict_columns=self.conflict_columns
+            )
+            state["fetched"] += 1
+
+        # sync — race-free w.r.t. other tasks; do not introduce awaits
+        for href in self.discover_links(url, response):
+            link = self.normalize_url(href, url)
+            if not link or link in seen or not self.should_enqueue(link):
+                continue
+            seen.add(link)
+            frontier.append(link)
+
+        # per-task pacing: each in-flight task self-throttles after its fetch
+        if self.options.request_delay:
+            await asyncio.sleep(self.options.request_delay)
+        return
+
     async def run(self) -> None:
-        """Lifecycle: BFS over seed_urls(); fetch each URL, build a snapshot, insert into bronze."""
+        """Lifecycle: BFS over seed_urls(); fetch up to self.http.concurrency URLs in parallel."""
         # init frontier
         initial = self.seed_urls()
         frontier: deque[str] = deque(initial)
         seen: set[str] = set(initial)
-        fetched = 0
+        state: dict[str, int] = {"fetched": 0}
         max_pages = self.options.max_pages
+        concurrency = self.http.concurrency
+        in_flight: set[asyncio.Task[None]] = set()
 
-        # fetch and persist loop
-        while frontier and (max_pages == 0 or fetched < max_pages):
-            url = frontier.popleft()
-            response = await self.fetch(url)
-            if self.should_persist(url, response):
-                record = self.build_snapshot(url, response)
-                await self.db.insert(
-                    record, model=self.bronze_model, conflict_columns=self.conflict_columns
-                )
-                fetched += 1
+        # spawn-and-drain loop: top up to `concurrency` tasks; drain as they finish.
+        # max_pages is a soft cap: once spawning stops, up to concurrency-1 in-flight
+        # tasks may still persist, so the final count can overshoot by that much.
+        while frontier or in_flight:
+            while (
+                frontier
+                and len(in_flight) < concurrency
+                and (max_pages == 0 or state["fetched"] < max_pages)
+            ):
+                url = frontier.popleft()
+                in_flight.add(asyncio.create_task(self._process_url(url, frontier, seen, state)))
 
-            # discover and enqueue links
-            for href in self.discover_links(url, response):
-                link = self.normalize_url(href, url)
-                if not link or link in seen or not self.should_enqueue(link):
-                    continue
-                seen.add(link)
-                frontier.append(link)
+            if not in_flight:
+                break
 
-            if self.options.request_delay:
-                await asyncio.sleep(self.options.request_delay)
-
+            done, in_flight = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                await task
         return

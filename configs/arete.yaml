@@ -13,7 +13,6 @@ extract:
     ignore_url_patterns: []
     page_size: 100
     max_pages: 0
-    request_delay: 0.0
 transform:
   parser: supermercados.arete
   options: {}

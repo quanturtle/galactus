@@ -21,7 +21,6 @@ extract:
       - /codigo-etico
     page_size: 0
     max_pages: 500
-    request_delay: 0.0
 transform:
   parser: noticias.ultimahora
   options: {}

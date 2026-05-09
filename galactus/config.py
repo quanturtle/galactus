@@ -8,7 +8,7 @@ from galactus.core.errors import ConfigError
 
 
 class ExtractOptions(BaseModel):
-    """Scraper-strategy options: URLs, patterns, pagination, and rate-limiting."""
+    """Scraper-strategy options: URLs, patterns, pagination, and per-task pacing."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
