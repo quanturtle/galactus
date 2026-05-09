@@ -38,7 +38,7 @@ class TransformStage(PipelineStage):
                 db=db,
                 bronze_table=self.config.bronze_table,
                 silver_table=self.config.silver_table,
-                options=tr.options,
+                config=tr,
             )
 
             # run the parser lifecycle

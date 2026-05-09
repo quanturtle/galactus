@@ -47,8 +47,7 @@ class ExtractStage(PipelineStage):
                 http=client,
                 db=db,
                 bronze_table=self.config.bronze_table,
-                options=ext.options,
-                concurrency=ext.concurrency,
+                config=ext,
             )
 
             # run the scraper lifecycle

@@ -12,15 +12,17 @@ WEBSITE = "lanacionpy"
 class Scraper(BaseScraper):
     """Scraper for lanacion — Arc Publishing feed, open-ended pagination into bronze.api_snapshots."""
 
-    model = ApiSnapshot
+    bronze_model = ApiSnapshot
 
     def _build_url(self, offset: int) -> str:
-        query = json.dumps({
-            "feedSize": str(self.options.page_size),
-            "feedFrom": str(offset),
-            "website": WEBSITE,
-            "feedQuery": "type:story",
-        })
+        query = json.dumps(
+            {
+                "feedSize": str(self.options.page_size),
+                "feedFrom": str(offset),
+                "website": WEBSITE,
+                "feedQuery": "type:story",
+            }
+        )
         return urljoin(self.options.base_url, ENDPOINT) + "?" + urlencode({"query": query})
 
     def _current_offset(self, url: str) -> int:

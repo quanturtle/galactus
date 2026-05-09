@@ -11,14 +11,16 @@ ENDPOINT = "/pf/api/v3/content/fetch/story-feed-query"
 class Scraper(BaseScraper):
     """Scraper for latribuna — Arc Publishing feed, open-ended pagination into bronze.api_snapshots."""
 
-    model = ApiSnapshot
+    bronze_model = ApiSnapshot
 
     def _build_url(self, offset: int) -> str:
-        query = json.dumps({
-            "query": "type:story",
-            "offset": offset,
-            "size": self.options.page_size,
-        })
+        query = json.dumps(
+            {
+                "query": "type:story",
+                "offset": offset,
+                "size": self.options.page_size,
+            }
+        )
         return urljoin(self.options.base_url, ENDPOINT) + "?" + urlencode({"query": query})
 
     def _current_offset(self, url: str) -> int:

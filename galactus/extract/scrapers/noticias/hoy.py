@@ -10,7 +10,7 @@ ENDPOINT = "/wp-json/wp/v2/posts"
 class Scraper(BaseScraper):
     """Scraper for hoy — WordPress REST, page-bounded pagination into bronze.api_snapshots."""
 
-    model = ApiSnapshot
+    bronze_model = ApiSnapshot
 
     def _build_url(self, page: int) -> str:
         params = {

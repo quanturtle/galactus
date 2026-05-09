@@ -1,28 +1,32 @@
-import json
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
-from galactus.config import TransformOptions
+from galactus.config import TransformConfig
+from galactus.core.errors import ParserError
 from galactus.infra.db import Database
-from galactus.transform.html_parser import HtmlParser, decompress
-from sql.a_bronze.api_snapshots import ApiSnapshot
-from sql.a_bronze.html_snapshots import HtmlSnapshot
+from galactus.transform.html_parser import HtmlParser
 from sql.base import Base
 
 
-class BaseParser:
+class BaseParser(ABC):
     """Template Method base for all parsers.
 
     run() owns the bronze->silver lifecycle: stream unparsed bronze rows,
     decode each, build silver entities, batch-upsert into silver, then
-    mark bronze rows parsed. Concrete parsers override hooks; only
-    build_entities() is abstract.
+    mark bronze rows parsed. Concrete parsers override hooks; both
+    decode() and build_entities() are abstract.
     """
 
     bronze_model: ClassVar[type[Base]]
     silver_model: ClassVar[type[Base]]
     conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url")
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        for attr in ("bronze_model", "silver_model"):
+            if not hasattr(cls, attr):
+                raise ParserError(f"{cls.__name__} must define class variable '{attr}'")
 
     def __init__(
         self,
@@ -30,15 +34,20 @@ class BaseParser:
         db: Database,
         bronze_table: str,
         silver_table: str,
-        options: TransformOptions,
+        config: TransformConfig,
     ) -> None:
         self.source = source
         self.db = db
         self.bronze_table = bronze_table
         self.silver_table = silver_table
-        self.options = options
-        self.batch_size = options.batch_size
-        self.html_parser = HtmlParser(
+        self.config = config
+        self.options = config.options
+        self.batch_size = config.options.batch_size
+        self.html_parser = self._make_html_parser(config.options)
+
+    # hook: override to provide code-level blocklist defaults per parser
+    def _make_html_parser(self, options: Any) -> HtmlParser:
+        return HtmlParser(
             {
                 "blocklist_tags": options.blocklist_tags,
                 "blocklist_attributes": options.blocklist_attributes,
@@ -50,12 +59,8 @@ class BaseParser:
         return self.db.load_unparsed(self.bronze_model, self.source)
 
     # 2. decode — bronze row -> parsed payload (BeautifulSoup for HTML, dict for JSON)
-    def decode(self, record: Base) -> Any:
-        if self.bronze_model is HtmlSnapshot:
-            return self.html_parser.parse(decompress(record.html))
-        if self.bronze_model is ApiSnapshot:
-            return json.loads(decompress(record.body))
-        raise NotImplementedError(f"No default decode for {self.bronze_model}")
+    @abstractmethod
+    def decode(self, record: Base) -> Any: ...
 
     # 3. build_entities — bronze row + decoded payload -> silver records
     @abstractmethod

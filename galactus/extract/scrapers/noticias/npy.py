@@ -5,4 +5,4 @@ from sql.a_bronze.html_snapshots import HtmlSnapshot
 class Scraper(BaseScraper):
     """Scraper for npy — same-domain BFS into bronze.html_snapshots."""
 
-    model = HtmlSnapshot
+    bronze_model = HtmlSnapshot

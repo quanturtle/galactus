@@ -9,7 +9,8 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 
-from galactus.config import ExtractOptions
+from galactus.config import ExtractConfig
+from galactus.core.errors import ScraperError
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
 from galactus.transform.html_parser import compress
@@ -17,11 +18,28 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
 
-SKIP_EXTENSIONS = frozenset({
-    ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp",
-    ".css", ".js", ".zip", ".mp4", ".mp3", ".ico", ".woff", ".woff2",
-    ".rss", ".xml", ".atom",
-})
+SKIP_EXTENSIONS = frozenset(
+    {
+        ".pdf",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".svg",
+        ".webp",
+        ".css",
+        ".js",
+        ".zip",
+        ".mp4",
+        ".mp3",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".rss",
+        ".xml",
+        ".atom",
+    }
+)
 SKIP_PREFIXES = ("mailto:", "tel:", "javascript:", "data:", "whatsapp:", "#")
 
 
@@ -29,12 +47,17 @@ class BaseScraper:
     """Template Method base for all scrapers.
 
     run() owns the BFS over seed_urls(), fetch(), persist, then expand. Concrete
-    scrapers override hooks (model class var is the only required override);
+    scrapers override hooks (bronze_model class var is the only required override);
     every other hook ships with a working default.
     """
 
-    model: ClassVar[type[Base]]
+    bronze_model: ClassVar[type[Base]]
     conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url", "fetched_at")
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if not hasattr(cls, "bronze_model"):
+            raise ScraperError(f"{cls.__name__} must define class variable 'bronze_model'")
 
     def __init__(
         self,
@@ -42,18 +65,22 @@ class BaseScraper:
         http: HttpClient,
         db: Database,
         bronze_table: str,
-        options: ExtractOptions,
-        concurrency: int = 1,
+        config: ExtractConfig,
     ) -> None:
         self.source = source
         self.http = http
         self.db = db
         self.bronze_table = bronze_table
-        self.options = options
-        self.concurrency = concurrency
-        self.home_domain: str = urlparse(options.base_url).netloc
-        self._scrape_patterns: list[re.Pattern] = [re.compile(p) for p in options.scrape_url_patterns]
-        self._ignore_patterns: list[re.Pattern] = [re.compile(p) for p in options.ignore_url_patterns]
+        self.config = config
+        self.options = config.options
+        self.concurrency = config.concurrency
+        self.home_domain: str = urlparse(self.options.base_url).netloc
+        self._scrape_patterns: list[re.Pattern] = [
+            re.compile(p) for p in self.options.scrape_url_patterns
+        ]
+        self._ignore_patterns: list[re.Pattern] = [
+            re.compile(p) for p in self.options.ignore_url_patterns
+        ]
 
     # 1. seed_urls — frontier init
     def seed_urls(self) -> list[str]:
@@ -72,7 +99,7 @@ class BaseScraper:
     # 4. build_snapshot — response -> bronze row
     def build_snapshot(self, url: str, response: HttpResponse) -> Base:
         now = datetime.now(tz=UTC)
-        if self.model is HtmlSnapshot:
+        if self.bronze_model is HtmlSnapshot:
             return HtmlSnapshot(
                 source=self.source,
                 source_url=url,
@@ -83,7 +110,7 @@ class BaseScraper:
                 html=compress(response.text),
                 is_diff=False,
             )
-        if self.model is ApiSnapshot:
+        if self.bronze_model is ApiSnapshot:
             return ApiSnapshot(
                 source=self.source,
                 source_url=url,
@@ -94,7 +121,7 @@ class BaseScraper:
                 response_headers=dict(response.headers),
                 body=compress(response.text),
             )
-        raise NotImplementedError(f"No default build_snapshot for {self.model}")
+        raise NotImplementedError(f"No default build_snapshot for {self.bronze_model}")
 
     # 5a. _walk_for_urls — recursive helper: collect URL-like strings from a dict/list
     def _walk_for_urls(self, value: Any) -> list[str]:
@@ -203,7 +230,9 @@ class BaseScraper:
             response = await self.fetch(url)
             if self.should_persist(url, response):
                 record = self.build_snapshot(url, response)
-                await self.db.insert(record, model=self.model, conflict_columns=self.conflict_columns)
+                await self.db.insert(
+                    record, model=self.bronze_model, conflict_columns=self.conflict_columns
+                )
                 fetched += 1
 
             # discover and enqueue links

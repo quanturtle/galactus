@@ -5,4 +5,4 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 class Scraper(BaseScraper):
     """Scraper for stock — paginated JSON API into bronze.api_snapshots."""
 
-    model = ApiSnapshot
+    bronze_model = ApiSnapshot

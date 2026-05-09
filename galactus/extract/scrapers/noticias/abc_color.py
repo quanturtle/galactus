@@ -25,15 +25,17 @@ SECTIONS = (
 class Scraper(BaseScraper):
     """Scraper for abc_color — Arc Publishing sections-api, per-section pagination into bronze.api_snapshots."""
 
-    model = ApiSnapshot
+    bronze_model = ApiSnapshot
 
     def _build_url(self, section: str, offset: int) -> str:
-        query = json.dumps({
-            "section_id": section,
-            "sort": "display_date:desc",
-            "limit": str(self.options.page_size),
-            "offset": str(offset),
-        })
+        query = json.dumps(
+            {
+                "section_id": section,
+                "sort": "display_date:desc",
+                "limit": str(self.options.page_size),
+                "offset": str(offset),
+            }
+        )
         return urljoin(self.options.base_url, ENDPOINT) + "?" + urlencode({"query": query})
 
     def _current(self, url: str) -> tuple[str, int]:
