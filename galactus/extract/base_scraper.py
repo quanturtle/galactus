@@ -2,7 +2,6 @@ import asyncio
 import json
 import re
 from collections import deque
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
@@ -52,7 +51,8 @@ class BaseScraper:
     """
 
     bronze_model: ClassVar[type[Base]]
-    conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url", "fetched_at")
+    conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url", "created_at")
+    exclude_columns: ClassVar[tuple[str, ...]] = ("bronze_id", "created_at")
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -97,12 +97,10 @@ class BaseScraper:
 
     # 4. build_snapshot — response -> bronze row
     def build_snapshot(self, url: str, response: HttpResponse) -> Base:
-        now = datetime.now(tz=UTC)
         if self.bronze_model is HtmlSnapshot:
             return HtmlSnapshot(
                 source=self.source,
                 source_url=url,
-                fetched_at=now,
                 status_code=response.status_code,
                 content_type=response.headers.get("content-type", ""),
                 response_headers=dict(response.headers),
@@ -113,7 +111,6 @@ class BaseScraper:
             return ApiSnapshot(
                 source=self.source,
                 source_url=url,
-                fetched_at=now,
                 request_url=url,
                 request_params={},
                 status_code=response.status_code,
@@ -228,7 +225,10 @@ class BaseScraper:
         if self.should_persist(url, response):
             record = self.build_snapshot(url, response)
             await self.db.insert(
-                record, model=self.bronze_model, conflict_columns=self.conflict_columns
+                record,
+                model=self.bronze_model,
+                conflict_columns=self.conflict_columns,
+                exclude_columns=self.exclude_columns,
             )
             state["fetched"] += 1
 

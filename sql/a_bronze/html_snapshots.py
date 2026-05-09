@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import LargeBinary, UniqueConstraint
+from sqlalchemy import LargeBinary, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,7 +14,9 @@ class HtmlSnapshot(Base):
     __tablename__ = "html_snapshots"
     __table_args__ = (
         UniqueConstraint(
-            "source", "source_url", "fetched_at",
+            "source",
+            "source_url",
+            "created_at",
             name="uq_html_snapshots_natural_key",
         ),
         {"schema": SCHEMA},
@@ -23,10 +25,9 @@ class HtmlSnapshot(Base):
     bronze_id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(index=True)
     source_url: Mapped[str] = mapped_column(index=True)
-    fetched_at: Mapped[datetime] = mapped_column(index=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
     status_code: Mapped[int]
     content_type: Mapped[str]
     response_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
     html: Mapped[bytes] = mapped_column(LargeBinary)
     is_diff: Mapped[bool] = mapped_column(default=False)
-    parsed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)

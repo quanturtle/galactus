@@ -12,9 +12,10 @@ from sql.base import Base
 class BaseParser(ABC):
     """Template Method base for all parsers.
 
-    run() owns the bronze->silver lifecycle: stream unparsed bronze rows,
-    decode each, build silver entities, batch-upsert into silver, then
-    mark bronze rows parsed. Concrete parsers override hooks; both
+    run() owns the bronze->silver lifecycle: full-rescan bronze rows for the
+    source, decode each, build silver entities, batch-upsert into silver.
+    Idempotent re-scan: silver upsert on (source, source_url) is the dedup;
+    no per-row tracking on bronze. Concrete parsers override hooks; both
     decode() and build_entities() are abstract.
     """
 
@@ -54,9 +55,9 @@ class BaseParser(ABC):
             }
         )
 
-    # 1. load_records — stream of unparsed bronze rows
+    # 1. load_records — full-rescan stream of bronze rows for this source
     def load_records(self) -> AsyncIterator[Base]:
-        return self.db.load_unparsed(self.bronze_model, self.source)
+        return self.db.load_for_source(self.bronze_model, self.source)
 
     # 2. decode — bronze row -> parsed payload (BeautifulSoup for HTML, dict for JSON)
     @abstractmethod
@@ -67,9 +68,8 @@ class BaseParser(ABC):
     def build_entities(self, record: Base, decoded: Any) -> list[Base]: ...
 
     async def run(self) -> None:
-        """Lifecycle: stream unparsed bronze; decode + build silver; upsert in batches; mark parsed."""
-        # init batch buffers
-        bronze_ids: list[int] = []
+        """Lifecycle: full-rescan bronze for source; decode + build silver; upsert in batches."""
+        # init batch buffer
         silver_batch: list[Base] = []
 
         # stream and accumulate
@@ -77,24 +77,21 @@ class BaseParser(ABC):
             decoded = self.decode(record)
             entities = self.build_entities(record, decoded)
             silver_batch.extend(entities)
-            bronze_ids.append(record.bronze_id)
 
             # flush when batch is full
-            if len(bronze_ids) >= self.batch_size:
-                await self._flush(silver_batch, bronze_ids)
+            if len(silver_batch) >= self.batch_size:
+                await self._flush(silver_batch)
                 silver_batch = []
-                bronze_ids = []
 
         # flush trailing partial batch
-        if bronze_ids:
-            await self._flush(silver_batch, bronze_ids)
+        if silver_batch:
+            await self._flush(silver_batch)
 
         return
 
-    async def _flush(self, silver: list[Base], bronze_ids: list[int]) -> None:
+    async def _flush(self, silver: list[Base]) -> None:
         if silver:
             await self.db.upsert(
                 silver, model=self.silver_model, conflict_columns=self.conflict_columns
             )
-        await self.db.mark_parsed(self.bronze_model, bronze_ids)
         return

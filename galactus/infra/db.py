@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator, Iterable
 from typing import TypeVar
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select
 from sqlalchemy.dialects import registry
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import (
@@ -119,33 +119,17 @@ class Database:
             await session.commit()
         return
 
-    async def load_unparsed(self, model: type[M], source: str) -> AsyncIterator[M]:
-        """Stream bronze rows for `source` where parsed_at IS NULL.
+    async def load_for_source(self, model: type[M], source: str) -> AsyncIterator[M]:
+        """Stream all bronze rows for `source`, ordered by created_at then bronze_id.
 
         Server-side cursor; the transaction is held for the iterator's lifetime.
-        Callers running mark_parsed do so on a separate session.
+        Idempotent re-scan model: callers re-read the full source on every run and
+        rely on silver upsert (source, source_url) for dedup.
         """
         stmt = (
-            select(model)
-            .where(model.parsed_at.is_(None), model.source == source)
-            .order_by(model.bronze_id)
+            select(model).where(model.source == source).order_by(model.created_at, model.bronze_id)
         )
         async with self._sessionmaker() as session:
             result = await session.stream_scalars(stmt)
             async for record in result:
                 yield record
-
-    async def mark_parsed(self, model: type[M], ids: Iterable[int]) -> None:
-        """Flag bronze rows as parsed by setting parsed_at = NOW()."""
-        id_list = list(ids)
-        if not id_list:
-            return
-        stmt = (
-            update(model)
-            .where(model.bronze_id.in_(id_list))
-            .values(parsed_at=func.now())
-        )
-        async with self._sessionmaker() as session:
-            await session.execute(stmt)
-            await session.commit()
-        return
