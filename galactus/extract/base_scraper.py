@@ -74,11 +74,13 @@ class BaseScraper:
         http: HttpClient,
         db: Database,
         options: ExtractOptions,
+        concurrency: int,
     ) -> None:
         self.source = source
         self.http = http
         self.db = db
         self.options = options
+        self.concurrency = concurrency
         self._allowed_hosts: frozenset[str] = frozenset(
             {urlparse(self.options.base_url).netloc, *self.options.allowed_hosts}
         )
@@ -199,14 +201,14 @@ class BaseScraper:
         return
 
     async def run(self) -> None:
-        """Lifecycle: BFS over seed_urls(); fetch up to self.options.concurrency URLs in parallel."""
+        """Lifecycle: BFS over seed_urls(); fetch up to self.concurrency URLs in parallel."""
         # init frontier
         initial = self.seed_urls()
         frontier: deque[str] = deque(initial)
         seen: set[str] = set(initial)
         state: dict[str, int] = {"fetched": 0}
         max_pages = self.options.max_pages
-        concurrency = self.options.concurrency
+        concurrency = self.concurrency
         in_flight: set[asyncio.Task[None]] = set()
 
         # spawn-and-drain loop: top up to `concurrency` tasks; drain as they finish.

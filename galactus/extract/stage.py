@@ -51,6 +51,7 @@ class ExtractStage(PipelineStage):
                 http=client,
                 db=db,
                 options=ext.options,
+                concurrency=ext.concurrency,
             )
 
             # run the scraper lifecycle
