@@ -24,8 +24,7 @@ class Article(Base):
     source: Mapped[str] = mapped_column(index=True)
     source_url: Mapped[str]
     title: Mapped[str]
-    body_html: Mapped[str | None] = mapped_column(default=None)
-    body_text: Mapped[str | None] = mapped_column(default=None)
+    body: Mapped[str | None] = mapped_column(default=None)
     authors: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     published_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
     section: Mapped[str | None] = mapped_column(default=None)

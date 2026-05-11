@@ -71,8 +71,7 @@ class ScratchArticle(Base):
     source: Mapped[str] = mapped_column(index=True)
     source_url: Mapped[str]
     title: Mapped[str]
-    body_html: Mapped[str | None] = mapped_column(default=None)
-    body_text: Mapped[str | None] = mapped_column(default=None)
+    body: Mapped[str | None] = mapped_column(default=None)
     authors: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     published_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
     section: Mapped[str | None] = mapped_column(default=None)
@@ -99,9 +98,8 @@ class ScratchProduct(Base):
     name: Mapped[str]
     brand: Mapped[str | None] = mapped_column(default=None)
     price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
-    currency: Mapped[str | None] = mapped_column(default=None)
+    currency: Mapped[str] = mapped_column(default="PYG")
     unit: Mapped[str | None] = mapped_column(default=None)
-    in_stock: Mapped[bool | None] = mapped_column(default=None)
     image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
