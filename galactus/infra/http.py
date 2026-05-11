@@ -90,13 +90,9 @@ class HttpClient:
             )
         raise HttpError(f"GET {url} failed: {last_exc}") from last_exc
 
-    async def aclose(self) -> None:
-        await self.client.aclose()
-        return
-
     async def __aenter__(self) -> "HttpClient":
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        await self.aclose()
+        await self.client.aclose()
         return
