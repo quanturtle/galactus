@@ -1,6 +1,4 @@
 name: npy
-bronze_table: bronze.html_snapshots
-silver_table: silver.articles
 log_level: INFO
 extract:
   scraper: noticias.npy

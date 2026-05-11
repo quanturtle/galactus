@@ -309,8 +309,6 @@ A *source* is one website or API within a domain (`noticias` or `supermercados`)
 
 ```yaml
 name: <source>
-bronze_table: bronze.html_snapshots          # or bronze.api_snapshots
-silver_table: silver.products                # or silver.articles
 log_level: INFO
 extract:
   scraper: supermercados.<source>            # dotted path under galactus.extract.scrapers

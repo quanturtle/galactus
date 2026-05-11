@@ -1,6 +1,4 @@
 name: megacadena
-bronze_table: bronze.api_snapshots
-silver_table: silver.articles
 log_level: INFO
 extract:
   scraper: noticias.megacadena

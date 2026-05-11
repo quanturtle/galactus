@@ -63,8 +63,6 @@ class PipelineConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
-    bronze_table: str
-    silver_table: str
     database_url: str
     log_level: str = "INFO"
     db_pool_size: int = Field(default=5, ge=1)

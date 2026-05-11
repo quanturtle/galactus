@@ -14,8 +14,6 @@ def test_abc_color_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config = load_config(ABC_COLOR_YAML)
     assert config.name == "abc_color"
-    assert config.bronze_table
-    assert config.silver_table
 
 
 def test_each_source_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -24,8 +22,6 @@ def test_each_source_yaml_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     for yaml_file in sorted(configs_dir.glob("*.yaml")):
         config = load_config(yaml_file)
         assert config.name
-        assert config.bronze_table
-        assert config.silver_table
 
 
 def test_each_extract_source_has_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -53,8 +49,6 @@ def test_explicit_concurrency_parses(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         yaml.safe_dump(
             {
                 "name": "alpha",
-                "bronze_table": "bronze.x",
-                "silver_table": "silver.x",
                 "extract": {
                     "scraper": "pkg.alpha",
                     "concurrency": 7,
@@ -75,8 +69,6 @@ def test_concurrency_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
         yaml.safe_dump(
             {
                 "name": "src",
-                "bronze_table": "bronze.x",
-                "silver_table": "silver.x",
                 "extract": {
                     "scraper": "pkg.x",
                     "concurrency": 0,
@@ -89,14 +81,6 @@ def test_concurrency_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
         load_config(config_file)
 
 
-def test_missing_bronze_table_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
-    config_file = tmp_path / "bad.yaml"
-    config_file.write_text(yaml.safe_dump({"name": "x", "silver_table": "silver.x"}))
-    with pytest.raises(ConfigError):
-        load_config(config_file)
-
-
 def test_missing_dsn_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     config_file = tmp_path / "demo.yaml"
@@ -104,8 +88,6 @@ def test_missing_dsn_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         yaml.safe_dump(
             {
                 "name": "alpha",
-                "bronze_table": "bronze.x",
-                "silver_table": "silver.x",
             }
         )
     )
@@ -120,8 +102,6 @@ def test_extract_http_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         yaml.safe_dump(
             {
                 "name": "alpha",
-                "bronze_table": "bronze.x",
-                "silver_table": "silver.x",
                 "extract": {
                     "scraper": "pkg.x",
                     "options": {"base_url": "https://example.com"},
@@ -146,8 +126,6 @@ def test_pool_size_defaults_and_overrides(monkeypatch: pytest.MonkeyPatch, tmp_p
         yaml.safe_dump(
             {
                 "name": "alpha",
-                "bronze_table": "bronze.x",
-                "silver_table": "silver.x",
                 "db_pool_size": 12,
                 "extract": {
                     "scraper": "pkg.x",
@@ -170,8 +148,6 @@ def test_db_pool_size_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: P
         yaml.safe_dump(
             {
                 "name": "alpha",
-                "bronze_table": "bronze.x",
-                "silver_table": "silver.x",
                 "db_pool_size": 0,
             }
         )
@@ -189,8 +165,6 @@ def test_batch_size_in_extract_options_rejected(
         yaml.safe_dump(
             {
                 "name": "alpha",
-                "bronze_table": "bronze.x",
-                "silver_table": "silver.x",
                 "extract": {
                     "scraper": "pkg.x",
                     "options": {

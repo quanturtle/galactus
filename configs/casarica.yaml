@@ -1,6 +1,4 @@
 name: casarica
-bronze_table: bronze.html_snapshots
-silver_table: silver.products
 log_level: INFO
 extract:
   scraper: supermercados.casarica
