@@ -22,6 +22,9 @@ class BaseParser(ABC):
     bronze_model: ClassVar[type[Base]]
     silver_model: ClassVar[type[Base]]
     conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url")
+    # server-managed silver columns to drop from row dicts (id from the sequence;
+    # created_at/updated_at are stamped from the bronze row in run(), not __init__)
+    exclude_columns: ClassVar[tuple[str, ...]] = ("id",)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -85,6 +88,12 @@ class BaseParser(ABC):
                     raise ParserError(
                         f"source {self.source!r}: bronze_id {record.bronze_id} decode/build failed"
                     ) from exc
+
+                # stamp bronze provenance: silver created_at/updated_at mirror the bronze row's
+                # timestamp; db.upsert resolves conflicts to the min/max across all bronze sightings
+                for entity in entities:
+                    entity.created_at = record.created_at
+                    entity.updated_at = record.created_at
                 silver_batch.extend(entities)
 
                 # flush when batch is full
@@ -103,6 +112,9 @@ class BaseParser(ABC):
     async def _flush(self, silver: list[Base]) -> None:
         if silver:
             await self.db.upsert(
-                silver, model=self.silver_model, conflict_columns=self.conflict_columns
+                silver,
+                model=self.silver_model,
+                conflict_columns=self.conflict_columns,
+                exclude_columns=self.exclude_columns,
             )
         return

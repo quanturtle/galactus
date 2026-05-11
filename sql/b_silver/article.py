@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, UniqueConstraint
+from sqlalchemy import String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,9 @@ class Article(Base):
     section: Mapped[str | None] = mapped_column(default=None)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+    # bronze provenance: first / latest bronze.created_at seen for this (source, source_url)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     def __init__(self, **kw) -> None:
         kw.setdefault("authors", [])

@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator, Iterable
 from typing import TypeVar
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects import registry
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
@@ -118,6 +118,14 @@ class Database:
         immutable = excluded | set(conflict)
         stmt = pg_insert(model)
         update_set = {c.name: c for c in stmt.excluded if c.name not in immutable}
+        # silver carries bronze-derived provenance: created_at = first sighting, updated_at = latest
+        # sighting. On conflict, widen the window (LEAST/GREATEST) instead of last-write-wins. Bronze
+        # tables aren't upserted, so this is silver-only in practice.
+        cols = model.__table__.columns
+        if "created_at" in cols:
+            update_set["created_at"] = func.least(cols["created_at"], stmt.excluded.created_at)
+        if "updated_at" in cols:
+            update_set["updated_at"] = func.greatest(cols["updated_at"], stmt.excluded.updated_at)
         stmt = stmt.on_conflict_do_update(
             index_elements=conflict,
             set_=update_set,

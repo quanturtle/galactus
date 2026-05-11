@@ -4,6 +4,7 @@ Uses the scratch-schema models defined in conftest.py — no production tables
 are read or written.
 """
 
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import select, text
@@ -89,6 +90,8 @@ async def test_insert_accepts_single_or_iterable(db, engine) -> None:
 
 
 async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
+    # first bronze sighting
+    t1 = datetime(2026, 1, 2, 10, 0, 0)
     article = ScratchArticle(
         source="test_source",
         source_url="https://example.com/a-1",
@@ -96,9 +99,13 @@ async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
         authors=["alice"],
         tags=["news"],
         image_urls=["https://example.com/img.jpg"],
+        created_at=t1,
+        updated_at=t1,
     )
     await db.upsert(article, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
 
+    # a later sighting: content changes, updated_at advances, created_at holds (GREATEST/LEAST)
+    t2 = datetime(2026, 1, 5, 10, 0, 0)
     updated = ScratchArticle(
         source="test_source",
         source_url="https://example.com/a-1",
@@ -106,23 +113,44 @@ async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
         authors=["alice", "bob"],
         tags=["news", "updated"],
         image_urls=["https://example.com/img.jpg"],
+        created_at=t2,
+        updated_at=t2,
     )
     await db.upsert(updated, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
+
+    # an earlier sighting discovered on a later rescan: created_at moves back, updated_at holds
+    t0 = datetime(2026, 1, 1, 10, 0, 0)
+    backfill = ScratchArticle(
+        source="test_source",
+        source_url="https://example.com/a-1",
+        title="revised",
+        authors=["alice", "bob"],
+        tags=["news", "updated"],
+        image_urls=["https://example.com/img.jpg"],
+        created_at=t0,
+        updated_at=t0,
+    )
+    await db.upsert(backfill, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
 
     async with engine.connect() as conn:
         rows = (await conn.execute(select(ScratchArticle.__table__))).all()
     assert len(rows) == 1
     assert rows[0].title == "revised"
     assert rows[0].authors == ["alice", "bob"]
+    assert rows[0].created_at == t0
+    assert rows[0].updated_at == t2
 
 
 async def test_upsert_silver_products_with_decimal(db, engine) -> None:
+    t = datetime(2026, 1, 3, 12, 0, 0)
     product = ScratchProduct(
         source="test_source",
         source_url="https://example.com/p-1",
         name="widget",
         price=Decimal("19.99"),
         currency="USD",
+        created_at=t,
+        updated_at=t,
     )
     await db.upsert(product, ScratchProduct, SILVER_CONFLICT, SILVER_EXCLUDE)
     async with engine.connect() as conn:

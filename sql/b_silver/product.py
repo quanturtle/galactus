@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Numeric, String, UniqueConstraint
+from sqlalchemy import Numeric, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,8 +28,10 @@ class Product(Base):
     currency: Mapped[str | None] = mapped_column(default=None)
     unit: Mapped[str | None] = mapped_column(default=None)
     in_stock: Mapped[bool | None] = mapped_column(default=None)
-    observed_at: Mapped[datetime | None] = mapped_column(index=True, default=None)
     image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
+    # bronze provenance: first / latest bronze.created_at seen for this (source, source_url)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     def __init__(self, **kw) -> None:
         kw.setdefault("image_urls", [])
