@@ -252,14 +252,14 @@ class BaseScraper:
         return
 
     async def run(self) -> None:
-        """Lifecycle: BFS over seed_urls(); fetch up to self.http.concurrency URLs in parallel."""
+        """Lifecycle: BFS over seed_urls(); fetch up to self.config.concurrency URLs in parallel."""
         # init frontier
         initial = self.seed_urls()
         frontier: deque[str] = deque(initial)
         seen: set[str] = set(initial)
         state: dict[str, int] = {"fetched": 0}
         max_pages = self.options.max_pages
-        concurrency = self.http.concurrency
+        concurrency = self.config.concurrency
         in_flight: set[asyncio.Task[None]] = set()
 
         # spawn-and-drain loop: top up to `concurrency` tasks; drain as they finish.
