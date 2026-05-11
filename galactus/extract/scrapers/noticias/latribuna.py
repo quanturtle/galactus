@@ -23,17 +23,13 @@ class Scraper(BaseScraper):
         )
         return urljoin(self.options.base_url, ENDPOINT) + "?" + urlencode({"query": query})
 
-    def _current_offset(self, url: str) -> int:
-        params = parse_qs(urlparse(url).query)
-        blob = json.loads(params.get("query", ["{}"])[0])
-        return int(blob.get("offset", 0))
-
     def seed_urls(self) -> list[str]:
         return [self._build_url(0)]
 
-    def discover_links(self, url: str, response: HttpResponse) -> list[str]:
+    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
         elements = response.json().get("content_elements", [])
         if len(elements) < self.options.page_size:
             return []
-        next_offset = self._current_offset(url) + self.options.page_size
+        blob = json.loads(parse_qs(urlparse(url).query).get("query", ["{}"])[0])
+        next_offset = int(blob.get("offset", 0)) + self.options.page_size
         return [self._build_url(next_offset)]

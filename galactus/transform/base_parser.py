@@ -37,14 +37,10 @@ class BaseParser(ABC):
         self,
         source: str,
         db: Database,
-        bronze_table: str,
-        silver_table: str,
         config: TransformConfig,
     ) -> None:
         self.source = source
         self.db = db
-        self.bronze_table = bronze_table
-        self.silver_table = silver_table
         self.config = config
         self.options = config.options
         self.html_parser = self._make_html_parser(config.options)

@@ -1,6 +1,6 @@
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse
+from urllib.parse import urlencode, urljoin
 
-from galactus.extract.base_scraper import BaseScraper
+from galactus.extract.base_scraper import BaseScraper, query_int
 from galactus.infra.http import HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
@@ -20,16 +20,12 @@ class Scraper(BaseScraper):
         }
         return urljoin(self.options.base_url, ENDPOINT) + "?" + urlencode(params)
 
-    def _current_page(self, url: str) -> int:
-        params = parse_qs(urlparse(url).query)
-        return int(params.get("page", ["1"])[0])
-
     def seed_urls(self) -> list[str]:
         return [self._build_url(1)]
 
-    def discover_links(self, url: str, response: HttpResponse) -> list[str]:
+    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
         total = int(response.headers.get("x-wp-totalpages", "1"))
-        page = self._current_page(url)
+        page = query_int(url, "page", 1)
         if page >= total:
             return []
         return [self._build_url(page + 1)]

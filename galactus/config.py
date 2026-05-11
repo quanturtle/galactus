@@ -13,6 +13,7 @@ class ExtractOptions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     base_url: str
+    allowed_hosts: list[str] = []
     scrape_url_patterns: list[str] = []
     ignore_url_patterns: list[str] = []
     page_size: int = 0

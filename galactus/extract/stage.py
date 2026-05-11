@@ -51,7 +51,6 @@ class ExtractStage(PipelineStage):
                 source=self.config.name,
                 http=client,
                 db=db,
-                bronze_table=self.config.bronze_table,
                 config=ext,
             )
 

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import re
 from collections import deque
 from pathlib import Path
@@ -46,12 +45,20 @@ SKIP_PREFIXES = ("mailto:", "tel:", "javascript:", "data:", "whatsapp:", "#")
 STORE_HTML_BODY = False
 
 
+def query_int(url: str, name: str, default: int) -> int:
+    """Read an int-valued query param out of a URL, falling back to default."""
+    return int(parse_qs(urlparse(url).query).get(name, [str(default)])[0])
+
+
 class BaseScraper:
     """Template Method base for all scrapers.
 
-    run() owns the BFS over seed_urls(), fetch(), persist, then expand. Concrete
-    scrapers override hooks (bronze_model class var is the only required override);
-    every other hook ships with a working default.
+    run() owns the BFS over seed_urls(): fetch a URL, persist it if eligible,
+    then expand the frontier with the page's next URLs. Concrete scrapers
+    override at most three hooks — seed_urls(), build_snapshot(), next_urls() —
+    plus the bronze_model class var (the only required override); every hook
+    ships with a working default. Everything else is private: fetching, URL
+    canonicalization, the same-site/pattern enqueue gate, and the persist gate.
     """
 
     bronze_model: ClassVar[type[Base]]
@@ -68,16 +75,16 @@ class BaseScraper:
         source: str,
         http: HttpClient,
         db: Database,
-        bronze_table: str,
         config: ExtractConfig,
     ) -> None:
         self.source = source
         self.http = http
         self.db = db
-        self.bronze_table = bronze_table
         self.config = config
         self.options = config.options
-        self.home_domain: str = urlparse(self.options.base_url).netloc
+        self._allowed_hosts: frozenset[str] = frozenset(
+            {urlparse(self.options.base_url).netloc, *self.options.allowed_hosts}
+        )
         self._scrape_patterns: list[re.Pattern] = [
             re.compile(p) for p in self.options.scrape_url_patterns
         ]
@@ -85,24 +92,23 @@ class BaseScraper:
             re.compile(p) for p in self.options.ignore_url_patterns
         ]
 
-    # 1. seed_urls — frontier init
+    # hook: frontier seeds — the first URLs to crawl
     def seed_urls(self) -> list[str]:
         return [self.options.base_url]
 
-    # 2. fetch — network -> HttpResponse
-    async def fetch(self, url: str) -> HttpResponse:
+    async def _fetch(self, url: str) -> HttpResponse:
         try:
             return await self.http.get(url)
         except HttpError as exc:
             raise ScraperError(f"{self.source}: GET {url} failed") from exc
 
-    # 3. should_persist — gate: keep this response?
-    def should_persist(self, url: str, response: HttpResponse) -> bool:
+    def _should_persist(self, url: str) -> bool:
         if not self._scrape_patterns:
             return True
         return any(p.search(url) for p in self._scrape_patterns)
 
-    # 4. build_snapshot — response -> bronze row
+    # hook: response -> bronze row. Default covers HtmlSnapshot / ApiSnapshot;
+    # override (alongside bronze_model) for a custom bronze table.
     def build_snapshot(self, url: str, response: HttpResponse) -> Base:
         if self.bronze_model is HtmlSnapshot:
             return HtmlSnapshot(
@@ -126,93 +132,38 @@ class BaseScraper:
             )
         raise NotImplementedError(f"No default build_snapshot for {self.bronze_model}")
 
-    # 5a. _walk_for_urls — recursive helper: collect URL-like strings from a dict/list
-    def _walk_for_urls(self, value: Any) -> list[str]:
-        out: list[str] = []
-        if isinstance(value, str):
-            if value.startswith(("http://", "https://", "/")):
-                out.append(value)
-        elif isinstance(value, dict):
-            for v in value.values():
-                out.extend(self._walk_for_urls(v))
-        elif isinstance(value, list):
-            for v in value:
-                out.extend(self._walk_for_urls(v))
-        return out
-
-    # 5a'. _is_same_domain — netloc match against home_domain, tolerant of www. prefix
-    def _is_same_domain(self, absolute_url: str) -> bool:
-        netloc = urlparse(absolute_url).netloc
-        if not netloc:
-            return False
-        if not netloc.startswith("www."):
-            netloc = "www." + netloc
-        return netloc == self.home_domain
-
-    # 5a''. _is_followable — same-domain and not a blocked file extension
-    def _is_followable(self, absolute_url: str) -> bool:
-        if not self._is_same_domain(absolute_url):
-            return False
-        ext = Path(urlparse(absolute_url).path).suffix.lower()
-        return ext not in SKIP_EXTENSIONS
-
-    # 5b. discover_json_links — JSON case
-    def discover_json_links(self, url: str, response: HttpResponse) -> list[str]:
-        try:
-            payload = response.json()
-        except json.JSONDecodeError:
-            return []
-        out: list[str] = []
-        for href in self._walk_for_urls(payload):
-            absolute = urljoin(url, href)
-            if self._is_followable(absolute):
-                out.append(absolute)
-        return out
-
-    # 5c. discover_html_links — HTML case
-    def discover_html_links(self, url: str, response: HttpResponse) -> list[str]:
+    # hook: a fetched page -> raw candidate URLs (absolute or relative) to crawl
+    # next. No filtering here — the base canonicalizes, dedups, and gates before
+    # enqueueing. Default scrapes every <a href>; an empty/JSON body yields none.
+    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
         soup = BeautifulSoup(response.text, "html.parser")
         out: list[str] = []
         for a in soup.find_all("a", href=True):
             href = str(a["href"]).strip()
             if not href:
                 continue
-            absolute = urljoin(url, href)
-            if self._is_followable(absolute):
-                out.append(absolute)
+            out.append(urljoin(url, href))
         return out
 
-    # 5. discover_links — dispatcher: response -> raw hrefs
-    def discover_links(self, url: str, response: HttpResponse) -> list[str]:
-        content_type = response.headers.get("content-type", "").lower()
-        if "json" in content_type:
-            return self.discover_json_links(url, response)
-        return self.discover_html_links(url, response)
-
-    # 6. normalize_url — href -> absolute URL or None
-    def normalize_url(self, href: str, page_url: str) -> str | None:
+    def _canonicalize_url(self, href: str, page_url: str) -> str | None:
         for prefix in SKIP_PREFIXES:
             if href.startswith(prefix):
                 return None
-        absolute = urljoin(page_url, href)
-        parsed = urlparse(absolute)
+        parsed = urlparse(urljoin(page_url, href))
         if parsed.scheme not in ("http", "https"):
             return None
-        scheme = "https"
-        netloc = parsed.netloc if parsed.netloc.startswith("www.") else "www." + parsed.netloc
         query = urlencode(
             sorted(parse_qs(parsed.query, keep_blank_values=True).items()),
             doseq=True,
         )
         path = parsed.path.rstrip("/") or "/"
-        return urlunparse((scheme, netloc, path, parsed.params, query, ""))
+        return urlunparse((parsed.scheme, parsed.netloc, path, parsed.params, query, ""))
 
-    # 7. should_enqueue — gate: add to frontier?
-    def should_enqueue(self, url: str) -> bool:
-        if urlparse(url).netloc != self.home_domain:
+    def _should_enqueue(self, url: str) -> bool:
+        parsed = urlparse(url)
+        if parsed.netloc not in self._allowed_hosts:
             return False
-        ext = Path(urlparse(url).path).suffix.lower()
-        if ext in SKIP_EXTENSIONS:
+        if Path(parsed.path).suffix.lower() in SKIP_EXTENSIONS:
             return False
         if self._scrape_patterns and not any(p.search(url) for p in self._scrape_patterns):
             return False
@@ -225,11 +176,11 @@ class BaseScraper:
         seen: set[str],
         state: dict[str, int],
     ) -> None:
-        """Fetch one URL, persist if eligible, then expand frontier with discovered links."""
-        response = await self.fetch(url)
+        """Fetch one URL, persist it if eligible, then expand the frontier with the page's next URLs."""
+        response = await self._fetch(url)
 
         # persist
-        if self.should_persist(url, response):
+        if self._should_persist(url):
             record = self.build_snapshot(url, response)
             try:
                 await self.db.insert(
@@ -242,10 +193,10 @@ class BaseScraper:
                 raise ScraperError(f"{self.source}: persisting {url} failed") from exc
             state["fetched"] += 1
 
-        # sync — race-free w.r.t. other tasks; do not introduce awaits
-        for href in self.discover_links(url, response):
-            link = self.normalize_url(href, url)
-            if not link or link in seen or not self.should_enqueue(link):
+        # expand — sync, race-free w.r.t. other tasks; do not introduce awaits here
+        for href in self.next_urls(url, response):
+            link = self._canonicalize_url(href, url)
+            if not link or link in seen or not self._should_enqueue(link):
                 continue
             seen.add(link)
             frontier.append(link)

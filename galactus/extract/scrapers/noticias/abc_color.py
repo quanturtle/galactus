@@ -38,17 +38,13 @@ class Scraper(BaseScraper):
         )
         return urljoin(self.options.base_url, ENDPOINT) + "?" + urlencode({"query": query})
 
-    def _current(self, url: str) -> tuple[str, int]:
-        params = parse_qs(urlparse(url).query)
-        blob = json.loads(params.get("query", ["{}"])[0])
-        return blob["section_id"], int(blob.get("offset", "0"))
-
     def seed_urls(self) -> list[str]:
         return [self._build_url(section, 0) for section in SECTIONS]
 
-    def discover_links(self, url: str, response: HttpResponse) -> list[str]:
+    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
         elements = response.json().get("content_elements", [])
         if len(elements) < self.options.page_size:
             return []
-        section, offset = self._current(url)
+        blob = json.loads(parse_qs(urlparse(url).query).get("query", ["{}"])[0])
+        section, offset = blob["section_id"], int(blob.get("offset", "0"))
         return [self._build_url(section, offset + self.options.page_size)]

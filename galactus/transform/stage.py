@@ -39,8 +39,6 @@ class TransformStage(PipelineStage):
             parser: BaseParser = mod.Parser(
                 source=self.config.name,
                 db=db,
-                bronze_table=self.config.bronze_table,
-                silver_table=self.config.silver_table,
                 config=tr,
             )
 
