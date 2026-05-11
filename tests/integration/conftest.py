@@ -80,12 +80,10 @@ class ScratchHtmlSnapshot(Base):
 
 class ScratchArticle(Base):
     __tablename__ = "articles"
-    __table_args__ = (
-        UniqueConstraint("source", "source_url", name="uq_scratch_articles_source_url"),
-        {"schema": SCRATCH_SCHEMA},
-    )
+    __table_args__ = {"schema": SCRATCH_SCHEMA}
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    bronze_id: Mapped[int] = mapped_column(index=True)
     source: Mapped[str] = mapped_column(index=True)
     source_url: Mapped[str]
     title: Mapped[str]
@@ -97,7 +95,6 @@ class ScratchArticle(Base):
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     def __init__(self, **kw) -> None:
         kw.setdefault("authors", [])
@@ -108,12 +105,10 @@ class ScratchArticle(Base):
 
 class ScratchProduct(Base):
     __tablename__ = "products"
-    __table_args__ = (
-        UniqueConstraint("source", "source_url", name="uq_scratch_products_source_url"),
-        {"schema": SCRATCH_SCHEMA},
-    )
+    __table_args__ = {"schema": SCRATCH_SCHEMA}
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    bronze_id: Mapped[int] = mapped_column(index=True)
     source: Mapped[str] = mapped_column(index=True)
     source_url: Mapped[str]
     sku: Mapped[str | None] = mapped_column(default=None)
@@ -125,7 +120,6 @@ class ScratchProduct(Base):
     in_stock: Mapped[bool | None] = mapped_column(default=None)
     image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     def __init__(self, **kw) -> None:
         kw.setdefault("image_urls", [])

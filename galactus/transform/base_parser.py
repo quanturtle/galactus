@@ -12,18 +12,20 @@ from sql.base import Base
 class BaseParser(ABC):
     """Template Method base for all parsers.
 
-    run() owns the bronze->silver lifecycle: full-rescan bronze rows for the
-    source, decode each, build silver entities, batch-upsert into silver.
-    Idempotent re-scan: silver upsert on (source, source_url) is the dedup;
-    no per-row tracking on bronze. Concrete parsers override hooks; both
-    decode() and build_entities() are abstract.
+    run() owns the bronze->silver lifecycle: stream the bronze rows for the
+    source that no silver row references yet, decode each, build silver
+    entities, batch-insert them. No dedup here — one silver row per (entity,
+    bronze sighting); the gold layer collapses across sightings. A bronze row
+    counts as parsed once any silver row carries its (source, bronze_id), and
+    each flush is one transaction over whole bronze rows, so a re-run skips
+    already-committed work. Concrete parsers override hooks; both decode() and
+    build_entities() are abstract.
     """
 
     bronze_model: ClassVar[type[Base]]
     silver_model: ClassVar[type[Base]]
-    conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url")
-    # server-managed silver columns to drop from row dicts (id from the sequence;
-    # created_at/updated_at are stamped from the bronze row in run(), not __init__)
+    # server-managed silver column dropped from row dicts; bronze_id and created_at
+    # are stamped from the bronze row in run(), so they stay in the dict
     exclude_columns: ClassVar[tuple[str, ...]] = ("id",)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -58,9 +60,9 @@ class BaseParser(ABC):
             }
         )
 
-    # 1. load_records — full-rescan stream of bronze rows for this source
+    # 1. load_records — stream of bronze rows for this source not yet in silver
     def load_records(self) -> AsyncIterator[Base]:
-        return self.db.load_for_source(self.bronze_model, self.source)
+        return self.db.load_unparsed(self.bronze_model, self.silver_model, self.source)
 
     # 2. decode — bronze row -> parsed payload (BeautifulSoup for HTML, dict for JSON)
     @abstractmethod
@@ -71,7 +73,7 @@ class BaseParser(ABC):
     def build_entities(self, record: Base, decoded: Any) -> list[Base]: ...
 
     async def run(self) -> None:
-        """Lifecycle: full-rescan bronze for source; decode + build silver; upsert in batches."""
+        """Lifecycle: stream unparsed bronze for source; decode + build silver; insert in batches."""
         # init batch buffer
         silver_batch: list[Base] = []
 
@@ -89,14 +91,13 @@ class BaseParser(ABC):
                         f"source {self.source!r}: bronze_id {record.bronze_id} decode/build failed"
                     ) from exc
 
-                # stamp bronze provenance: silver created_at/updated_at mirror the bronze row's
-                # timestamp; db.upsert resolves conflicts to the min/max across all bronze sightings
+                # stamp bronze provenance: which bronze row this came from, and its snapshot time
                 for entity in entities:
+                    entity.bronze_id = record.bronze_id
                     entity.created_at = record.created_at
-                    entity.updated_at = record.created_at
                 silver_batch.extend(entities)
 
-                # flush when batch is full
+                # flush once the buffer holds a full batch (always on a bronze-row boundary)
                 if len(silver_batch) >= self.batch_size:
                     await self._flush(silver_batch)
                     silver_batch = []
@@ -111,10 +112,9 @@ class BaseParser(ABC):
 
     async def _flush(self, silver: list[Base]) -> None:
         if silver:
-            await self.db.upsert(
+            await self.db.insert(
                 silver,
                 model=self.silver_model,
-                conflict_columns=self.conflict_columns,
                 exclude_columns=self.exclude_columns,
             )
         return

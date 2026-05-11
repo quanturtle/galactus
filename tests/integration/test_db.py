@@ -18,7 +18,6 @@ from tests.integration.conftest import (
 
 BRONZE_CONFLICT = ("source", "source_url", "created_at")
 BRONZE_EXCLUDE = ("bronze_id", "created_at")
-SILVER_CONFLICT = ("source", "source_url")
 SILVER_EXCLUDE = ("id",)
 
 
@@ -49,6 +48,14 @@ def _html_snapshot(
         response_headers={"content-type": "text/html"},
         html=b"<html><body>hello</body></html>",
     )
+
+
+async def _bronze_ids(engine, table: str) -> list[int]:
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(text(f"SELECT bronze_id FROM scratch.{table} ORDER BY bronze_id"))
+        ).all()
+    return [r.bronze_id for r in rows]
 
 
 async def test_insert_bronze_html_records_each_fetch(db, engine) -> None:
@@ -89,10 +96,13 @@ async def test_insert_accepts_single_or_iterable(db, engine) -> None:
     assert count == 3
 
 
-async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
-    # first bronze sighting
+async def test_insert_silver_articles_records_each_sighting(db, engine) -> None:
+    # No dedup: two sightings of the same source_url from different bronze rows
+    # produce two silver rows. created_at carries the bronze snapshot's timestamp.
     t1 = datetime(2026, 1, 2, 10, 0, 0)
-    article = ScratchArticle(
+    t2 = datetime(2026, 1, 5, 10, 0, 0)
+    first = ScratchArticle(
+        bronze_id=1,
         source="test_source",
         source_url="https://example.com/a-1",
         title="original",
@@ -100,13 +110,9 @@ async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
         tags=["news"],
         image_urls=["https://example.com/img.jpg"],
         created_at=t1,
-        updated_at=t1,
     )
-    await db.upsert(article, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
-
-    # a later sighting: content changes, updated_at advances, created_at holds (GREATEST/LEAST)
-    t2 = datetime(2026, 1, 5, 10, 0, 0)
-    updated = ScratchArticle(
+    second = ScratchArticle(
+        bronze_id=2,
         source="test_source",
         source_url="https://example.com/a-1",
         title="revised",
@@ -114,79 +120,102 @@ async def test_upsert_silver_articles_creates_then_updates(db, engine) -> None:
         tags=["news", "updated"],
         image_urls=["https://example.com/img.jpg"],
         created_at=t2,
-        updated_at=t2,
     )
-    await db.upsert(updated, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
-
-    # an earlier sighting discovered on a later rescan: created_at moves back, updated_at holds
-    t0 = datetime(2026, 1, 1, 10, 0, 0)
-    backfill = ScratchArticle(
-        source="test_source",
-        source_url="https://example.com/a-1",
-        title="revised",
-        authors=["alice", "bob"],
-        tags=["news", "updated"],
-        image_urls=["https://example.com/img.jpg"],
-        created_at=t0,
-        updated_at=t0,
-    )
-    await db.upsert(backfill, ScratchArticle, SILVER_CONFLICT, SILVER_EXCLUDE)
+    await db.insert([first, second], ScratchArticle, exclude_columns=SILVER_EXCLUDE)
 
     async with engine.connect() as conn:
-        rows = (await conn.execute(select(ScratchArticle.__table__))).all()
-    assert len(rows) == 1
-    assert rows[0].title == "revised"
-    assert rows[0].authors == ["alice", "bob"]
-    assert rows[0].created_at == t0
-    assert rows[0].updated_at == t2
+        rows = (
+            await conn.execute(
+                select(ScratchArticle.__table__).order_by(ScratchArticle.__table__.c.created_at)
+            )
+        ).all()
+    assert [(r.bronze_id, r.title, r.created_at) for r in rows] == [
+        (1, "original", t1),
+        (2, "revised", t2),
+    ]
 
 
-async def test_upsert_silver_products_with_decimal(db, engine) -> None:
+async def test_insert_silver_products_with_decimal(db, engine) -> None:
     t = datetime(2026, 1, 3, 12, 0, 0)
     product = ScratchProduct(
+        bronze_id=7,
         source="test_source",
         source_url="https://example.com/p-1",
         name="widget",
         price=Decimal("19.99"),
         currency="USD",
         created_at=t,
-        updated_at=t,
     )
-    await db.upsert(product, ScratchProduct, SILVER_CONFLICT, SILVER_EXCLUDE)
+    await db.insert(product, ScratchProduct, exclude_columns=SILVER_EXCLUDE)
     async with engine.connect() as conn:
         row = (
             await conn.execute(
                 text(
-                    "SELECT price, currency FROM scratch.products WHERE source_url = 'https://example.com/p-1'"
+                    "SELECT bronze_id, price, currency FROM scratch.products WHERE source_url = 'https://example.com/p-1'"
                 )
             )
         ).one()
+    assert row.bronze_id == 7
     assert row.price == Decimal("19.99")
     assert row.currency == "USD"
 
 
-async def test_load_for_source_filters_by_source(db, engine) -> None:
+async def test_load_unparsed_filters_by_source(db, engine) -> None:
     a = _html_snapshot(source="src_a", source_url="https://example.com/a")
     b = _html_snapshot(source="src_b", source_url="https://example.com/b")
     await db.insert([a, b], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
 
-    yielded = [r async for r in db.load_for_source(ScratchHtmlSnapshot, "src_b")]
-    assert len(yielded) == 1
-    assert yielded[0].source == "src_b"
+    yielded = [r async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_b")]
+    assert [r.source for r in yielded] == ["src_b"]
 
-    yielded_a = [r async for r in db.load_for_source(ScratchHtmlSnapshot, "src_a")]
-    assert len(yielded_a) == 1
-    assert yielded_a[0].source == "src_a"
+    yielded_a = [r async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")]
+    assert [r.source for r in yielded_a] == ["src_a"]
 
 
-async def test_load_for_source_full_rescan(db, engine) -> None:
+async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
     one = _html_snapshot(source_url="https://example.com/a")
     two = _html_snapshot(source_url="https://example.com/b")
     await db.insert([one, two], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    first_id, second_id = await _bronze_ids(engine, "html_snapshots")
 
-    first = [r async for r in db.load_for_source(ScratchHtmlSnapshot, "test_source")]
-    assert len(first) == 2
+    # nothing parsed yet -> both bronze rows are unparsed
+    pending = [
+        r.bronze_id
+        async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
+    ]
+    assert pending == [first_id, second_id]
 
-    # idempotent re-scan: the same rows are yielded on every call
-    second = [r async for r in db.load_for_source(ScratchHtmlSnapshot, "test_source")]
-    assert [r.bronze_id for r in second] == [r.bronze_id for r in first]
+    # parse the first one into a silver row carrying its (source, bronze_id)
+    await db.insert(
+        ScratchArticle(
+            bronze_id=first_id, source="test_source", source_url="https://example.com/a", title="t"
+        ),
+        ScratchArticle,
+        exclude_columns=SILVER_EXCLUDE,
+    )
+
+    # only the still-unparsed bronze row is yielded now
+    pending = [
+        r.bronze_id
+        async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
+    ]
+    assert pending == [second_id]
+
+
+async def test_load_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
+    # a silver row for a different source must not mask a bronze row that shares its bronze_id
+    a = _html_snapshot(source="src_a", source_url="https://example.com/a")
+    await db.insert(a, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    (bronze_id,) = await _bronze_ids(engine, "html_snapshots")
+    await db.insert(
+        ScratchArticle(
+            bronze_id=bronze_id, source="src_b", source_url="https://example.com/x", title="t"
+        ),
+        ScratchArticle,
+        exclude_columns=SILVER_EXCLUDE,
+    )
+
+    pending = [
+        r.bronze_id async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")
+    ]
+    assert pending == [bronze_id]
