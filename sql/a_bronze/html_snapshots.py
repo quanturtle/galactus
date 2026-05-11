@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import LargeBinary, UniqueConstraint, func
+from sqlalchemy import LargeBinary, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,15 +12,7 @@ class HtmlSnapshot(Base):
     """bronze.html_snapshots — first-full-then-diff HTML captures."""
 
     __tablename__ = "html_snapshots"
-    __table_args__ = (
-        UniqueConstraint(
-            "source",
-            "source_url",
-            "created_at",
-            name="uq_html_snapshots_natural_key",
-        ),
-        {"schema": SCHEMA},
-    )
+    __table_args__ = {"schema": SCHEMA}
 
     bronze_id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(index=True)

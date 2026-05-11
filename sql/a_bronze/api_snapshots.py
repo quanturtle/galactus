@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import LargeBinary, UniqueConstraint, func
+from sqlalchemy import LargeBinary, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,15 +13,7 @@ class ApiSnapshot(Base):
     """bronze.api_snapshots — raw API response captures."""
 
     __tablename__ = "api_snapshots"
-    __table_args__ = (
-        UniqueConstraint(
-            "source",
-            "source_url",
-            "created_at",
-            name="uq_api_snapshots_natural_key",
-        ),
-        {"schema": SCHEMA},
-    )
+    __table_args__ = {"schema": SCHEMA}
 
     bronze_id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(index=True)
