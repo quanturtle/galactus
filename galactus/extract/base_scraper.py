@@ -41,6 +41,10 @@ SKIP_EXTENSIONS = frozenset(
 )
 SKIP_PREFIXES = ("mailto:", "tel:", "javascript:", "data:", "whatsapp:", "#")
 
+# temporary: skip persisting full HTML bodies while testing scrapers. flip back to True
+# to restore real snapshots.
+STORE_HTML_BODY = False
+
 
 class BaseScraper:
     """Template Method base for all scrapers.
@@ -107,7 +111,7 @@ class BaseScraper:
                 status_code=response.status_code,
                 content_type=response.headers.get("content-type", ""),
                 response_headers=dict(response.headers),
-                html=compress(response.text),
+                html=compress(response.text) if STORE_HTML_BODY else b"",
                 is_diff=False,
             )
         if self.bronze_model is ApiSnapshot:
