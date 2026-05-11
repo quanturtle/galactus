@@ -68,7 +68,8 @@ class HttpClient:
         last_exc: Exception | None = None
         last_response: httpx.Response | None = None
 
-        # retry loop: pass through on <500, retry on 5xx and transient errors
+        # retry loop: pass through on <500, retry on 5xx and transient transport
+        # failures (connect errors, timeouts, mid-stream server disconnects)
         for attempt in range(self.retries + 1):
             try:
                 async with self._semaphore:
@@ -76,7 +77,7 @@ class HttpClient:
                 last_response = response
                 if response.status_code < 500:
                     return HttpResponse(response)
-            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            except httpx.TransportError as exc:
                 last_exc = exc
 
             if attempt < self.retries:
