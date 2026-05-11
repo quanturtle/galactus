@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
 from galactus.config import TransformConfig
-from galactus.core.errors import ParserError
+from galactus.core.errors import DatabaseError, ParserError
 from galactus.infra.db import Database
 from galactus.transform.html_parser import HtmlParser
 from sql.base import Base
@@ -72,20 +72,31 @@ class BaseParser(ABC):
         # init batch buffer
         silver_batch: list[Base] = []
 
-        # stream and accumulate
-        async for record in self.load_records():
-            decoded = self.decode(record)
-            entities = self.build_entities(record, decoded)
-            silver_batch.extend(entities)
+        # stream bronze and accumulate silver; a DatabaseError from load/flush becomes ParserError
+        try:
+            async for record in self.load_records():
+                # decode + build silver; surface subclass failures as ParserError
+                try:
+                    decoded = self.decode(record)
+                    entities = self.build_entities(record, decoded)
+                except ParserError:
+                    raise
+                except Exception as exc:
+                    raise ParserError(
+                        f"source {self.source!r}: bronze_id {record.bronze_id} decode/build failed"
+                    ) from exc
+                silver_batch.extend(entities)
 
-            # flush when batch is full
-            if len(silver_batch) >= self.batch_size:
+                # flush when batch is full
+                if len(silver_batch) >= self.batch_size:
+                    await self._flush(silver_batch)
+                    silver_batch = []
+
+            # flush trailing partial batch
+            if silver_batch:
                 await self._flush(silver_batch)
-                silver_batch = []
-
-        # flush trailing partial batch
-        if silver_batch:
-            await self._flush(silver_batch)
+        except DatabaseError as exc:
+            raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
 
         return
 

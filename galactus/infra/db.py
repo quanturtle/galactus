@@ -4,6 +4,7 @@ from typing import TypeVar
 from sqlalchemy import select
 from sqlalchemy.dialects import registry
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from galactus.core.errors import DatabaseError
 from sql.base import Base
 
 # mirror migrations/env.py: route bare postgresql:// to psycopg3
@@ -46,8 +48,11 @@ class Database:
 
     async def open(self) -> None:
         # surface bad URLs / unreachable DB at startup, not lazily
-        async with self._engine.connect():
-            pass
+        try:
+            async with self._engine.connect():
+                pass
+        except SQLAlchemyError as exc:
+            raise DatabaseError("cannot connect to database") from exc
         return
 
     async def close(self) -> None:
@@ -83,9 +88,12 @@ class Database:
         stmt = pg_insert(model).on_conflict_do_nothing(
             index_elements=list(conflict_columns),
         )
-        async with self._sessionmaker() as session:
-            await session.execute(stmt, rows)
-            await session.commit()
+        try:
+            async with self._sessionmaker() as session:
+                await session.execute(stmt, rows)
+                await session.commit()
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"{model.__name__} insert failed") from exc
         return
 
     async def upsert(
@@ -114,9 +122,12 @@ class Database:
             index_elements=conflict,
             set_=update_set,
         )
-        async with self._sessionmaker() as session:
-            await session.execute(stmt, rows)
-            await session.commit()
+        try:
+            async with self._sessionmaker() as session:
+                await session.execute(stmt, rows)
+                await session.commit()
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"{model.__name__} upsert failed") from exc
         return
 
     async def load_for_source(self, model: type[M], source: str) -> AsyncIterator[M]:
@@ -129,7 +140,10 @@ class Database:
         stmt = (
             select(model).where(model.source == source).order_by(model.created_at, model.bronze_id)
         )
-        async with self._sessionmaker() as session:
-            result = await session.stream_scalars(stmt)
-            async for record in result:
-                yield record
+        try:
+            async with self._sessionmaker() as session:
+                result = await session.stream_scalars(stmt)
+                async for record in result:
+                    yield record
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"streaming {model.__name__} for source {source!r} failed") from exc

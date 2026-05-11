@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from galactus.core.errors import ScraperError
+from galactus.core.errors import HttpError
 
 
 class HttpResponse:
@@ -32,8 +32,8 @@ class HttpClient:
 
     Concerns: opening connections, applying headers/params, retrying transient
     failures. URL construction (scheme, normalization) is the scraper's job.
-    All terminal failures surface as ScraperError so callers can treat them
-    uniformly.
+    All terminal failures surface as HttpError; the scraper re-raises them as
+    ScraperError with source/URL context.
     """
 
     def __init__(
@@ -82,12 +82,12 @@ class HttpClient:
             if attempt < self.retries:
                 await asyncio.sleep(self.retry_delay)
 
-        # exhausted retries — surface as ScraperError
+        # exhausted retries — surface as HttpError
         if last_response is not None:
-            raise ScraperError(
+            raise HttpError(
                 f"GET {url} returned {last_response.status_code} after {self.retries + 1} attempts"
             )
-        raise ScraperError(f"GET {url} failed: {last_exc}") from last_exc
+        raise HttpError(f"GET {url} failed: {last_exc}") from last_exc
 
     async def aclose(self) -> None:
         await self.client.aclose()

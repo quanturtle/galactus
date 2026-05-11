@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 from bs4 import BeautifulSoup
 
 from galactus.config import ExtractConfig
-from galactus.core.errors import ScraperError
+from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
 from galactus.transform.html_parser import compress
@@ -87,7 +87,10 @@ class BaseScraper:
 
     # 2. fetch — network -> HttpResponse
     async def fetch(self, url: str) -> HttpResponse:
-        return await self.http.get(url)
+        try:
+            return await self.http.get(url)
+        except HttpError as exc:
+            raise ScraperError(f"{self.source}: GET {url} failed") from exc
 
     # 3. should_persist — gate: keep this response?
     def should_persist(self, url: str, response: HttpResponse) -> bool:
@@ -224,12 +227,15 @@ class BaseScraper:
         # persist
         if self.should_persist(url, response):
             record = self.build_snapshot(url, response)
-            await self.db.insert(
-                record,
-                model=self.bronze_model,
-                conflict_columns=self.conflict_columns,
-                exclude_columns=self.exclude_columns,
-            )
+            try:
+                await self.db.insert(
+                    record,
+                    model=self.bronze_model,
+                    conflict_columns=self.conflict_columns,
+                    exclude_columns=self.exclude_columns,
+                )
+            except DatabaseError as exc:
+                raise ScraperError(f"{self.source}: persisting {url} failed") from exc
             state["fetched"] += 1
 
         # sync — race-free w.r.t. other tasks; do not introduce awaits
