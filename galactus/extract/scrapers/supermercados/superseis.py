@@ -1,8 +1,8 @@
 from galactus.extract.base_scraper import BaseScraper
-from sql.a_bronze.api_snapshots import ApiSnapshot
+from sql.a_bronze.html_snapshots import HtmlSnapshot
 
 
 class Scraper(BaseScraper):
-    """Scraper for superseis — paginated JSON API into bronze.api_snapshots."""
+    """Scraper for superseis — same-domain BFS into bronze.html_snapshots."""
 
-    bronze_model = ApiSnapshot
+    bronze_model = HtmlSnapshot

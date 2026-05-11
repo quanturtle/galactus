@@ -1,5 +1,5 @@
 name: arete
-bronze_table: bronze.api_snapshots
+bronze_table: bronze.html_snapshots
 silver_table: silver.products
 log_level: INFO
 extract:
@@ -8,10 +8,16 @@ extract:
   timeout_seconds: 30.0
   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   options:
-    base_url: https://api.arete.com.py
-    scrape_url_patterns: []
-    ignore_url_patterns: []
-    page_size: 100
+    base_url: https://www.arete.com.py
+    scrape_url_patterns:
+      - "-p\\d+"
+    ignore_url_patterns:
+      - /login
+      - /cart
+      - /account
+      - /checkout
+      - /register
+    page_size: 0
     max_pages: 0
 transform:
   parser: supermercados.arete
