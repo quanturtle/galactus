@@ -2,7 +2,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
-from galactus.config import TransformConfig
+from galactus.config import TransformOptions
 from galactus.core.errors import DatabaseError, ParserError
 from galactus.infra.db import Database
 from galactus.transform.html_parser import HtmlParser, decompress
@@ -38,16 +38,14 @@ class BaseParser(ABC):
         self,
         source: str,
         db: Database,
-        config: TransformConfig,
+        options: TransformOptions,
     ) -> None:
         self.source = source
         self.db = db
-        self.config = config
-        self.options = config.options
-        self.html_parser = self._make_html_parser(config.options)
+        self.html_parser = self._make_html_parser(options)
 
     # hook: override to provide code-level blocklist defaults per parser
-    def _make_html_parser(self, options: Any) -> HtmlParser:
+    def _make_html_parser(self, options: TransformOptions) -> HtmlParser:
         return HtmlParser(
             {
                 "blocklist_tags": options.blocklist_tags,
