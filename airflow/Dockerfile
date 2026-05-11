@@ -22,4 +22,9 @@ RUN uv venv --python 3.12 /home/airflow/galactus/.venv \
     && ln -sf /home/airflow/galactus/.venv/bin/galactus /usr/local/bin/galactus \
     && chown -R airflow:root /home/airflow/galactus
 
+# pre-create the logs dir owned by the airflow user (uid 50000) so a fresh
+# airflow_logs named volume inherits that ownership instead of mounting as
+# root:root, which would block the uid-50000 process from writing task logs
+RUN mkdir -p /home/airflow/logs && chown airflow:root /home/airflow/logs
+
 USER airflow

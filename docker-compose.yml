@@ -41,10 +41,16 @@ services:
 
   airflow-init:
     <<: *airflow-common
+    # run as root so we can fix ownership of the airflow_logs volume mountpoint
+    # (a fresh named volume mounts as root:root; the airflow user is uid 50000),
+    # then run the db migration and create the admin user
+    user: "0:0"
     entrypoint: /bin/bash
     command:
       - -c
       - |
+        mkdir -p /home/airflow/logs &&
+        chown -R "${AIRFLOW_UID:-50000}:0" /home/airflow/logs &&
         airflow db migrate &&
         airflow users create \
           --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" \
