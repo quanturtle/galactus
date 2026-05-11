@@ -18,9 +18,8 @@ class Scraper(BaseScraper):
         return [self._build_url(0)]
 
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        # stop once the next offset would be past the total the API reports
-        total = int(response.json().get("count", 0))
-        next_skip = query_int(url, "skip", 0) + self.options.page_size
-        if next_skip >= total:
+        if query_int(url, "skip", 0) != 0:
             return []
-        return [self._build_url(next_skip)]
+        page_size = self.options.page_size
+        total = int(response.json().get("count", 0))
+        return [self._build_url(skip) for skip in range(page_size, total, page_size)]

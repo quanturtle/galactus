@@ -24,8 +24,7 @@ class Scraper(BaseScraper):
         return [self._build_url(1)]
 
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        total = int(response.headers.get("x-wp-totalpages", "1"))
-        page = query_int(url, "page", 1)
-        if page >= total:
+        if query_int(url, "page", 1) != 1:
             return []
-        return [self._build_url(page + 1)]
+        total = int(response.headers.get("x-wp-totalpages", "1"))
+        return [self._build_url(page) for page in range(2, total + 1)]
