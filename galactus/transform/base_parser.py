@@ -1,10 +1,13 @@
+import json
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
 from galactus.config import TransformConfig
 from galactus.core.errors import DatabaseError, ParserError
 from galactus.infra.db import Database
-from galactus.transform.html_parser import HtmlParser
+from galactus.transform.html_parser import HtmlParser, decompress
+from sql.a_bronze.api_snapshots import ApiSnapshot
+from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
 
 
@@ -17,8 +20,9 @@ class BaseParser(ABC):
     row per (entity, bronze sighting); the gold layer collapses across
     sightings. A bronze row counts as parsed once any silver row carries its
     (source, bronze_id), so a re-run skips bronze rows whose silver already
-    committed. Concrete parsers override hooks; both decode() and
-    build_entities() are abstract.
+    committed. Concrete parsers define bronze_model / silver_model and
+    implement build_entities(); decode() and _make_html_parser() ship with
+    working defaults.
     """
 
     bronze_model: ClassVar[type[Base]]
@@ -58,16 +62,21 @@ class BaseParser(ABC):
     async def load_records(self) -> list[Base]:
         return await self.db.load_unparsed(self.bronze_model, self.silver_model, self.source)
 
-    # 2. decode — bronze row -> parsed payload (BeautifulSoup for HTML, dict for JSON)
-    @abstractmethod
-    def decode(self, record: Base) -> Any: ...
+    # 2. decode — bronze row -> parsed payload. Default decodes by bronze_model:
+    # BeautifulSoup for HtmlSnapshot, dict for ApiSnapshot. Override for a custom bronze model.
+    def decode(self, record: Base) -> Any:
+        if self.bronze_model is HtmlSnapshot:
+            return self.html_parser.parse(decompress(record.html))
+        if self.bronze_model is ApiSnapshot:
+            return json.loads(decompress(record.body))
+        raise NotImplementedError(f"No default decode for {self.bronze_model}")
 
     # 3. build_entities — bronze row + decoded payload -> silver records
     @abstractmethod
     def build_entities(self, record: Base, decoded: Any) -> list[Base]: ...
 
-    # 4. _build_silver — decode + build every bronze row, stamping its provenance onto each entity
-    def _build_silver(self, records: list[Base]) -> list[Base]:
+    # 4. parse_records — decode + build every bronze row, stamping its provenance onto each entity
+    def parse_records(self, records: list[Base]) -> list[Base]:
         silver: list[Base] = []
         for record in records:
             # decode + build silver; surface subclass failures as ParserError
@@ -92,7 +101,7 @@ class BaseParser(ABC):
         """Lifecycle: load all unparsed bronze for source; decode + build silver; insert."""
         try:
             records = await self.load_records()
-            silver = self._build_silver(records)
+            silver = self.parse_records(records)
             await self.db.insert(
                 silver,
                 model=self.silver_model,
