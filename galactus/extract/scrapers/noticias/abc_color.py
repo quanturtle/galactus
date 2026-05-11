@@ -42,9 +42,10 @@ class Scraper(BaseScraper):
         return [self._build_url(section, 0) for section in SECTIONS]
 
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
+        page_size = self.options.page_size
         elements = response.json().get("content_elements", [])
-        if len(elements) < self.options.page_size:
+        if len(elements) < page_size:
             return []
         blob = json.loads(parse_qs(urlparse(url).query).get("query", ["{}"])[0])
         section, offset = blob["section_id"], int(blob.get("offset", "0"))
-        return [self._build_url(section, offset + self.options.page_size)]
+        return [self._build_url(section, offset + page_size)]
