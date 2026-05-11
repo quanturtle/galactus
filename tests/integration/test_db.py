@@ -165,11 +165,11 @@ async def test_load_unparsed_filters_by_source(db, engine) -> None:
     b = _html_snapshot(source="src_b", source_url="https://example.com/b")
     await db.insert([a, b], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
 
-    yielded = [r async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_b")]
-    assert [r.source for r in yielded] == ["src_b"]
+    loaded = await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_b")
+    assert [r.source for r in loaded] == ["src_b"]
 
-    yielded_a = [r async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")]
-    assert [r.source for r in yielded_a] == ["src_a"]
+    loaded_a = await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")
+    assert [r.source for r in loaded_a] == ["src_a"]
 
 
 async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
@@ -181,7 +181,7 @@ async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
     # nothing parsed yet -> both bronze rows are unparsed
     pending = [
         r.bronze_id
-        async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
+        for r in await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [first_id, second_id]
 
@@ -194,10 +194,10 @@ async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
         exclude_columns=SILVER_EXCLUDE,
     )
 
-    # only the still-unparsed bronze row is yielded now
+    # only the still-unparsed bronze row is returned now
     pending = [
         r.bronze_id
-        async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
+        for r in await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [second_id]
 
@@ -216,6 +216,6 @@ async def test_load_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
     )
 
     pending = [
-        r.bronze_id async for r in db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")
+        r.bronze_id for r in await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")
     ]
     assert pending == [bronze_id]

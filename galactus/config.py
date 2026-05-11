@@ -39,13 +39,12 @@ class ExtractConfig(BaseModel):
 
 
 class TransformOptions(BaseModel):
-    """Parser-strategy options: HTML cleaning rules and batching."""
+    """Parser-strategy options: HTML cleaning rules."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     blocklist_tags: list[str] = []
     blocklist_attributes: list[str] = []
-    batch_size: int = 100
 
 
 class TransformConfig(BaseModel):

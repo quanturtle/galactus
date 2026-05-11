@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import Iterable
 from typing import TypeVar
 
 from sqlalchemy import select
@@ -102,14 +102,13 @@ class Database:
         bronze_model: type[M],
         silver_model: type[Base],
         source: str,
-    ) -> AsyncIterator[M]:
-        """Stream bronze rows for `source` that no silver row references yet.
+    ) -> list[M]:
+        """Return the bronze rows for `source` that no silver row references yet.
 
         A bronze row counts as parsed once any silver row carries its
         (source, bronze_id) — one bronze row may yield many silver entities.
-        Ordered by created_at then bronze_id. Server-side cursor; the
-        transaction is held for the iterator's lifetime. Safe to re-run:
-        committed batches are skipped on the next pass.
+        Ordered by created_at then bronze_id. Safe to re-run: bronze rows whose
+        silver already committed are not returned on the next pass.
         """
         already_parsed = (
             select(silver_model.bronze_id)
@@ -124,10 +123,9 @@ class Database:
         )
         try:
             async with self._sessionmaker() as session:
-                result = await session.stream_scalars(stmt)
-                async for record in result:
-                    yield record
+                result = await session.scalars(stmt)
+                return list(result.all())
         except SQLAlchemyError as exc:
             raise DatabaseError(
-                f"streaming unparsed {bronze_model.__name__} for source {source!r} failed"
+                f"loading unparsed {bronze_model.__name__} for source {source!r} failed"
             ) from exc
