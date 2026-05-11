@@ -62,14 +62,14 @@ class BaseParser(ABC):
     async def load_records(self) -> list[Base]:
         return await self.db.load_unparsed(self.bronze_model, self.silver_model, self.source)
 
-    # 2. decode — bronze row -> parsed payload. Default decodes by bronze_model:
+    # 2. decode — bronze row -> parsed payload. Default dispatches on the row type:
     # BeautifulSoup for HtmlSnapshot, dict for ApiSnapshot. Override for a custom bronze model.
     def decode(self, record: Base) -> Any:
-        if self.bronze_model is HtmlSnapshot:
+        if isinstance(record, HtmlSnapshot):
             return self.html_parser.parse(decompress(record.html))
-        if self.bronze_model is ApiSnapshot:
+        if isinstance(record, ApiSnapshot):
             return json.loads(decompress(record.body))
-        raise NotImplementedError(f"No default decode for {self.bronze_model}")
+        raise NotImplementedError(f"no default decode for {type(record).__name__}")
 
     # 3. build_entities — bronze row + decoded payload -> silver records
     @abstractmethod
