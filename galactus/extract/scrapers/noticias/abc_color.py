@@ -1,33 +1,31 @@
 import json
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
-ENDPOINT = "/pf/api/v3/content/fetch/sections-api"
-SECTIONS = (
-    "/nacionales",
-    "/internacionales",
-    "/politica",
-    "/economia",
-    "/deportes",
-    "/policiales",
-    "/espectaculos",
-    "/opinion",
-    "/ciencia",
-    "/tecnologia",
-    "/locales",
-    "/sociedad",
-)
-
 
 class Scraper(BaseScraper):
     """Scraper for abc_color — Arc Publishing sections-api, per-section pagination into bronze.api_snapshots."""
 
-    bronze_model = ApiSnapshot
+    snapshot_model = ApiSnapshot
+    SECTIONS = (
+        "/nacionales",
+        "/internacionales",
+        "/politica",
+        "/economia",
+        "/deportes",
+        "/policiales",
+        "/espectaculos",
+        "/opinion",
+        "/ciencia",
+        "/tecnologia",
+        "/locales",
+        "/sociedad",
+    )
 
-    def _build_url(self, section: str, offset: int) -> str:
+    def build_url(self, section: str, offset: int) -> str:
         query = json.dumps(
             {
                 "section_id": section,
@@ -36,10 +34,10 @@ class Scraper(BaseScraper):
                 "offset": str(offset),
             }
         )
-        return urljoin(self.options.base_url, ENDPOINT) + "?" + urlencode({"query": query})
+        return f"{self.options.base_url}?{urlencode({'query': query})}"
 
-    def seed_urls(self) -> list[str]:
-        return [self._build_url(section, 0) for section in SECTIONS]
+    def seeds(self) -> list[str]:
+        return [self.build_url(section, 0) for section in self.SECTIONS]
 
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
         page_size = self.options.page_size
@@ -48,4 +46,4 @@ class Scraper(BaseScraper):
             return []
         blob = json.loads(parse_qs(urlparse(url).query).get("query", ["{}"])[0])
         section, offset = blob["section_id"], int(blob.get("offset", "0"))
-        return [self._build_url(section, offset + page_size)]
+        return [self.build_url(section, offset + page_size)]

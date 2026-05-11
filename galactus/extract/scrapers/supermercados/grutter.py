@@ -8,17 +8,14 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 class Scraper(BaseScraper):
     """Scraper for grutter — WooCommerce Store API, page-bounded pagination into bronze.api_snapshots."""
 
-    bronze_model = ApiSnapshot
+    snapshot_model = ApiSnapshot
 
-    def _build_url(self, page: int) -> str:
-        params = {"per_page": str(self.options.page_size), "page": str(page)}
-        return self.options.base_url + "?" + urlencode(params)
+    def build_url(self, page: int) -> str:
+        return f"{self.options.base_url}?{urlencode({'page': str(page)})}"
 
-    def seed_urls(self) -> list[str]:
-        return [self._build_url(1)]
+    def seeds(self) -> list[str]:
+        return [self.build_url(1)]
 
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        if url not in self._seeds:
-            return []
         total = int(response.headers.get("x-wp-totalpages", "1"))
-        return [self._build_url(page) for page in range(2, total + 1)]
+        return [self.build_url(page) for page in range(2, total + 1)]

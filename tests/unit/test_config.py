@@ -112,10 +112,11 @@ def test_extract_http_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     config = load_config(config_file)
     assert config.extract is not None
     assert config.extract.timeout_seconds == 30.0
-    assert config.extract.user_agent == (
+    assert config.extract.headers["User-Agent"] == (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
+    assert config.extract.params == {}
     assert config.extract.http_pool_size == 100
 
 

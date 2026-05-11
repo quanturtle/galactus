@@ -2,8 +2,8 @@ import asyncio
 import re
 from collections import deque
 from pathlib import Path
-from typing import Any, ClassVar
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
+from typing import ClassVar
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -44,28 +44,33 @@ SKIP_PREFIXES = ("mailto:", "tel:", "javascript:", "data:", "whatsapp:", "#")
 STORE_HTML_BODY = True
 
 
-def query_int(url: str, name: str, default: int) -> int:
-    """Read an int-valued query param out of a URL, falling back to default."""
-    return int(parse_qs(urlparse(url).query).get(name, [str(default)])[0])
-
-
 class BaseScraper:
     """Template Method base for all scrapers.
 
-    run() owns the BFS over seed_urls(): fetch a URL, persist it if eligible,
-    then expand the frontier with the page's next URLs. Concrete scrapers
-    override at most three hooks — seed_urls(), build_snapshot(), next_urls() —
-    plus the bronze_model class var (the only required override); every hook
-    ships with a working default. Everything else is private: fetching, URL
-    canonicalization, the same-site/pattern enqueue gate, and the persist gate.
+    run() owns the BFS over seeds(): fetch a URL, persist it if eligible, then
+    expand the frontier with the page's next URLs.
+
+    Public hook surface — override in subclasses, every one ships a default:
+        snapshot_model   class var; default HtmlSnapshot. API scrapers set to
+                         ApiSnapshot. The discriminator the default
+                         build_snapshot() routes on.
+        seeds()          initial frontier; default [options.base_url].
+        should_persist() gate before building a snapshot; default = scrape-pattern
+                         check (allow-all when no patterns).
+        build_snapshot() construct the bronze record; default routes on
+                         snapshot_model. Override entirely for a custom shape.
+        build_url(url)   build a request URL. Default returns it as-is.
+                         Paginating scrapers override (possibly with a different
+                         signature, e.g. build_url(self, page: int)) and call
+                         their own build_url from seeds() / next_urls().
+        next_urls()      URLs to add to the frontier after visiting one;
+                         default scrapes every <a href> (HTML BFS).
+
+    Private internals — not extension points: _fetch, _should_enqueue,
+    _crawl_url, run.
     """
 
-    bronze_model: ClassVar[type[Base]]
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        if not hasattr(cls, "bronze_model"):
-            raise ScraperError(f"{cls.__name__} must define class variable 'bronze_model'")
+    snapshot_model: ClassVar[type[Base]] = HtmlSnapshot
 
     def __init__(
         self,
@@ -89,26 +94,54 @@ class BaseScraper:
         self._ignore_patterns: list[re.Pattern] = [
             re.compile(p) for p in self.options.ignore_url_patterns
         ]
-        self._seeds: frozenset[str] = frozenset()
 
     # hook: frontier seeds — the first URLs to crawl
-    def seed_urls(self) -> list[str]:
+    def seeds(self) -> list[str]:
         return [self.options.base_url]
 
-    async def _fetch(self, url: str) -> HttpResponse:
-        try:
-            return await self.http.get(url)
-        except HttpError as exc:
-            raise ScraperError(f"{self.source}: GET {url} failed") from exc
-
-    def _should_persist(self, url: str) -> bool:
+    # hook: gate persistence — return True to snapshot this url, False to skip
+    def should_persist(self, url: str) -> bool:
         if not self._scrape_patterns:
             return True
         return any(p.search(url) for p in self._scrape_patterns)
 
+    # hook: build a request URL. Default returns it as-is. Concrete scrapers
+    # override to build URLs relative to options.base_url (and may take a
+    # different signature, e.g. (self, page: int)) — they call their own
+    # build_url from inside seeds() / next_urls().
+    def build_url(self, url: str) -> str:
+        return url
+
+    # hook: construct the bronze record for one response. Default routes on
+    # snapshot_model; override entirely for a fully custom record shape.
+    def build_snapshot(self, url: str, response: HttpResponse) -> Base:
+        model = self.snapshot_model
+        if model is HtmlSnapshot:
+            return HtmlSnapshot(
+                source=self.source,
+                source_url=url,
+                status_code=response.status_code,
+                content_type=response.headers.get("content-type", ""),
+                response_headers=dict(response.headers),
+                html=compress(response.text) if STORE_HTML_BODY else b"",
+                is_diff=False,
+            )
+        if model is ApiSnapshot:
+            return ApiSnapshot(
+                source=self.source,
+                source_url=url,
+                request_url=url,
+                request_params={},
+                status_code=response.status_code,
+                response_headers=dict(response.headers),
+                body=compress(response.text),
+            )
+        raise ScraperError(f"{self.source}: no snapshot builder for {model}")
+
     # hook: a fetched page -> raw candidate URLs (absolute or relative) to crawl
-    # next. No filtering here — the base canonicalizes, dedups, and gates before
-    # enqueueing. Default scrapes every <a href>; an empty/JSON body yields none.
+    # next. No filtering here — build_url canonicalizes and _should_enqueue
+    # gates before enqueueing. Default scrapes every <a href>; a JSON body
+    # yields none.
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
         soup = BeautifulSoup(response.text, "html.parser")
         out: list[str] = []
@@ -119,22 +152,18 @@ class BaseScraper:
             out.append(urljoin(url, href))
         return out
 
-    def _canonicalize_url(self, href: str, page_url: str) -> str | None:
-        for prefix in SKIP_PREFIXES:
-            if href.startswith(prefix):
-                return None
-        parsed = urlparse(urljoin(page_url, href))
-        if parsed.scheme not in ("http", "https"):
-            return None
-        query = urlencode(
-            sorted(parse_qs(parsed.query, keep_blank_values=True).items()),
-            doseq=True,
-        )
-        path = parsed.path.rstrip("/") or "/"
-        return urlunparse((parsed.scheme, parsed.netloc, path, parsed.params, query, ""))
+    async def _fetch(self, url: str) -> HttpResponse:
+        try:
+            return await self.http.get(url)
+        except HttpError as exc:
+            raise ScraperError(f"{self.source}: GET {url} failed") from exc
 
     def _should_enqueue(self, url: str) -> bool:
+        if url.startswith(SKIP_PREFIXES):
+            return False
         parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
         if parsed.netloc not in self._allowed_hosts:
             return False
         if Path(parsed.path).suffix.lower() in SKIP_EXTENSIONS:
@@ -143,7 +172,7 @@ class BaseScraper:
             return False
         return not any(p.search(url) for p in self._ignore_patterns)
 
-    async def _process_url(
+    async def _crawl_url(
         self,
         url: str,
         frontier: deque[str],
@@ -153,43 +182,21 @@ class BaseScraper:
         """Fetch one URL, persist it if eligible, then expand the frontier with the page's next URLs."""
         response = await self._fetch(url)
 
-        # persist
-        if self._should_persist(url):
-            if self.bronze_model is HtmlSnapshot:
-                record = HtmlSnapshot(
-                    source=self.source,
-                    source_url=url,
-                    status_code=response.status_code,
-                    content_type=response.headers.get("content-type", ""),
-                    response_headers=dict(response.headers),
-                    html=compress(response.text) if STORE_HTML_BODY else b"",
-                    is_diff=False,
-                )
-            elif self.bronze_model is ApiSnapshot:
-                record = ApiSnapshot(
-                    source=self.source,
-                    source_url=url,
-                    request_url=url,
-                    request_params={},
-                    status_code=response.status_code,
-                    response_headers=dict(response.headers),
-                    body=compress(response.text),
-                )
-            else:
-                raise ScraperError(f"{self.source}: no snapshot builder for {self.bronze_model}")
+        # build and persist snapshot if eligible
+        if self.should_persist(url):
+            record = self.build_snapshot(url, response)
             try:
-                await self.db.insert(record, model=self.bronze_model)
+                await self.db.insert(record, model=type(record))
             except DatabaseError as exc:
                 raise ScraperError(f"{self.source}: persisting {url} failed") from exc
             state["fetched"] += 1
 
         # expand — sync, race-free w.r.t. other tasks; do not introduce awaits here
         for href in self.next_urls(url, response):
-            link = self._canonicalize_url(href, url)
-            if not link or link in seen or not self._should_enqueue(link):
+            if href in seen or not self._should_enqueue(href):
                 continue
-            seen.add(link)
-            frontier.append(link)
+            seen.add(href)
+            frontier.append(href)
 
         # per-task pacing: each in-flight task self-throttles after its fetch
         if self.options.request_delay:
@@ -197,10 +204,9 @@ class BaseScraper:
         return
 
     async def run(self) -> None:
-        """Lifecycle: BFS over seed_urls(); fetch up to self.concurrency URLs in parallel."""
+        """Lifecycle: BFS over seeds(); fetch up to self.concurrency URLs in parallel."""
         # init frontier
-        initial = self.seed_urls()
-        self._seeds = frozenset(initial)
+        initial = self.seeds()
         frontier: deque[str] = deque(initial)
         seen: set[str] = set(initial)
         state: dict[str, int] = {"fetched": 0}
@@ -218,7 +224,7 @@ class BaseScraper:
                 and (max_pages == 0 or state["fetched"] < max_pages)
             ):
                 url = frontier.popleft()
-                in_flight.add(asyncio.create_task(self._process_url(url, frontier, seen, state)))
+                in_flight.add(asyncio.create_task(self._crawl_url(url, frontier, seen, state)))
 
             if not in_flight:
                 break

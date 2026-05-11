@@ -3,8 +3,9 @@ log_level: INFO
 extract:
   scraper: supermercados.grutter
   timeout_seconds: 30.0
-  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   concurrency: 5
+  params:
+    per_page: "100"
   options:
     base_url: https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products
     scrape_url_patterns: []

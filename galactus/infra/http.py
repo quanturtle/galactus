@@ -42,6 +42,7 @@ class HttpClient:
         self,
         timeout: float = 30.0,
         headers: Mapping[str, str] | None = None,
+        params: Mapping[str, Any] | None = None,
         follow_redirects: bool = True,
         retries: int = 3,
         retry_delay: float = 2.0,
@@ -50,6 +51,7 @@ class HttpClient:
         self.client = httpx.AsyncClient(
             timeout=timeout,
             headers=dict(headers) if headers else None,
+            params=dict(params) if params else None,
             follow_redirects=follow_redirects,
             limits=httpx.Limits(
                 max_connections=pool_size,

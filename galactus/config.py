@@ -28,10 +28,15 @@ class ExtractConfig(BaseModel):
 
     scraper: str
     timeout_seconds: float = 30.0
-    user_agent: str = (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    headers: dict[str, str] = Field(
+        default_factory=lambda: {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
     )
+    params: dict[str, str] = {}
     retries: int = 3
     retry_delay: float = 2.0
     http_pool_size: int = Field(default=100, ge=1)

@@ -34,7 +34,8 @@ class ExtractStage(PipelineStage):
         async with (
             HttpClient(
                 timeout=ext.timeout_seconds,
-                headers={"User-Agent": ext.user_agent},
+                headers=ext.headers,
+                params=ext.params,
                 retries=ext.retries,
                 retry_delay=ext.retry_delay,
                 pool_size=ext.http_pool_size,
