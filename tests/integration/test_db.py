@@ -16,10 +16,6 @@ from tests.integration.conftest import (
     ScratchProduct,
 )
 
-BRONZE_CONFLICT = ("source", "source_url", "created_at")
-BRONZE_EXCLUDE = ("bronze_id", "created_at")
-SILVER_EXCLUDE = ("id",)
-
 
 def _api_snapshot(
     source: str = "test_source",
@@ -59,11 +55,11 @@ async def _bronze_ids(engine, table: str) -> list[int]:
 
 
 async def test_insert_bronze_html_records_each_fetch(db, engine) -> None:
-    # Two fetches of the same URL produce two bronze rows: created_at is server-
-    # filled per insert, so the (source, source_url, created_at) natural key differs.
+    # Each insert is its own bronze row: bronze_id and created_at are left unset,
+    # so the DB fills a fresh surrogate id and timestamp per insert.
     rec = _html_snapshot()
-    await db.insert(rec, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
-    await db.insert(rec, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert(rec, ScratchHtmlSnapshot)
+    await db.insert(rec, ScratchHtmlSnapshot)
     async with engine.connect() as conn:
         result = await conn.execute(text("SELECT COUNT(*) FROM scratch.html_snapshots"))
         assert result.scalar() == 2
@@ -71,8 +67,8 @@ async def test_insert_bronze_html_records_each_fetch(db, engine) -> None:
 
 async def test_insert_bronze_api_records_each_fetch(db, engine) -> None:
     rec = _api_snapshot()
-    await db.insert(rec, ScratchApiSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
-    await db.insert(rec, ScratchApiSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert(rec, ScratchApiSnapshot)
+    await db.insert(rec, ScratchApiSnapshot)
     async with engine.connect() as conn:
         rows = (
             await conn.execute(
@@ -89,8 +85,8 @@ async def test_insert_accepts_single_or_iterable(db, engine) -> None:
     one = _html_snapshot(source_url="https://example.com/a")
     two = _html_snapshot(source_url="https://example.com/b")
     three = _html_snapshot(source_url="https://example.com/c")
-    await db.insert(one, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
-    await db.insert([two, three], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert(one, ScratchHtmlSnapshot)
+    await db.insert([two, three], ScratchHtmlSnapshot)
     async with engine.connect() as conn:
         count = (await conn.execute(text("SELECT COUNT(*) FROM scratch.html_snapshots"))).scalar()
     assert count == 3
@@ -121,7 +117,7 @@ async def test_insert_silver_articles_records_each_sighting(db, engine) -> None:
         image_urls=["https://example.com/img.jpg"],
         created_at=t2,
     )
-    await db.insert([first, second], ScratchArticle, exclude_columns=SILVER_EXCLUDE)
+    await db.insert([first, second], ScratchArticle)
 
     async with engine.connect() as conn:
         rows = (
@@ -146,7 +142,7 @@ async def test_insert_silver_products_with_decimal(db, engine) -> None:
         currency="USD",
         created_at=t,
     )
-    await db.insert(product, ScratchProduct, exclude_columns=SILVER_EXCLUDE)
+    await db.insert(product, ScratchProduct)
     async with engine.connect() as conn:
         row = (
             await conn.execute(
@@ -163,7 +159,7 @@ async def test_insert_silver_products_with_decimal(db, engine) -> None:
 async def test_load_unparsed_filters_by_source(db, engine) -> None:
     a = _html_snapshot(source="src_a", source_url="https://example.com/a")
     b = _html_snapshot(source="src_b", source_url="https://example.com/b")
-    await db.insert([a, b], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert([a, b], ScratchHtmlSnapshot)
 
     loaded = await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_b")
     assert [r.source for r in loaded] == ["src_b"]
@@ -175,7 +171,7 @@ async def test_load_unparsed_filters_by_source(db, engine) -> None:
 async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
     one = _html_snapshot(source_url="https://example.com/a")
     two = _html_snapshot(source_url="https://example.com/b")
-    await db.insert([one, two], ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert([one, two], ScratchHtmlSnapshot)
     first_id, second_id = await _bronze_ids(engine, "html_snapshots")
 
     # nothing parsed yet -> both bronze rows are unparsed
@@ -191,7 +187,6 @@ async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
             bronze_id=first_id, source="test_source", source_url="https://example.com/a", title="t"
         ),
         ScratchArticle,
-        exclude_columns=SILVER_EXCLUDE,
     )
 
     # only the still-unparsed bronze row is returned now
@@ -205,14 +200,13 @@ async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
 async def test_load_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
     # a silver row for a different source must not mask a bronze row that shares its bronze_id
     a = _html_snapshot(source="src_a", source_url="https://example.com/a")
-    await db.insert(a, ScratchHtmlSnapshot, BRONZE_CONFLICT, BRONZE_EXCLUDE)
+    await db.insert(a, ScratchHtmlSnapshot)
     (bronze_id,) = await _bronze_ids(engine, "html_snapshots")
     await db.insert(
         ScratchArticle(
             bronze_id=bronze_id, source="src_b", source_url="https://example.com/x", title="t"
         ),
         ScratchArticle,
-        exclude_columns=SILVER_EXCLUDE,
     )
 
     pending = [

@@ -1,9 +1,8 @@
 from collections.abc import Iterable
 from typing import TypeVar
 
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.dialects import registry
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -67,31 +66,23 @@ class Database:
         await self.close()
         return
 
-    async def insert(
-        self,
-        records: M | Iterable[M],
-        model: type[M],
-        conflict_columns: Iterable[str] = (),
-        exclude_columns: Iterable[str] = (),
-    ) -> None:
-        """Insert rows. With `conflict_columns`, collisions are skipped (ON CONFLICT DO NOTHING).
+    async def insert(self, records: M | Iterable[M], model: type[M]) -> None:
+        """Bulk-insert one or many records of `model`.
 
-        `exclude_columns` lists model attributes to drop from the row dict
-        (typically server-managed columns like surrogate ids and auto timestamps).
+        Columns left unset (None) on every record — surrogate ids, server-filled
+        timestamps — are dropped from the row dicts so the database applies its
+        own defaults; the remaining columns are identical across rows.
         """
         if isinstance(records, Base):
             records = [records]
-        excluded = frozenset(exclude_columns)
-        rows = [r.to_dict(excluded) for r in records]
+        rows = [r.to_dict() for r in records]
         if not rows:
             return
-        stmt = pg_insert(model)
-        conflict = list(conflict_columns)
-        if conflict:
-            stmt = stmt.on_conflict_do_nothing(index_elements=conflict)
+        unset = {k for k in rows[0] if all(row[k] is None for row in rows)}
+        rows = [{k: v for k, v in row.items() if k not in unset} for row in rows]
         try:
             async with self._sessionmaker() as session:
-                await session.execute(stmt, rows)
+                await session.execute(insert(model), rows)
                 await session.commit()
         except SQLAlchemyError as exc:
             raise DatabaseError(f"{model.__name__} insert failed") from exc
