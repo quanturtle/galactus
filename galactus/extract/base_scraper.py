@@ -89,6 +89,7 @@ class BaseScraper:
         self._ignore_patterns: list[re.Pattern] = [
             re.compile(p) for p in self.options.ignore_url_patterns
         ]
+        self._seeds: frozenset[str] = frozenset()
 
     # hook: frontier seeds — the first URLs to crawl
     def seed_urls(self) -> list[str]:
@@ -104,31 +105,6 @@ class BaseScraper:
         if not self._scrape_patterns:
             return True
         return any(p.search(url) for p in self._scrape_patterns)
-
-    # hook: response -> bronze row. Default covers HtmlSnapshot / ApiSnapshot;
-    # override (alongside bronze_model) for a custom bronze table.
-    def build_snapshot(self, url: str, response: HttpResponse) -> Base:
-        if self.bronze_model is HtmlSnapshot:
-            return HtmlSnapshot(
-                source=self.source,
-                source_url=url,
-                status_code=response.status_code,
-                content_type=response.headers.get("content-type", ""),
-                response_headers=dict(response.headers),
-                html=compress(response.text) if STORE_HTML_BODY else b"",
-                is_diff=False,
-            )
-        if self.bronze_model is ApiSnapshot:
-            return ApiSnapshot(
-                source=self.source,
-                source_url=url,
-                request_url=url,
-                request_params={},
-                status_code=response.status_code,
-                response_headers=dict(response.headers),
-                body=compress(response.text),
-            )
-        raise NotImplementedError(f"No default build_snapshot for {self.bronze_model}")
 
     # hook: a fetched page -> raw candidate URLs (absolute or relative) to crawl
     # next. No filtering here — the base canonicalizes, dedups, and gates before
@@ -179,7 +155,28 @@ class BaseScraper:
 
         # persist
         if self._should_persist(url):
-            record = self.build_snapshot(url, response)
+            if self.bronze_model is HtmlSnapshot:
+                record = HtmlSnapshot(
+                    source=self.source,
+                    source_url=url,
+                    status_code=response.status_code,
+                    content_type=response.headers.get("content-type", ""),
+                    response_headers=dict(response.headers),
+                    html=compress(response.text) if STORE_HTML_BODY else b"",
+                    is_diff=False,
+                )
+            elif self.bronze_model is ApiSnapshot:
+                record = ApiSnapshot(
+                    source=self.source,
+                    source_url=url,
+                    request_url=url,
+                    request_params={},
+                    status_code=response.status_code,
+                    response_headers=dict(response.headers),
+                    body=compress(response.text),
+                )
+            else:
+                raise ScraperError(f"{self.source}: no snapshot builder for {self.bronze_model}")
             try:
                 await self.db.insert(record, model=self.bronze_model)
             except DatabaseError as exc:
@@ -203,6 +200,7 @@ class BaseScraper:
         """Lifecycle: BFS over seed_urls(); fetch up to self.concurrency URLs in parallel."""
         # init frontier
         initial = self.seed_urls()
+        self._seeds = frozenset(initial)
         frontier: deque[str] = deque(initial)
         seen: set[str] = set(initial)
         state: dict[str, int] = {"fetched": 0}

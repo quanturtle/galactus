@@ -1,6 +1,6 @@
 from urllib.parse import urlencode
 
-from galactus.extract.base_scraper import BaseScraper, query_int
+from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
@@ -18,7 +18,7 @@ class Scraper(BaseScraper):
         return [self._build_url(0)]
 
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        if query_int(url, "skip", 0) != 0:
+        if url not in self._seeds:
             return []
         page_size = self.options.page_size
         total = int(response.json().get("count", 0))

@@ -1,6 +1,6 @@
 from urllib.parse import urlencode
 
-from galactus.extract.base_scraper import BaseScraper, query_int
+from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
@@ -18,8 +18,7 @@ class Scraper(BaseScraper):
         return [self._build_url(1)]
 
     def next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        # WooCommerce reports total pages on every page; only act on the first
-        if query_int(url, "page", 1) != 1:
+        if url not in self._seeds:
             return []
         total = int(response.headers.get("x-wp-totalpages", "1"))
         return [self._build_url(page) for page in range(2, total + 1)]
