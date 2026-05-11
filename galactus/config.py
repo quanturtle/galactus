@@ -28,7 +28,10 @@ class ExtractConfig(BaseModel):
     scraper: str
     concurrency: int = Field(default=1, ge=1)
     timeout_seconds: float = 30.0
-    user_agent: str = "galactus/0.2"
+    user_agent: str = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
     retries: int = 3
     retry_delay: float = 2.0
     http_pool_size: int = Field(default=100, ge=1)
