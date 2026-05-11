@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest_asyncio
 from dotenv import load_dotenv
-from sqlalchemy import LargeBinary, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import LargeBinary, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,15 +34,7 @@ SCRATCH_SCHEMA = "scratch"
 
 class ScratchApiSnapshot(Base):
     __tablename__ = "api_snapshots"
-    __table_args__ = (
-        UniqueConstraint(
-            "source",
-            "source_url",
-            "created_at",
-            name="uq_scratch_api_snapshots_natural_key",
-        ),
-        {"schema": SCRATCH_SCHEMA},
-    )
+    __table_args__ = {"schema": SCRATCH_SCHEMA}
 
     bronze_id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(index=True)
@@ -57,15 +49,7 @@ class ScratchApiSnapshot(Base):
 
 class ScratchHtmlSnapshot(Base):
     __tablename__ = "html_snapshots"
-    __table_args__ = (
-        UniqueConstraint(
-            "source",
-            "source_url",
-            "created_at",
-            name="uq_scratch_html_snapshots_natural_key",
-        ),
-        {"schema": SCRATCH_SCHEMA},
-    )
+    __table_args__ = {"schema": SCRATCH_SCHEMA}
 
     bronze_id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(index=True)

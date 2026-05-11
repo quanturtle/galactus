@@ -62,8 +62,6 @@ class BaseScraper:
     """
 
     bronze_model: ClassVar[type[Base]]
-    conflict_columns: ClassVar[tuple[str, ...]] = ("source", "source_url", "created_at")
-    exclude_columns: ClassVar[tuple[str, ...]] = ("bronze_id", "created_at")
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -183,12 +181,7 @@ class BaseScraper:
         if self._should_persist(url):
             record = self.build_snapshot(url, response)
             try:
-                await self.db.insert(
-                    record,
-                    model=self.bronze_model,
-                    conflict_columns=self.conflict_columns,
-                    exclude_columns=self.exclude_columns,
-                )
+                await self.db.insert(record, model=self.bronze_model)
             except DatabaseError as exc:
                 raise ScraperError(f"{self.source}: persisting {url} failed") from exc
             state["fetched"] += 1

@@ -27,9 +27,6 @@ class BaseParser(ABC):
 
     bronze_model: ClassVar[type[Base]]
     silver_model: ClassVar[type[Base]]
-    # server-managed silver column dropped from row dicts; bronze_id and created_at
-    # are stamped from the bronze row in run(), so they stay in the dict
-    exclude_columns: ClassVar[tuple[str, ...]] = ("id",)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -77,7 +74,7 @@ class BaseParser(ABC):
 
     # 4. parse_records — decode + build every bronze row, stamping its provenance onto each entity
     def parse_records(self, records: list[Base]) -> list[Base]:
-        silver: list[Base] = []
+        parsed_records: list[Base] = []
         for record in records:
             # decode + build silver; surface subclass failures as ParserError
             try:
@@ -94,19 +91,15 @@ class BaseParser(ABC):
             for entity in entities:
                 entity.bronze_id = record.bronze_id
                 entity.created_at = record.created_at
-            silver.extend(entities)
-        return silver
+            parsed_records.extend(entities)
+        return parsed_records
 
     async def run(self) -> None:
         """Lifecycle: load all unparsed bronze for source; decode + build silver; insert."""
         try:
             records = await self.load_records()
-            silver = self.parse_records(records)
-            await self.db.insert(
-                silver,
-                model=self.silver_model,
-                exclude_columns=self.exclude_columns,
-            )
+            parsed_records = self.parse_records(records)
+            await self.db.insert(parsed_records, model=self.silver_model)
         except DatabaseError as exc:
             raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
         return
