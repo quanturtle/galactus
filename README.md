@@ -124,7 +124,7 @@ Infra adapters raise `HttpError` / `DatabaseError`; plugin code catches those an
 Each stage adapts a domain object to the `PipelineStage` contract: it opens the infra context managers it needs (`HttpClient` + `Database` for extract, `Database` for transform), `importlib`-resolves the configured plugin module (`galactus.extract.scrapers.<dotted.path>`), instantiates it, awaits its `run()`, and re-raises failures as the stage's error type. `LoadStage` is a no-op stub today — the constructor matches the others so the wiring in `cli.py` stays uniform.
 
 ### `extract/base_scraper.py` — `BaseScraper` · *Template Method*
-`run()` fixes the whole crawl lifecycle: seed a frontier deque from `seed_urls()`, spawn-and-drain up to `config.concurrency` in-flight fetch tasks, fetch each URL, persist it if it passes the `scrape_url_patterns` gate (`build_snapshot()` → `Database.insert(... ON CONFLICT DO NOTHING)`), canonicalize the page's outbound links (drop `mailto:`/`tel:`/`javascript:`/fragments/asset extensions, restrict to allowed hosts, sort query params, strip fragments) and enqueue the ones that pass the same-host + scrape/ignore-pattern gate, then self-throttle by `request_delay`. `max_pages` is a **soft** cap (in-flight tasks may overshoot by up to `concurrency-1`). Concrete scrapers override at most three hooks — `seed_urls()`, `next_urls()`, `build_snapshot()` — and **must** set the `bronze_model` class var; all three hooks ship with working defaults keyed on `bronze_model` (`HtmlSnapshot` ⇒ scrape every `<a href>` and store cleaned HTML; `ApiSnapshot` ⇒ store the raw body). There is no separate `BaseApiScraper` — paginated APIs just override `seed_urls()` / `next_urls()` to walk pages.
+`run()` fixes the whole crawl lifecycle: seed a frontier deque from `seed_urls()`, spawn-and-drain up to `options.concurrency` in-flight fetch tasks, fetch each URL, persist it if it passes the `scrape_url_patterns` gate (`build_snapshot()` → `Database.insert(... ON CONFLICT DO NOTHING)`), canonicalize the page's outbound links (drop `mailto:`/`tel:`/`javascript:`/fragments/asset extensions, restrict to allowed hosts, sort query params, strip fragments) and enqueue the ones that pass the same-host + scrape/ignore-pattern gate, then self-throttle by `request_delay`. `max_pages` is a **soft** cap (in-flight tasks may overshoot by up to `concurrency-1`). Concrete scrapers override at most three hooks — `seed_urls()`, `next_urls()`, `build_snapshot()` — and **must** set the `bronze_model` class var; all three hooks ship with working defaults keyed on `bronze_model` (`HtmlSnapshot` ⇒ scrape every `<a href>` and store cleaned HTML; `ApiSnapshot` ⇒ store the raw body). There is no separate `BaseApiScraper` — paginated APIs just override `seed_urls()` / `next_urls()` to walk pages.
 
 ### `transform/base_parser.py` — `BaseParser` · *Template Method*
 `run()` fixes the bronze→silver lifecycle: `load_records()` (all bronze rows for the source that no silver row references yet) → `parse_records()` (`decode()` each, then `build_entities()`, then stamp every entity with the bronze row's `bronze_id` and `created_at` as provenance) → `Database.insert()` of all silver rows in one transaction. Concrete parsers **must** set `bronze_model` / `silver_model` and implement `build_entities()`; `decode()` (BeautifulSoup for `HtmlSnapshot`, `json.loads` for `ApiSnapshot`) and `_make_html_parser()` ship with defaults. No dedup here — one silver row per `(entity, bronze sighting)`; collapsing across sightings is the gold layer's job. Re-runs are safe: a bronze row counts as parsed once *any* silver row carries its `(source, bronze_id)`, so `load_unparsed()` skips it next time.
@@ -309,12 +309,9 @@ A *source* is one website or API within a domain (`noticias` or `supermercados`)
 
 ```yaml
 name: <source>
-bronze_table: bronze.html_snapshots          # or bronze.api_snapshots
-silver_table: silver.products                # or silver.articles
 log_level: INFO
 extract:
   scraper: supermercados.<source>            # dotted path under galactus.extract.scrapers
-  concurrency: 1
   timeout_seconds: 30.0
   user_agent: "Mozilla/5.0 ..."
   options:
@@ -326,6 +323,7 @@ extract:
       - /cart
     page_size: 0                             # > 0 for paginated APIs
     max_pages: 10                            # soft cap; 0 = unbounded
+    concurrency: 1                           # in-flight fetch tasks
 transform:
   parser: supermercados.<source>             # dotted path under galactus.transform.parsers
   options: {}                                # blocklist_tags / blocklist_attributes if needed

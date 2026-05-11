@@ -39,7 +39,7 @@ class TransformStage(PipelineStage):
             parser: BaseParser = mod.Parser(
                 source=self.config.name,
                 db=db,
-                config=tr,
+                options=tr.options,
             )
 
             # run the parser lifecycle

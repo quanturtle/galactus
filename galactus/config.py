@@ -8,7 +8,7 @@ from galactus.core.errors import ConfigError
 
 
 class ExtractOptions(BaseModel):
-    """Scraper-strategy options: URLs, patterns, pagination, and per-task pacing."""
+    """Scraper-strategy options: URLs, patterns, pagination, concurrency, and per-task pacing."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -18,6 +18,7 @@ class ExtractOptions(BaseModel):
     ignore_url_patterns: list[str] = []
     page_size: int = 0
     max_pages: int = 0
+    concurrency: int = Field(default=1, ge=1)
     request_delay: float = 0.0
 
 
@@ -27,7 +28,6 @@ class ExtractConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     scraper: str
-    concurrency: int = Field(default=1, ge=1)
     timeout_seconds: float = 30.0
     user_agent: str = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -63,8 +63,6 @@ class PipelineConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
-    bronze_table: str
-    silver_table: str
     database_url: str
     log_level: str = "INFO"
     db_pool_size: int = Field(default=5, ge=1)

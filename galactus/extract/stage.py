@@ -37,7 +37,7 @@ class ExtractStage(PipelineStage):
                 headers={"User-Agent": ext.user_agent},
                 retries=ext.retries,
                 retry_delay=ext.retry_delay,
-                concurrency=ext.concurrency,
+                concurrency=ext.options.concurrency,
                 pool_size=ext.http_pool_size,
             ) as client,
             Database(
@@ -51,7 +51,7 @@ class ExtractStage(PipelineStage):
                 source=self.config.name,
                 http=client,
                 db=db,
-                config=ext,
+                options=ext.options,
             )
 
             # run the scraper lifecycle
