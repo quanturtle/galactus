@@ -31,9 +31,11 @@ class HttpClient:
     """HTTP client used by scrapers. Backed by httpx.AsyncClient internally.
 
     Concerns: opening connections, applying headers/params, retrying transient
-    failures. URL construction (scheme, normalization) is the scraper's job.
-    All terminal failures surface as HttpError; the scraper re-raises them as
-    ScraperError with source/URL context.
+    failures. URL construction (scheme, normalization) is the scraper's job, and
+    so is fetch concurrency — BaseScraper.run caps how many requests are in flight,
+    so this client carries no semaphore of its own (pool_size still bounds the
+    underlying socket pool). All terminal failures surface as HttpError; the
+    scraper re-raises them as ScraperError with source/URL context.
     """
 
     def __init__(
@@ -43,7 +45,6 @@ class HttpClient:
         follow_redirects: bool = True,
         retries: int = 3,
         retry_delay: float = 2.0,
-        concurrency: int = 1,
         pool_size: int = 100,
     ) -> None:
         self.client = httpx.AsyncClient(
@@ -57,7 +58,6 @@ class HttpClient:
         )
         self.retries = retries
         self.retry_delay = retry_delay
-        self._semaphore = asyncio.Semaphore(concurrency)
 
     async def get(
         self,
@@ -72,8 +72,7 @@ class HttpClient:
         # failures (connect errors, timeouts, mid-stream server disconnects)
         for attempt in range(self.retries + 1):
             try:
-                async with self._semaphore:
-                    response = await self.client.get(url, headers=headers, params=params)
+                response = await self.client.get(url, headers=headers, params=params)
                 last_response = response
                 if response.status_code < 500:
                     return HttpResponse(response)
