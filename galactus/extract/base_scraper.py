@@ -40,9 +40,8 @@ SKIP_EXTENSIONS = frozenset(
 )
 SKIP_PREFIXES = ("mailto:", "tel:", "javascript:", "data:", "whatsapp:", "#")
 
-# temporary: skip persisting full HTML bodies while testing scrapers. flip back to True
-# to restore real snapshots.
-STORE_HTML_BODY = False
+# persist full HTML bodies in bronze.html_snapshots (the parsers need them).
+STORE_HTML_BODY = True
 
 
 def query_int(url: str, name: str, default: int) -> int:
