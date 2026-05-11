@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 
-from galactus.config import ExtractConfig
+from galactus.config import ExtractOptions
 from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
@@ -73,13 +73,12 @@ class BaseScraper:
         source: str,
         http: HttpClient,
         db: Database,
-        config: ExtractConfig,
+        options: ExtractOptions,
     ) -> None:
         self.source = source
         self.http = http
         self.db = db
-        self.config = config
-        self.options = config.options
+        self.options = options
         self._allowed_hosts: frozenset[str] = frozenset(
             {urlparse(self.options.base_url).netloc, *self.options.allowed_hosts}
         )
@@ -200,14 +199,14 @@ class BaseScraper:
         return
 
     async def run(self) -> None:
-        """Lifecycle: BFS over seed_urls(); fetch up to self.config.concurrency URLs in parallel."""
+        """Lifecycle: BFS over seed_urls(); fetch up to self.options.concurrency URLs in parallel."""
         # init frontier
         initial = self.seed_urls()
         frontier: deque[str] = deque(initial)
         seen: set[str] = set(initial)
         state: dict[str, int] = {"fetched": 0}
         max_pages = self.options.max_pages
-        concurrency = self.config.concurrency
+        concurrency = self.options.concurrency
         in_flight: set[asyncio.Task[None]] = set()
 
         # spawn-and-drain loop: top up to `concurrency` tasks; drain as they finish.

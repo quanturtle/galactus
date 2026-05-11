@@ -2,7 +2,6 @@ name: casarica
 log_level: INFO
 extract:
   scraper: supermercados.casarica
-  concurrency: 1
   timeout_seconds: 30.0
   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   options:
@@ -17,6 +16,7 @@ extract:
       - /register
     page_size: 0
     max_pages: 10
+    concurrency: 1
 transform:
   parser: supermercados.casarica
   options: {}

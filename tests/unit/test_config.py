@@ -39,7 +39,7 @@ def test_default_concurrency_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config = load_config(ABC_COLOR_YAML)
     if config.extract is not None:
-        assert config.extract.concurrency >= 1
+        assert config.extract.options.concurrency >= 1
 
 
 def test_explicit_concurrency_parses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -51,15 +51,14 @@ def test_explicit_concurrency_parses(monkeypatch: pytest.MonkeyPatch, tmp_path: 
                 "name": "alpha",
                 "extract": {
                     "scraper": "pkg.alpha",
-                    "concurrency": 7,
-                    "options": {"base_url": "https://example.com"},
+                    "options": {"base_url": "https://example.com", "concurrency": 7},
                 },
             }
         )
     )
     config = load_config(config_file)
     assert config.extract is not None
-    assert config.extract.concurrency == 7
+    assert config.extract.options.concurrency == 7
 
 
 def test_concurrency_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -71,8 +70,7 @@ def test_concurrency_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
                 "name": "src",
                 "extract": {
                     "scraper": "pkg.x",
-                    "concurrency": 0,
-                    "options": {"base_url": "https://example.com"},
+                    "options": {"base_url": "https://example.com", "concurrency": 0},
                 },
             }
         )
