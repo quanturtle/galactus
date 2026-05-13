@@ -38,7 +38,6 @@ SKIP_EXTENSIONS = frozenset(
         ".atom",
     }
 )
-SKIP_PREFIXES = ("mailto:", "tel:", "javascript:", "data:", "whatsapp:", "#")
 
 # persist full HTML bodies in bronze.html_snapshots (the parsers need them).
 STORE_HTML_BODY = True
@@ -47,27 +46,37 @@ STORE_HTML_BODY = True
 class BaseScraper:
     """Template Method base for all scrapers.
 
-    run() owns the BFS over seeds(): fetch a URL, persist it if eligible, then
-    expand the frontier with the page's next URLs.
+    run() owns the BFS over seed_urls(): fetch a URL, persist it if eligible,
+    then expand the frontier with the page's next URLs.
 
     Public hook surface — override in subclasses, every one ships a default:
-        snapshot_model   class var; default HtmlSnapshot. API scrapers set to
-                         ApiSnapshot. The discriminator the default
-                         build_snapshot() routes on.
-        seeds()          initial frontier; default [options.base_url].
-        should_persist() gate before building a snapshot; default = scrape-pattern
-                         check (allow-all when no patterns).
-        build_snapshot() construct the bronze record; default routes on
-                         snapshot_model. Override entirely for a custom shape.
-        build_url(url)   build a request URL. Default returns it as-is.
-                         Paginating scrapers override (possibly with a different
-                         signature, e.g. build_url(self, page: int)) and call
-                         their own build_url from seeds() / next_urls().
-        next_urls()      URLs to add to the frontier after visiting one;
-                         default scrapes every <a href> (HTML BFS).
+        snapshot_model      class var; default HtmlSnapshot. API scrapers set
+                            to ApiSnapshot. The discriminator process_response
+                            routes on when building the bronze record.
+        seed_urls()         initial frontier; default [options.base_url].
+        fetch(url)          one HTTP GET; default delegates to self.http.get
+                            and wraps HttpError as ScraperError.
+        extract_links(url, response) raw candidate links from a response;
+                            default scrapes every <a href>, joined with url.
+        build_url(*args, **kwargs) raw link -> request URL. Default identity
+                            (returns args[0]). Paginated-API subclasses
+                            re-shape the signature (e.g. build_url(page),
+                            build_url(section, offset)) and call their own
+                            build_url from seed_urls() / get_next_urls().
+        get_next_urls(url, response) URLs to add to the frontier after
+                            visiting one; default = [build_url(l) for l in
+                            extract_links(url, response)].
+        should_enqueue(url) gate before adding a URL to the frontier;
+                            default = same host, skip media extensions,
+                            and no ignore_url_patterns match.
+        should_persist(url) gate before persisting a fetched URL;
+                            default = scrape-pattern check (allow-all when
+                            no patterns).
+        process_response(url, response) per-response orchestration; default
+                            persists the snapshot if should_persist(url) and
+                            returns get_next_urls(url, response).
 
-    Private internals — not extension points: _fetch, _should_enqueue,
-    _crawl_url, run.
+    Private internals — not extension points: run.
     """
 
     snapshot_model: ClassVar[type[Base]] = HtmlSnapshot
@@ -96,53 +105,22 @@ class BaseScraper:
         ]
 
     # hook: frontier seeds — the first URLs to crawl
-    def seeds(self) -> list[str]:
+    def seed_urls(self) -> list[str]:
         return [self.options.base_url]
 
-    # hook: gate persistence — return True to snapshot this url, False to skip
-    def should_persist(self, url: str) -> bool:
-        if not self._scrape_patterns:
-            return True
-        return any(p.search(url) for p in self._scrape_patterns)
+    # hook: one HTTP GET. Default delegates to the injected HttpClient and
+    # converts low-level HttpError into a domain ScraperError.
+    async def fetch(self, url: str) -> HttpResponse:
+        try:
+            return await self.http.get(url)
+        except HttpError as exc:
+            raise ScraperError(f"{self.source}: GET {url} failed") from exc
 
-    # hook: build a request URL. Default returns it as-is. Concrete scrapers
-    # override to build URLs relative to options.base_url (and may take a
-    # different signature, e.g. (self, page: int)) — they call their own
-    # build_url from inside seeds() / next_urls().
-    def build_url(self, url: str) -> str:
-        return url
-
-    # hook: construct the bronze record for one response. Default routes on
-    # snapshot_model; override entirely for a fully custom record shape.
-    def build_snapshot(self, url: str, response: HttpResponse) -> Base:
-        model = self.snapshot_model
-        if model is HtmlSnapshot:
-            return HtmlSnapshot(
-                source=self.source,
-                source_url=url,
-                status_code=response.status_code,
-                content_type=response.headers.get("content-type", ""),
-                response_headers=dict(response.headers),
-                html=compress(response.text) if STORE_HTML_BODY else b"",
-                is_diff=False,
-            )
-        if model is ApiSnapshot:
-            return ApiSnapshot(
-                source=self.source,
-                source_url=url,
-                request_url=url,
-                request_params={},
-                status_code=response.status_code,
-                response_headers=dict(response.headers),
-                body=compress(response.text),
-            )
-        raise ScraperError(f"{self.source}: no snapshot builder for {model}")
-
-    # hook: a fetched page -> raw candidate URLs (absolute or relative) to crawl
-    # next. No filtering here — build_url canonicalizes and _should_enqueue
-    # gates before enqueueing. Default scrapes every <a href>; a JSON body
-    # yields none.
-    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
+    # hook: a fetched page -> raw candidate links (absolute or relative).
+    # No filtering here — get_next_urls canonicalizes via build_url and
+    # should_enqueue gates before enqueueing. Default scrapes every
+    # <a href>; a JSON body yields none.
+    def extract_links(self, url: str, response: HttpResponse) -> list[str]:
         soup = BeautifulSoup(response.text, "html.parser")
         out: list[str] = []
         for a in soup.find_all("a", href=True):
@@ -152,84 +130,108 @@ class BaseScraper:
             out.append(urljoin(url, href))
         return out
 
-    async def _fetch(self, url: str) -> HttpResponse:
-        try:
-            return await self.http.get(url)
-        except HttpError as exc:
-            raise ScraperError(f"{self.source}: GET {url} failed") from exc
+    # hook: raw link -> request URL. Default returns the first positional
+    # arg as-is. Paginating subclasses override with a different signature
+    # (e.g. build_url(self, page: int)) and call their own build_url from
+    # inside seed_urls() / get_next_urls().
+    def build_url(self, *args, **kwargs) -> str:
+        return args[0]
 
-    def _should_enqueue(self, url: str) -> bool:
-        if url.startswith(SKIP_PREFIXES):
-            return False
+    # hook: URLs to add to the frontier after visiting one. Default composes
+    # extract_links + build_url; override to plug in pagination state.
+    def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
+        return [self.build_url(link) for link in self.extract_links(url, response)]
+
+    # hook: gate before adding a URL to the frontier. Default = same host,
+    # skip media extensions, no ignore_url_patterns match. Naturally rejects
+    # mailto:/tel:/javascript: (their urlparse netloc is empty).
+    def should_enqueue(self, url: str) -> bool:
         parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
         if parsed.netloc not in self._allowed_hosts:
             return False
         if Path(parsed.path).suffix.lower() in SKIP_EXTENSIONS:
             return False
-        if self._scrape_patterns and not any(p.search(url) for p in self._scrape_patterns):
-            return False
         return not any(p.search(url) for p in self._ignore_patterns)
 
-    async def _crawl_url(
-        self,
-        url: str,
-        frontier: deque[str],
-        seen: set[str],
-        state: dict[str, int],
-    ) -> None:
-        """Fetch one URL, persist it if eligible, then expand the frontier with the page's next URLs."""
-        response = await self._fetch(url)
+    # hook: gate persistence — return True to snapshot this url, False to skip
+    def should_persist(self, url: str) -> bool:
+        if not self._scrape_patterns:
+            return True
+        return any(p.search(url) for p in self._scrape_patterns)
 
-        # build and persist snapshot if eligible
+    # hook: per-response orchestration. Persist the snapshot if eligible,
+    # then return the next URLs to enqueue. Override entirely for a fully
+    # custom record shape or to gate persistence on response content.
+    async def process_response(self, url: str, response: HttpResponse) -> list[str]:
+        # persist if eligible — route snapshot construction on snapshot_model
         if self.should_persist(url):
-            record = self.build_snapshot(url, response)
+            model = self.snapshot_model
+            if model is HtmlSnapshot:
+                record: Base = HtmlSnapshot(
+                    source=self.source,
+                    source_url=url,
+                    status_code=response.status_code,
+                    content_type=response.headers.get("content-type", ""),
+                    response_headers=dict(response.headers),
+                    html=compress(response.text) if STORE_HTML_BODY else b"",
+                    is_diff=False,
+                )
+            elif model is ApiSnapshot:
+                record = ApiSnapshot(
+                    source=self.source,
+                    source_url=url,
+                    request_url=url,
+                    request_params={},
+                    status_code=response.status_code,
+                    response_headers=dict(response.headers),
+                    body=compress(response.text),
+                )
+            else:
+                raise ScraperError(f"{self.source}: no snapshot builder for {model}")
+
             try:
                 await self.db.insert(record, model=type(record))
             except DatabaseError as exc:
                 raise ScraperError(f"{self.source}: persisting {url} failed") from exc
-            state["fetched"] += 1
 
-        # expand — sync, race-free w.r.t. other tasks; do not introduce awaits here
-        for href in self.next_urls(url, response):
-            if href in seen or not self._should_enqueue(href):
-                continue
-            seen.add(href)
-            frontier.append(href)
-
-        # per-task pacing: each in-flight task self-throttles after its fetch
-        if self.options.request_delay:
-            await asyncio.sleep(self.options.request_delay)
-        return
+        return self.get_next_urls(url, response)
 
     async def run(self) -> None:
-        """Lifecycle: BFS over seeds(); fetch up to self.concurrency URLs in parallel."""
+        """Lifecycle: BFS over seed_urls(); fetch up to self.concurrency URLs in parallel."""
         # init frontier
-        initial = self.seeds()
-        frontier: deque[str] = deque(initial)
-        seen: set[str] = set(initial)
-        state: dict[str, int] = {"fetched": 0}
+        frontier: deque[str] = deque(self.seed_urls())
+        seen: set[str] = set(frontier)
+        fetched = 0
         max_pages = self.options.max_pages
-        concurrency = self.concurrency
-        in_flight: set[asyncio.Task[None]] = set()
+        in_flight: dict[asyncio.Task[HttpResponse], str] = {}
 
-        # spawn-and-drain loop: top up to `concurrency` tasks; drain as they finish.
-        # max_pages is a soft cap: once spawning stops, up to concurrency-1 in-flight
-        # tasks may still persist, so the final count can overshoot by that much.
+        # spawn-and-drain loop: top up to `concurrency` fetch tasks; drain as
+        # they finish — for each completed fetch, run process_response, fold
+        # its next URLs into the frontier, then self-throttle. max_pages is a
+        # soft cap on dispatched tasks: once spawning stops, up to
+        # concurrency-1 in-flight tasks may still complete after the cap.
         while frontier or in_flight:
             while (
                 frontier
-                and len(in_flight) < concurrency
-                and (max_pages == 0 or state["fetched"] < max_pages)
+                and len(in_flight) < self.concurrency
+                and (max_pages == 0 or fetched < max_pages)
             ):
                 url = frontier.popleft()
-                in_flight.add(asyncio.create_task(self._crawl_url(url, frontier, seen, state)))
+                in_flight[asyncio.create_task(self.fetch(url))] = url
 
             if not in_flight:
                 break
 
-            done, in_flight = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait(in_flight.keys(), return_when=asyncio.FIRST_COMPLETED)
             for task in done:
-                await task
+                url = in_flight.pop(task)
+                response = await task
+                for href in await self.process_response(url, response):
+                    if href in seen or not self.should_enqueue(href):
+                        continue
+                    seen.add(href)
+                    frontier.append(href)
+                if self.options.request_delay:
+                    await asyncio.sleep(self.options.request_delay)
+                fetched += 1
         return

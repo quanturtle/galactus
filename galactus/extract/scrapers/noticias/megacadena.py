@@ -13,9 +13,9 @@ class Scraper(BaseScraper):
     def build_url(self, page: int) -> str:
         return f"{self.options.base_url}?{urlencode({'page': str(page)})}"
 
-    def seeds(self) -> list[str]:
+    def seed_urls(self) -> list[str]:
         return [self.build_url(1)]
 
-    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
+    def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
         total = int(response.headers.get("x-wp-totalpages", "1"))
         return [self.build_url(page) for page in range(2, total + 1)]

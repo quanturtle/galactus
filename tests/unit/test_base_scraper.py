@@ -70,46 +70,41 @@ def make_scraper(scraper_cls: type[BaseScraper], **option_overrides: Any) -> Bas
     )
 
 
-def test_default_snapshot_is_html() -> None:
+def test_seed_urls_default_is_base_url() -> None:
     scraper = make_scraper(BaseScraper)
-    resp = FakeResponse(text="<html></html>", headers={"content-type": "text/html"})
-    record = scraper.build_snapshot("https://example.test/x", resp)  # type: ignore[arg-type]
-    assert isinstance(record, HtmlSnapshot)
-    assert record.source_url == "https://example.test/x"
-
-
-def test_api_snapshot_routing() -> None:
-    class ApiScraper(BaseScraper):
-        snapshot_model = ApiSnapshot
-
-    scraper = make_scraper(ApiScraper)
-    resp = FakeResponse(text='{"ok":true}', headers={"content-type": "application/json"})
-    record = scraper.build_snapshot("https://example.test/api", resp)  # type: ignore[arg-type]
-    assert isinstance(record, ApiSnapshot)
-    assert record.source_url == "https://example.test/api"
-
-
-def test_unknown_snapshot_model_raises_scrapererror() -> None:
-    class OtherRecord(Base):
-        __abstract__ = True
-
-    class WeirdScraper(BaseScraper):
-        snapshot_model = OtherRecord
-
-    scraper = make_scraper(WeirdScraper)
-    resp = FakeResponse()
-    with pytest.raises(ScraperError):
-        scraper.build_snapshot("https://example.test/x", resp)  # type: ignore[arg-type]
-
-
-def test_seeds_default_is_base_url() -> None:
-    scraper = make_scraper(BaseScraper)
-    assert scraper.seeds() == ["https://example.test"]
+    assert scraper.seed_urls() == ["https://example.test"]
 
 
 def test_build_url_default_is_identity() -> None:
     scraper = make_scraper(BaseScraper)
     assert scraper.build_url("https://example.test/a?b=2") == "https://example.test/a?b=2"
+
+
+def test_extract_links_default_returns_a_hrefs_joined_with_url() -> None:
+    scraper = make_scraper(BaseScraper)
+    html = (
+        "<html><body>"
+        '<a href="/about">about</a>'
+        '<a href="https://example.test/contact">contact</a>'
+        '<a href="">empty</a>'
+        "<p>no link</p>"
+        "</body></html>"
+    )
+    response = FakeResponse(text=html)
+    links = scraper.extract_links("https://example.test/index", response)  # type: ignore[arg-type]
+    assert links == [
+        "https://example.test/about",
+        "https://example.test/contact",
+    ]
+
+
+def test_should_enqueue_rejects_foreign_hosts_and_ignore_patterns() -> None:
+    scraper = make_scraper(BaseScraper, ignore_url_patterns=[r"/private/"])
+    assert scraper.should_enqueue("https://example.test/article/1")
+    assert not scraper.should_enqueue("https://other.test/article/1")
+    assert not scraper.should_enqueue("mailto:a@b.com")
+    assert not scraper.should_enqueue("https://example.test/private/secret")
+    assert not scraper.should_enqueue("https://example.test/file.pdf")
 
 
 def test_should_persist_gates_on_patterns() -> None:
@@ -121,12 +116,44 @@ def test_should_persist_gates_on_patterns() -> None:
     assert not gated.should_persist("https://example.test/about")
 
 
-def test_should_enqueue_rejects_skip_prefixes_and_other_schemes() -> None:
+def test_process_response_inserts_html_snapshot_for_html_default() -> None:
     scraper = make_scraper(BaseScraper)
-    assert not scraper._should_enqueue("mailto:a@b.com")
-    assert not scraper._should_enqueue("javascript:void(0)")
-    assert not scraper._should_enqueue("ftp://example.test/x")
-    assert scraper._should_enqueue("https://example.test/x")
+    db: FakeDatabase = scraper.db  # type: ignore[assignment]
+    response = FakeResponse(text="<html></html>", headers={"content-type": "text/html"})
+    asyncio.run(scraper.process_response("https://example.test/x", response))  # type: ignore[arg-type]
+    assert len(db.inserts) == 1
+    record, model = db.inserts[0]
+    assert model is HtmlSnapshot
+    assert isinstance(record, HtmlSnapshot)
+    assert record.source_url == "https://example.test/x"
+
+
+def test_process_response_inserts_api_snapshot_when_snapshot_model_is_api() -> None:
+    class ApiScraper(BaseScraper):
+        snapshot_model = ApiSnapshot
+
+    scraper = make_scraper(ApiScraper)
+    db: FakeDatabase = scraper.db  # type: ignore[assignment]
+    response = FakeResponse(text='{"ok":true}', headers={"content-type": "application/json"})
+    asyncio.run(scraper.process_response("https://example.test/api", response))  # type: ignore[arg-type]
+    assert len(db.inserts) == 1
+    record, model = db.inserts[0]
+    assert model is ApiSnapshot
+    assert isinstance(record, ApiSnapshot)
+    assert record.source_url == "https://example.test/api"
+
+
+def test_process_response_raises_scrapererror_for_unknown_snapshot_model() -> None:
+    class OtherRecord(Base):
+        __abstract__ = True
+
+    class WeirdScraper(BaseScraper):
+        snapshot_model = OtherRecord
+
+    scraper = make_scraper(WeirdScraper)
+    response = FakeResponse()
+    with pytest.raises(ScraperError):
+        asyncio.run(scraper.process_response("https://example.test/x", response))  # type: ignore[arg-type]
 
 
 def test_run_persists_and_expands_html_bfs() -> None:

@@ -43,7 +43,7 @@ galactus_v2/
 │   │   ├── pipeline.py             # Pipeline + PipelineStage(ABC) — the composition root
 │   │   └── errors.py               # exception hierarchy: PipelineError -> Extract/Transform/Load/Infra/Config
 │   ├── extract/
-│   │   ├── base_scraper.py         # BaseScraper — async BFS crawler, three overridable hooks
+│   │   ├── base_scraper.py         # BaseScraper — async BFS crawler with a small public hook surface
 │   │   ├── stage.py                # ExtractStage — adapts a Scraper into a PipelineStage
 │   │   └── scrapers/{noticias,supermercados}/<source>.py   # per-source Scraper subclasses
 │   ├── transform/
@@ -124,13 +124,13 @@ Infra adapters raise `HttpError` / `DatabaseError`; plugin code catches those an
 Each stage adapts a domain object to the `PipelineStage` contract: it opens the infra context managers it needs (`HttpClient` + `Database` for extract, `Database` for transform), `importlib`-resolves the configured plugin module (`galactus.extract.scrapers.<dotted.path>`), instantiates it, awaits its `run()`, and re-raises failures as the stage's error type. `LoadStage` is a no-op stub today — the constructor matches the others so the wiring in `cli.py` stays uniform.
 
 ### `extract/base_scraper.py` — `BaseScraper` · *Template Method*
-`run()` fixes the whole crawl lifecycle: seed a frontier deque from `seed_urls()`, spawn-and-drain up to `concurrency` in-flight fetch tasks (the only place that bounds fetch concurrency), fetch each URL, persist it if it passes the `scrape_url_patterns` gate (`build_snapshot()` → `Database.insert(... ON CONFLICT DO NOTHING)`), canonicalize the page's outbound links (drop `mailto:`/`tel:`/`javascript:`/fragments/asset extensions, restrict to allowed hosts, sort query params, strip fragments) and enqueue the ones that pass the same-host + scrape/ignore-pattern gate, then self-throttle by `request_delay`. `max_pages` is a **soft** cap (in-flight tasks may overshoot by up to `concurrency-1`). Concrete scrapers override at most three hooks — `seed_urls()`, `next_urls()`, `build_snapshot()` — and **must** set the `bronze_model` class var; all three hooks ship with working defaults keyed on `bronze_model` (`HtmlSnapshot` ⇒ scrape every `<a href>` and store cleaned HTML; `ApiSnapshot` ⇒ store the raw body). There is no separate `BaseApiScraper` — paginated APIs just override `seed_urls()` / `next_urls()` to walk pages.
+`run()` fixes the whole crawl lifecycle: seed a frontier deque from `seed_urls()`, spawn-and-drain up to `concurrency` in-flight `fetch()` tasks (the only place that bounds fetch concurrency), and for each completed fetch run `process_response()` — which persists the snapshot if it passes the `should_persist()` gate (record shape routed on the `snapshot_model` class var → `Database.insert(... ON CONFLICT DO NOTHING)`) and returns `get_next_urls()` to fold into the frontier through `should_enqueue()` (same-host, drop asset extensions, no `ignore_url_patterns` match) — then self-throttle by `request_delay`. `max_pages` is a **soft** cap on dispatched tasks (in-flight tasks may overshoot by up to `concurrency-1`). The public hook surface is small and orthogonal — `seed_urls`, `fetch`, `extract_links`, `build_url`, `get_next_urls`, `should_enqueue`, `should_persist`, `process_response` — and all ship with working defaults keyed on `snapshot_model` (`HtmlSnapshot` ⇒ scrape every `<a href>` and store cleaned HTML; `ApiSnapshot` ⇒ store the raw body). There is no separate `BaseApiScraper` — paginated APIs override `seed_urls()` / `get_next_urls()` and define their own `build_url(...)` with a pagination signature (`build_url(page)`, `build_url(offset)`, …), called from inside their own seed/next-url methods.
 
 ### `transform/base_parser.py` — `BaseParser` · *Template Method*
 `run()` fixes the bronze→silver lifecycle: `load_records()` (all bronze rows for the source that no silver row references yet) → `parse_records()` (`decode()` each, then `build_entities()`, then stamp every entity with the bronze row's `bronze_id` and `created_at` as provenance) → `Database.insert()` of all silver rows in one transaction. Concrete parsers **must** set `bronze_model` / `silver_model` and implement `build_entities()`; `decode()` (BeautifulSoup for `HtmlSnapshot`, `json.loads` for `ApiSnapshot`) and `_make_html_parser()` ship with defaults. No dedup here — one silver row per `(entity, bronze sighting)`; collapsing across sightings is the gold layer's job. Re-runs are safe: a bronze row counts as parsed once *any* silver row carries its `(source, bronze_id)`, so `load_unparsed()` skips it next time.
 
 ### `extract/scrapers/<domain>/<source>.py`, `transform/parsers/<domain>/<source>.py` · *Strategy / plugin*
-Each module exports a single `Scraper` (or `Parser`) class subclassing the template-method base. The plugin is selected by **dotted path in the YAML** — `extract.scraper: noticias.lanacion` resolves to `galactus.extract.scrapers.noticias.lanacion.Scraper`. There is no registry; the CLI just imports the path and checks the class is there. Most HTML sources are one-liners (`bronze_model = HtmlSnapshot`); API sources override `seed_urls()` / `next_urls()` (e.g. `noticias/lanacion.py` walks an Arc Publishing feed by offset; `noticias/abc_color.py` walks twelve sections, each paginated). Parser `build_entities()` bodies are currently stubs (`raise NotImplementedError`) — the parsing logic is in progress.
+Each module exports a single `Scraper` (or `Parser`) class subclassing the template-method base. The plugin is selected by **dotted path in the YAML** — `extract.scraper: noticias.lanacion` resolves to `galactus.extract.scrapers.noticias.lanacion.Scraper`. There is no registry; the CLI just imports the path and checks the class is there. Most HTML sources are one-liners (`snapshot_model = HtmlSnapshot`); API sources override `seed_urls()` / `get_next_urls()` and define their own paginating `build_url(...)` (e.g. `noticias/lanacion.py` walks an Arc Publishing feed by offset; `noticias/abc_color.py` walks twelve sections, each paginated). Parser `build_entities()` bodies are currently stubs (`raise NotImplementedError`) — the parsing logic is in progress.
 
 ### `infra/http.py` — `HttpClient` / `HttpResponse` · *Adapter + Retry*
 `HttpClient` wraps `httpx.AsyncClient` (connection-pool `Limits`, `follow_redirects=True`); fetch concurrency is `BaseScraper.run`'s job, not this client's. `get()` returns any response with status `< 500`, retries `5xx` and transient transport errors (connect errors, timeouts, mid-stream disconnects) up to `retries` times with `retry_delay` backoff, and raises `HttpError` once exhausted. `HttpResponse` exposes only `status_code` / `headers` / `content` / `text` / `json()` — scrapers never touch `httpx` directly.
@@ -175,7 +175,7 @@ Registers the psycopg3 dialect (so `DATABASE_URL` stays a plain `postgresql://` 
 ```mermaid
 flowchart LR
     SRC[("website / API")] -->|"Scraper.run() — BFS / paginated fetch"| EX[extract]
-    EX -->|"build_snapshot, insert ON CONFLICT DO NOTHING"| BR{{"bronze.html_snapshots<br/>bronze.api_snapshots<br/>(raw captures, natural key source+url+created_at)"}}
+    EX -->|"process_response, insert ON CONFLICT DO NOTHING"| BR{{"bronze.html_snapshots<br/>bronze.api_snapshots<br/>(raw captures, natural key source+url+created_at)"}}
     BR -->|"load_unparsed → decode → build_entities()"| TR[transform]
     TR -->|"insert, stamped with (source, bronze_id, created_at)"| SV{{"silver.articles<br/>silver.products<br/>(normalized entities + provenance)"}}
     SV -.->|"aggregate / dedup across sightings — TBD"| LD[load]
@@ -186,7 +186,7 @@ Each source follows the **bronze/silver** medallion shape: capture raw bytes fir
 
 | Domain & source kind | bronze model | silver model | extract behavior |
 |---|---|---|---|
-| **noticias** — API sources (`lanacion`, `abc_color`, `hoy`, `latribuna`, `megacadena`) | `ApiSnapshot` | `Article` | paginated JSON feeds; pagination via `seed_urls()` / `next_urls()` overrides |
+| **noticias** — API sources (`lanacion`, `abc_color`, `hoy`, `latribuna`, `megacadena`) | `ApiSnapshot` | `Article` | paginated JSON feeds; pagination via `seed_urls()` / `get_next_urls()` overrides |
 | **noticias** — HTML sources (`ultimahora`, `npy`, `elnacional`) | `HtmlSnapshot` | `Article` | same-domain BFS, cleaned + zlib-compressed HTML |
 | **supermercados** — API sources (`biggie`, `grutter`, `stock`) | `ApiSnapshot` | `Product` | paginated JSON product catalogs |
 | **supermercados** — HTML sources (`superseis`, `arete`, `casarica`) | `HtmlSnapshot` | `Product` | same-domain BFS over `/product/`-style URLs |
@@ -195,7 +195,7 @@ Design decisions worth knowing:
 - **One silver row per (entity, bronze sighting).** Silver does no deduplication; collapsing repeated sightings of the same article/product is reserved for the gold layer (not yet built).
 - **Provenance is `(source, bronze_id)`** on every silver row, plus the bronze snapshot's `created_at`.
 - **Re-runs are idempotent.** Re-scraping skips duplicate bronze rows via the natural-key `ON CONFLICT DO NOTHING`; re-transforming skips bronze rows already referenced by silver.
-- **HTML diff versioning is deferred.** `html_snapshots.is_diff` exists but is always `False` today — every fetch stores full (cleaned) HTML. (And `STORE_HTML_BODY` in `base_scraper.py` is currently `False` while scrapers are being shaken out — flip it back to `True` to store real bodies.)
+- **HTML diff versioning is deferred.** `html_snapshots.is_diff` exists but is always `False` today — every fetch stores full (cleaned) HTML.
 - **Scheduling and run identity live outside the pipeline.** The CLI takes no `--run-id`; Airflow's metadata DB owns the run ledger.
 
 ## Scrapers & parsers
@@ -204,12 +204,15 @@ Design decisions worth knowing:
 classDiagram
     class BaseScraper {
         <<Template Method>>
-        +ClassVar bronze_model
-        +ClassVar conflict_columns
-        +ClassVar exclude_columns
+        +ClassVar snapshot_model
         +seed_urls() list~str~
-        +next_urls(url, response) list~str~
-        +build_snapshot(url, response) Base
+        +fetch(url) HttpResponse
+        +extract_links(url, response) list~str~
+        +build_url(*args, **kwargs) str
+        +get_next_urls(url, response) list~str~
+        +should_enqueue(url) bool
+        +should_persist(url) bool
+        +process_response(url, response) list~str~
         +run()
     }
     class BaseParser {
@@ -221,10 +224,10 @@ classDiagram
         +build_entities(record, decoded) list~Base~
         +run()
     }
-    BaseScraper <|-- LanacionScraper : overrides seed_urls/next_urls
-    BaseScraper <|-- AbcColorScraper : overrides seed_urls/next_urls
-    BaseScraper <|-- UltimahoraScraper : bronze_model = HtmlSnapshot
-    BaseScraper <|-- SuperseisScraper : bronze_model = HtmlSnapshot
+    BaseScraper <|-- LanacionScraper : overrides seed_urls/get_next_urls/build_url
+    BaseScraper <|-- AbcColorScraper : overrides seed_urls/get_next_urls/build_url
+    BaseScraper <|-- UltimahoraScraper : snapshot_model = HtmlSnapshot
+    BaseScraper <|-- SuperseisScraper : snapshot_model = HtmlSnapshot
     BaseParser <|-- LanacionParser : bronze ApiSnapshot / silver Article
     BaseParser <|-- SuperseisParser : bronze HtmlSnapshot / silver Product
 ```
@@ -239,7 +242,7 @@ from sql.a_bronze.html_snapshots import HtmlSnapshot
 class Scraper(BaseScraper):
     """Scraper for ultimahora — same-domain BFS into bronze.html_snapshots."""
 
-    bronze_model = HtmlSnapshot
+    snapshot_model = HtmlSnapshot
 ```
 
 An API scraper drives pagination through the hooks:
@@ -253,16 +256,19 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 class Scraper(BaseScraper):
     """Scraper for lanacion — Arc Publishing feed, open-ended pagination into bronze.api_snapshots."""
 
-    bronze_model = ApiSnapshot
+    snapshot_model = ApiSnapshot
+
+    def build_url(self, offset: int) -> str:
+        return f"{self.options.base_url}?offset={offset}&size={self.options.page_size}"
 
     def seed_urls(self) -> list[str]:
-        return [self._build_url(offset=0)]
+        return [self.build_url(0)]
 
-    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
+    def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
         elements = response.json().get("content_elements", [])
         if len(elements) < self.options.page_size:
             return []
-        return [self._build_url(offset=self._offset_of(url) + self.options.page_size)]
+        return [self.build_url(self._offset_of(url) + self.options.page_size)]
 ```
 
 A parser declares its two models and fills in `build_entities()`:
@@ -331,7 +337,7 @@ transform:
 
 ### 2. Scraper — `galactus/extract/scrapers/<domain>/<source>.py`
 
-Export a class **named `Scraper`** (the stage imports that exact name). For an HTML source, set `bronze_model = HtmlSnapshot` and you're done. For an API source, also override `seed_urls()` / `next_urls()` (and optionally `build_snapshot()`). See `scrapers/noticias/lanacion.py` and `scrapers/noticias/abc_color.py`.
+Export a class **named `Scraper`** (the stage imports that exact name). For an HTML source, set `snapshot_model = HtmlSnapshot` and you're done. For an API source, also set `snapshot_model = ApiSnapshot` and override `seed_urls()` / `get_next_urls()` (and typically define your own paginating `build_url(...)`). See `scrapers/noticias/lanacion.py` and `scrapers/noticias/abc_color.py`.
 
 ### 3. Parser — `galactus/transform/parsers/<domain>/<source>.py`
 

@@ -36,10 +36,10 @@ class Scraper(BaseScraper):
         )
         return f"{self.options.base_url}?{urlencode({'query': query})}"
 
-    def seeds(self) -> list[str]:
+    def seed_urls(self) -> list[str]:
         return [self.build_url(section, 0) for section in self.SECTIONS]
 
-    def next_urls(self, url: str, response: HttpResponse) -> list[str]:
+    def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
         page_size = self.options.page_size
         elements = response.json().get("content_elements", [])
         if len(elements) < page_size:
