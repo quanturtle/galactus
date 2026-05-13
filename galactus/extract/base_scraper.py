@@ -161,28 +161,35 @@ class BaseScraper:
 
         # spawn-and-drain: top up to `concurrency` fetches, then drain on FIRST_COMPLETED.
         # max_pages is a hard cap on dispatched fetches — counted at spawn time so no extras slip through.
-        while frontier or in_flight:
-            while (
-                frontier
-                and len(in_flight) < self.concurrency
-                and (max_pages == 0 or dispatched < max_pages)
-            ):
-                url = frontier.popleft()
-                in_flight[asyncio.create_task(self.fetch(url))] = url
-                dispatched += 1
+        try:
+            while frontier or in_flight:
+                while (
+                    frontier
+                    and len(in_flight) < self.concurrency
+                    and (max_pages == 0 or dispatched < max_pages)
+                ):
+                    url = frontier.popleft()
+                    in_flight[asyncio.create_task(self.fetch(url))] = url
+                    dispatched += 1
 
-            if not in_flight:
-                break
+                if not in_flight:
+                    break
 
-            done, _ = await asyncio.wait(in_flight.keys(), return_when=asyncio.FIRST_COMPLETED)
-            for task in done:
-                url = in_flight.pop(task)
-                response = await task
-                for href in await self.process_response(url, response):
-                    if href in seen or not self.should_enqueue(href):
-                        continue
-                    seen.add(href)
-                    frontier.append(href)
-                if self.options.request_delay:
-                    await asyncio.sleep(self.options.request_delay)
+                done, _ = await asyncio.wait(in_flight.keys(), return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    url = in_flight.pop(task)
+                    response = await task
+                    for href in await self.process_response(url, response):
+                        if href in seen or not self.should_enqueue(href):
+                            continue
+                        seen.add(href)
+                        frontier.append(href)
+                    if self.options.request_delay:
+                        await asyncio.sleep(self.options.request_delay)
+        finally:
+            # drain remaining fetches so a mid-run raise doesn't leak tasks to the loop
+            for task in in_flight:
+                task.cancel()
+            if in_flight:
+                await asyncio.gather(*in_flight.keys(), return_exceptions=True)
         return
