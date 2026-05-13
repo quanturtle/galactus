@@ -5,7 +5,7 @@ canned responses inline. Imported on demand by tests that exercise scraper
 hooks without real HTTP or DB.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from galactus.config import ExtractOptions, TransformOptions
@@ -40,7 +40,12 @@ class FakeHttpClient:
         self.responses = responses or {}
         self.calls: list[str] = []
 
-    async def get(self, url: str) -> FakeResponse:
+    async def get(
+        self,
+        url: str,
+        headers: Mapping[str, str] | None = None,
+        params: Mapping[str, Any] | None = None,
+    ) -> FakeResponse:
         self.calls.append(url)
         return self.responses.get(url, FakeResponse(text=""))
 
