@@ -1,8 +1,7 @@
 import json
-from urllib.parse import parse_qs, urlencode, urlparse
 
 from galactus.extract.base_scraper import BaseScraper
-from galactus.infra.http import HttpResponse
+from galactus.infra.http import HttpRequest, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
 
@@ -25,7 +24,7 @@ class Scraper(BaseScraper):
         "/sociedad",
     )
 
-    def build_url(self, section: str, offset: int) -> str:
+    def build_url(self, section: str, offset: int) -> HttpRequest:
         query = json.dumps(
             {
                 "section_id": section,
@@ -34,16 +33,20 @@ class Scraper(BaseScraper):
                 "offset": str(offset),
             }
         )
-        return f"{self.config.base_url}?{urlencode({'query': query})}"
+        return HttpRequest(
+            url=self.config.base_url,
+            headers=dict(self.config.headers),
+            params={**self.config.params, "query": query},
+        )
 
-    def seed_urls(self) -> list[str]:
+    def seed_urls(self) -> list[HttpRequest]:
         return [self.build_url(section, 0) for section in self.SECTIONS]
 
-    def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
+    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
         page_size = self.config.page_size
         elements = response.json().get("content_elements", [])
         if len(elements) < page_size:
             return []
-        blob = json.loads(parse_qs(urlparse(url).query).get("query", ["{}"])[0])
+        blob = json.loads(response.request.params.get("query", "{}"))
         section, offset = blob["section_id"], int(blob.get("offset", "0"))
         return [self.build_url(section, offset + page_size)]

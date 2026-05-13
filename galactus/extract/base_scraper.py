@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from galactus.config import ExtractConfig
 from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.infra.db import Database
-from galactus.infra.http import HttpClient, HttpResponse
+from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
 from galactus.transform.html_parser import compress
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
@@ -71,8 +71,6 @@ class BaseScraper:
     def make_http_client(self) -> HttpClient:
         return HttpClient(
             timeout=self.config.timeout_seconds,
-            headers=self.config.headers,
-            params=self.config.params,
             retries=self.config.retries,
             retry_delay=self.config.retry_delay,
             pool_size=self.config.concurrency,
@@ -86,55 +84,61 @@ class BaseScraper:
             **self.db_extras(),
         )
 
-    def seed_urls(self) -> list[str]:
-        return [self.config.base_url]
+    def seed_urls(self) -> list[HttpRequest]:
+        return [self.build_url(self.config.base_url)]
 
-    async def fetch(self, url: str) -> HttpResponse:
+    async def fetch(self, request: HttpRequest) -> HttpResponse:
         try:
-            return await self.http.get(url)
+            return await self.http.get(request)
         except HttpError as exc:
-            raise ScraperError(f"{self.source}: GET {url} failed") from exc
+            raise ScraperError(f"{self.source}: GET {request.url} failed") from exc
 
     # JSON bodies yield no <a href>, so API subclasses inherit a no-op default.
-    def extract_links(self, url: str, response: HttpResponse) -> list[str]:
+    def extract_links(self, response: HttpResponse) -> list[str]:
         soup = BeautifulSoup(response.text, "html.parser")
         out: list[str] = []
         for a in soup.find_all("a", href=True):
             href = str(a["href"]).strip()
             if not href:
                 continue
-            out.append(urljoin(url, href))
+            out.append(urljoin(response.url, href))
         return out
 
     # *args/**kwargs lets paginating subclasses reshape the signature (e.g. build_url(page)).
-    def build_url(self, *args, **kwargs) -> str:
-        return args[0]
+    # one place per scraper that constructs an HttpRequest — config headers/params attach here.
+    def build_url(self, *args, **kwargs) -> HttpRequest:
+        return HttpRequest(
+            url=args[0],
+            headers=dict(self.config.headers),
+            params=dict(self.config.params),
+        )
 
-    def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        return [self.build_url(link) for link in self.extract_links(url, response)]
+    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+        return [self.build_url(link) for link in self.extract_links(response)]
 
     # empty netloc on mailto:/tel:/javascript: makes them fall through to False.
-    def should_enqueue(self, url: str) -> bool:
-        parsed = urlparse(url)
+    def should_enqueue(self, request: HttpRequest) -> bool:
+        parsed = urlparse(request.url)
         if parsed.netloc not in self.config.allowed_domains:
             return False
         if Path(parsed.path).suffix.lower() in SKIP_EXTENSIONS:
             return False
-        return not any(p.search(url) for p in self.config.ignore_patterns)
+        return not any(p.search(request.url) for p in self.config.ignore_patterns)
 
-    def should_persist(self, url: str) -> bool:
+    def should_persist(self, request: HttpRequest) -> bool:
         if not self.config.scrape_patterns:
             return True
-        return any(p.search(url) for p in self.config.scrape_patterns)
+        return any(p.search(request.url) for p in self.config.scrape_patterns)
 
-    async def process_response(self, url: str, response: HttpResponse) -> list[str]:
+    async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
         # dispatch on snapshot_model — subclasses set ApiSnapshot to swap the bronze record shape.
-        if self.should_persist(url):
+        request = response.request
+        if self.should_persist(request):
             model = self.snapshot_model
             if model is HtmlSnapshot:
                 record: Base = HtmlSnapshot(
                     source=self.source,
-                    source_url=url,
+                    source_url=request.url,
                     status_code=response.status_code,
                     content_type=response.headers.get("content-type", ""),
                     response_headers=dict(response.headers),
@@ -144,9 +148,9 @@ class BaseScraper:
             elif model is ApiSnapshot:
                 record = ApiSnapshot(
                     source=self.source,
-                    source_url=url,
-                    request_url=url,
-                    request_params={},
+                    source_url=request.url,
+                    request_url=request.url,
+                    request_params=request.params,
                     status_code=response.status_code,
                     response_headers=dict(response.headers),
                     body=compress(response.text),
@@ -157,9 +161,9 @@ class BaseScraper:
             try:
                 await self.db.insert(record, model=type(record))
             except DatabaseError as exc:
-                raise ScraperError(f"{self.source}: persisting {url} failed") from exc
+                raise ScraperError(f"{self.source}: persisting {request.url} failed") from exc
 
-        return self.get_next_urls(url, response)
+        return self.get_next_urls(response)
 
     async def run(self) -> None:
         """Lifecycle: open clients; BFS over seed_urls(); fetch up to self.concurrency in parallel."""
@@ -167,11 +171,11 @@ class BaseScraper:
             self.http = http
             self.db = db
 
-            frontier: deque[str] = deque(self.seed_urls())
-            seen: set[str] = set(frontier)
+            frontier: deque[HttpRequest] = deque(self.seed_urls())
+            seen: set[HttpRequest] = set(frontier)
             dispatched = 0
             max_pages = self.config.max_pages
-            in_flight: dict[asyncio.Task[HttpResponse], str] = {}
+            in_flight: set[asyncio.Task[HttpResponse]] = set()
 
             # spawn-and-drain: top up to `concurrency` fetches, then drain on FIRST_COMPLETED.
             # max_pages is a hard cap on dispatched fetches — counted at spawn time so no extras slip through.
@@ -182,22 +186,22 @@ class BaseScraper:
                         and len(in_flight) < self.concurrency
                         and (max_pages == 0 or dispatched < max_pages)
                     ):
-                        url = frontier.popleft()
-                        in_flight[asyncio.create_task(self.fetch(url))] = url
+                        request = frontier.popleft()
+                        in_flight.add(asyncio.create_task(self.fetch(request)))
                         dispatched += 1
 
                     if not in_flight:
                         break
 
-                    done, _ = await asyncio.wait(in_flight.keys(), return_when=asyncio.FIRST_COMPLETED)
+                    done, _ = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
                     for task in done:
-                        url = in_flight.pop(task)
+                        in_flight.discard(task)
                         response = await task
-                        for href in await self.process_response(url, response):
-                            if href in seen or not self.should_enqueue(href):
+                        for next_request in await self.process_response(response):
+                            if next_request in seen or not self.should_enqueue(next_request):
                                 continue
-                            seen.add(href)
-                            frontier.append(href)
+                            seen.add(next_request)
+                            frontier.append(next_request)
                         if self.config.request_delay:
                             await asyncio.sleep(self.config.request_delay)
             finally:
@@ -205,5 +209,5 @@ class BaseScraper:
                 for task in in_flight:
                     task.cancel()
                 if in_flight:
-                    await asyncio.gather(*in_flight.keys(), return_exceptions=True)
+                    await asyncio.gather(*in_flight, return_exceptions=True)
         return

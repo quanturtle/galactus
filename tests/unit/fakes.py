@@ -5,17 +5,31 @@ canned responses inline. Imported on demand by tests that exercise scraper
 hooks without real HTTP or DB.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from typing import Any
 
 from galactus.config import ExtractConfig, TransformConfig
 from galactus.extract.base_scraper import BaseScraper
+from galactus.infra.http import HttpRequest
 from galactus.transform.base_parser import BaseParser
 from sql.base import Base
 
 
-class FakeResponse:
-    """Stand-in for HttpResponse — same duck-typed surface scrapers read."""
+class FakeHttpRequest(HttpRequest):
+    """Test stand-in for HttpRequest — same surface, kept here for naming symmetry
+    with FakeHttpResponse. Inherits HttpRequest's frozen-ish storage and hashing
+    so it interchanges freely with production HttpRequest instances in BFS sets.
+    """
+
+    pass
+
+
+class FakeHttpResponse:
+    """Stand-in for HttpResponse — same duck-typed surface scrapers read.
+
+    Carries a `request` attribute mirroring HttpResponse.request so hooks that
+    read `response.request.params` (Arc Publishing paginators) work unchanged.
+    """
 
     def __init__(
         self,
@@ -23,31 +37,39 @@ class FakeResponse:
         status_code: int = 200,
         headers: dict[str, str] | None = None,
         json_body: Any = None,
+        url: str = "",
+        request: HttpRequest | None = None,
     ) -> None:
         self.text = text
         self.status_code = status_code
         self.headers = headers or {}
         self._json = json_body
+        self.url = url
+        self.request = request if request is not None else FakeHttpRequest(url=url)
 
     def json(self) -> Any:
         return self._json
 
 
 class FakeHttpClient:
-    """Stand-in for HttpClient — returns a canned response per URL."""
+    """Stand-in for HttpClient — returns a canned response per URL.
 
-    def __init__(self, responses: dict[str, FakeResponse] | None = None) -> None:
+    Responses are keyed by request URL. The originating request is stamped onto
+    the returned FakeHttpResponse so process_response and get_next_urls can
+    read it back.
+    """
+
+    def __init__(self, responses: dict[str, FakeHttpResponse] | None = None) -> None:
         self.responses = responses or {}
-        self.calls: list[str] = []
+        self.calls: list[HttpRequest] = []
 
-    async def get(
-        self,
-        url: str,
-        headers: Mapping[str, str] | None = None,
-        params: Mapping[str, Any] | None = None,
-    ) -> FakeResponse:
-        self.calls.append(url)
-        return self.responses.get(url, FakeResponse(text=""))
+    async def get(self, request: HttpRequest) -> FakeHttpResponse:
+        self.calls.append(request)
+        response = self.responses.get(request.url, FakeHttpResponse(text=""))
+        response.request = request
+        if not response.url:
+            response.url = request.url
+        return response
 
     async def __aenter__(self) -> "FakeHttpClient":
         return self
