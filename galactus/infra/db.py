@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from sqlalchemy import insert, select
 from sqlalchemy.dialects import registry
@@ -33,11 +33,13 @@ class Database:
         database_url: str,
         pool_size: int = 5,
         max_overflow: int = 5,
+        **engine_kwargs: Any,
     ) -> None:
         self._engine: AsyncEngine = create_async_engine(
             database_url,
             pool_size=pool_size,
             max_overflow=max_overflow,
+            **engine_kwargs,
         )
         self._sessionmaker = async_sessionmaker(
             self._engine,
