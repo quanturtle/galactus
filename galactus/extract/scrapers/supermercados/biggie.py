@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 
+from galactus.core.errors import ScraperError
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
@@ -18,5 +19,8 @@ class Scraper(BaseScraper):
 
     def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
         page_size = self.options.page_size
-        total = int(response.json().get("count", 0))
+        body = response.json()
+        if "count" not in body:
+            raise ScraperError(f"biggie: missing 'count' in {url}")
+        total = int(body["count"])
         return [self.build_url(skip) for skip in range(page_size, total, page_size)]

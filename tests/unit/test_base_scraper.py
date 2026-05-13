@@ -156,6 +156,35 @@ def test_process_response_raises_scrapererror_for_unknown_snapshot_model() -> No
         asyncio.run(scraper.process_response("https://example.test/x", response))  # type: ignore[arg-type]
 
 
+def test_run_hard_caps_at_max_pages_under_concurrency() -> None:
+    class Scraper(BaseScraper):
+        pass
+
+    options = ExtractOptions(base_url="https://example.test", max_pages=10)
+    # seed fans out to 20 links so the frontier always has more than max_pages to chew on.
+    fanout_html = "<html>" + "".join(
+        f'<a href="/p{i}">p{i}</a>' for i in range(20)
+    ) + "</html>"
+    leaf_html = "<html>leaf</html>"
+    responses: dict[str, FakeResponse] = {"https://example.test": FakeResponse(text=fanout_html)}
+    for i in range(20):
+        responses[f"https://example.test/p{i}"] = FakeResponse(text=leaf_html)
+    http = FakeHttpClient(responses=responses)
+    db = FakeDatabase()
+    scraper = Scraper(
+        source="testsrc",
+        http=http,  # type: ignore[arg-type]
+        db=db,  # type: ignore[arg-type]
+        options=options,
+        concurrency=5,
+    )
+    asyncio.run(scraper.run())
+
+    assert len(http.calls) == 10
+    assert len(db.inserts) == 10
+    return
+
+
 def test_run_persists_and_expands_html_bfs() -> None:
     class Scraper(BaseScraper):
         pass

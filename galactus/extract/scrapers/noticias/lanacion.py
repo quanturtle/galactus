@@ -31,6 +31,6 @@ class Scraper(BaseScraper):
         elements = response.json().get("content_elements", [])
         if len(elements) < page_size:
             return []
-        blob = json.loads(parse_qs(urlparse(url).query).get("query", ["{}"])[0])
-        next_offset = int(blob.get("feedFrom", "0")) + page_size
-        return [self.build_url(next_offset)]
+        blob = json.loads(parse_qs(urlparse(url).query)["query"][0])
+        current = int(blob["feedFrom"])
+        return [self.build_url(current + i * page_size) for i in range(1, self.concurrency + 1)]
