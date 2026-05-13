@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections import deque
 from pathlib import Path
 from typing import Any, ClassVar
@@ -14,6 +15,8 @@ from galactus.transform.html_parser import compress
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
+
+logger = logging.getLogger(__name__)
 
 SKIP_EXTENSIONS = frozenset(
     {
@@ -88,10 +91,8 @@ class BaseScraper:
         return [self.build_url(self.config.base_url)]
 
     async def fetch(self, request: HttpRequest) -> HttpResponse:
-        try:
-            return await self.http.get(request)
-        except HttpError as exc:
-            raise ScraperError(f"{self.source}: GET {request.url} failed") from exc
+        # HttpError propagates so the run loop can skip the failed URL instead of aborting the crawl.
+        return await self.http.get(request)
 
     # JSON bodies yield no <a href>, so API subclasses inherit a no-op default.
     def extract_links(self, response: HttpResponse) -> list[str]:
@@ -178,7 +179,7 @@ class BaseScraper:
             in_flight: set[asyncio.Task[HttpResponse]] = set()
 
             # spawn-and-drain: top up to `concurrency` fetches, then drain on FIRST_COMPLETED.
-            # max_pages is a hard cap on dispatched fetches — counted at spawn time so no extras slip through.
+            # max_pages is a hard cap on dispatched fetches — counted at spawn time so no extras slip through. -1 disables the cap.
             try:
                 while frontier or in_flight:
                     while (
@@ -196,7 +197,11 @@ class BaseScraper:
                     done, _ = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
                     for task in done:
                         in_flight.discard(task)
-                        response = await task
+                        try:
+                            response = await task
+                        except HttpError as exc:
+                            logger.warning("%s: skipping URL after fetch failed: %s", self.source, exc)
+                            continue
                         for next_request in await self.process_response(response):
                             if next_request in seen or not self.should_enqueue(next_request):
                                 continue
