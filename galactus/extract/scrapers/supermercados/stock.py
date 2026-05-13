@@ -1,8 +1,12 @@
+from typing import Any
+
 from galactus.extract.base_scraper import BaseScraper
-from sql.a_bronze.api_snapshots import ApiSnapshot
 
 
 class Scraper(BaseScraper):
-    """Scraper for stock — paginated JSON API into bronze.api_snapshots."""
+    """Scraper for stock — same-domain BFS into bronze.html_snapshots."""
 
-    snapshot_model = ApiSnapshot
+    def http_extras(self) -> dict[str, Any]:
+        # stock.com.py serves TLS 1.2 with DH params that fail Python's default
+        # SECLEVEL=2. Drop to SECLEVEL=1 for the handshake; cert validation stays on.
+        return {"ssl_ciphers": "DEFAULT@SECLEVEL=1"}
