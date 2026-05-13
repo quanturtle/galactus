@@ -10,6 +10,8 @@ class Scraper(BaseScraper):
 
     snapshot_model = ApiSnapshot
     WEBSITE = "lanacionpy"
+    # Arc's feed sits on Elasticsearch; ES rejects feedFrom+feedSize > index.max_result_window (default 10000).
+    MAX_RESULT_WINDOW = 10000
 
     def build_url(self, offset: int) -> HttpRequest:
         query = json.dumps(
@@ -30,6 +32,9 @@ class Scraper(BaseScraper):
         return [self.build_url(0)]
 
     async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
+        # non-200 bodies aren't JSON; bail before .json() crashes the run
+        if response.status_code != 200:
+            return []
         # skip overshoot pages from in-flight fetches past the natural end — don't persist empty bronze rows
         if not response.json().get("content_elements", []):
             return []
@@ -42,4 +47,9 @@ class Scraper(BaseScraper):
             return []
         blob = json.loads(response.request.params["query"])
         current = int(blob["feedFrom"])
-        return [self.build_url(current + i * page_size) for i in range(1, self.concurrency + 1)]
+        # ES caps feedFrom+feedSize at MAX_RESULT_WINDOW; never queue a request that would 400.
+        return [
+            self.build_url(current + i * page_size)
+            for i in range(1, self.concurrency + 1)
+            if current + i * page_size + page_size <= self.MAX_RESULT_WINDOW
+        ]
