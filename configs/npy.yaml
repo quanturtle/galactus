@@ -8,7 +8,6 @@ extract:
   scrape_patterns:
   - npy\.com\.py/noticias/.+/[^/]+-[^/]+-[^/]+-[^/]+
   ignore_patterns: []
-  page_size: 0
   max_pages: -1
   allowed_domains:
   - www.npy.com.py

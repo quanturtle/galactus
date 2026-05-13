@@ -29,7 +29,7 @@ class Scraper(BaseScraper):
             {
                 "section_id": section,
                 "sort": "display_date:desc",
-                "limit": str(self.config.page_size),
+                "limit": self.config.params["limit"],
                 "offset": str(offset),
             }
         )
@@ -43,10 +43,10 @@ class Scraper(BaseScraper):
         return [self.build_url(section, 0) for section in self.SECTIONS]
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        page_size = self.config.page_size
+        limit = int(self.config.params["limit"])
         elements = response.json().get("content_elements", [])
-        if len(elements) < page_size:
+        if len(elements) < limit:
             return []
         blob = json.loads(response.request.params.get("query", "{}"))
         section, offset = blob["section_id"], int(blob.get("offset", "0"))
-        return [self.build_url(section, offset + page_size)]
+        return [self.build_url(section, offset + limit)]

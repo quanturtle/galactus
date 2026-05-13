@@ -249,26 +249,32 @@ An API scraper drives pagination through the hooks:
 
 ```python
 from galactus.extract.base_scraper import BaseScraper
-from galactus.infra.http import HttpResponse
+from galactus.infra.http import HttpRequest, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
 
 class Scraper(BaseScraper):
-    """Scraper for lanacion — Arc Publishing feed, open-ended pagination into bronze.api_snapshots."""
+    """Scraper for example — offset-paginated feed into bronze.api_snapshots."""
 
     snapshot_model = ApiSnapshot
 
-    def build_url(self, offset: int) -> str:
-        return f"{self.options.base_url}?offset={offset}&size={self.options.page_size}"
+    def build_url(self, offset: int) -> HttpRequest:
+        return HttpRequest(
+            url=self.config.base_url,
+            headers=dict(self.config.headers),
+            params={**self.config.params, "offset": str(offset)},
+        )
 
-    def seed_urls(self) -> list[str]:
+    def seed_urls(self) -> list[HttpRequest]:
         return [self.build_url(0)]
 
-    def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
+    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+        size = int(self.config.params["size"])
         elements = response.json().get("content_elements", [])
-        if len(elements) < self.options.page_size:
+        if len(elements) < size:
             return []
-        return [self.build_url(self._offset_of(url) + self.options.page_size)]
+        current = int(response.request.params["offset"])
+        return [self.build_url(current + size)]
 ```
 
 A parser declares its two models and fills in `build_entities()`:
@@ -328,7 +334,8 @@ extract:
     ignore_url_patterns:
       - /login
       - /cart
-    page_size: 0                             # > 0 for paginated APIs
+    params:                                  # paginated APIs read the page size from here
+      per_page: '100'                        #   under the API's native key (per_page, take, size, ...)
     max_pages: 10                            # hard cap on dispatched fetches; -1 = unbounded
 transform:
   parser: supermercados.<source>             # dotted path under galactus.transform.parsers

@@ -20,7 +20,6 @@ extract:
   - /como-comprar
   - -c\d+\.\d+$
   - \?(map|_q|filter)=
-  page_size: 0
   max_pages: -1
   allowed_domains:
   - www.casarica.com.py

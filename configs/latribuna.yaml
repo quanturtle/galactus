@@ -4,10 +4,11 @@ extract:
   scraper: noticias.latribuna
   timeout_seconds: 30.0
   concurrency: 5
+  params:
+    size: '100'
   base_url: https://www.latribuna.com.py/pf/api/v3/content/fetch/story-feed-query
   scrape_patterns: []
   ignore_patterns: []
-  page_size: 100
   max_pages: -1
   allowed_domains:
   - www.latribuna.com.py

@@ -20,9 +20,9 @@ class Scraper(BaseScraper):
         return [self.build_url(0)]
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        page_size = self.config.page_size
+        take = int(self.config.params["take"])
         body = response.json()
         if "count" not in body:
             raise ScraperError(f"biggie: missing 'count' in {response.url}")
         total = int(body["count"])
-        return [self.build_url(skip) for skip in range(page_size, total, page_size)]
+        return [self.build_url(skip) for skip in range(take, total, take)]

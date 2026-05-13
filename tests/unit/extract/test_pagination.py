@@ -25,12 +25,12 @@ def _scraper(
     base_url: str,
     *,
     concurrency: int = 1,
-    page_size: int = 100,
+    params: dict[str, str] | None = None,
 ) -> BaseScraper:
     return make_scraper(
         cls,
         base_url=base_url,
-        page_size=page_size,
+        params=params or {},
         concurrency=concurrency,
     )
 
@@ -75,7 +75,7 @@ BIGGIE_BASE_URL = "https://api.app.biggie.com.py/api/articles"
 
 
 def test_biggie_skip_emits_offsets_when_count_present() -> None:
-    scraper = _scraper(BiggieScraper, BIGGIE_BASE_URL, page_size=100)
+    scraper = _scraper(BiggieScraper, BIGGIE_BASE_URL, params={"take": "100"})
     seed = scraper.seed_urls()[0]
     response = _response_for(seed, json_body={"count": 350})
 
@@ -86,7 +86,7 @@ def test_biggie_skip_emits_offsets_when_count_present() -> None:
 
 
 def test_biggie_skip_raises_when_count_missing() -> None:
-    scraper = _scraper(BiggieScraper, BIGGIE_BASE_URL)
+    scraper = _scraper(BiggieScraper, BIGGIE_BASE_URL, params={"take": "100"})
     seed = scraper.seed_urls()[0]
     response = _response_for(seed, json_body={})
 
@@ -96,7 +96,7 @@ def test_biggie_skip_raises_when_count_missing() -> None:
 
 
 def test_biggie_seed_request_carries_skip_param_not_in_url() -> None:
-    scraper = _scraper(BiggieScraper, BIGGIE_BASE_URL)
+    scraper = _scraper(BiggieScraper, BIGGIE_BASE_URL, params={"take": "100"})
     seed = scraper.seed_urls()[0]
     assert seed.url == BIGGIE_BASE_URL
     assert seed.params["skip"] == "0"
@@ -109,7 +109,9 @@ LANACION_BASE_URL = "https://www.lanacion.com.py/pf/api/v3/content/fetch/content
 
 
 def test_lanacion_emits_concurrency_offsets_on_full_page() -> None:
-    scraper = _scraper(LaNacionScraper, LANACION_BASE_URL, concurrency=5, page_size=100)
+    scraper = _scraper(
+        LaNacionScraper, LANACION_BASE_URL, concurrency=5, params={"feedSize": "100"}
+    )
     seed = scraper.seed_urls()[0]
     response = _response_for(seed, json_body={"content_elements": [{} for _ in range(100)]})
 
@@ -125,7 +127,9 @@ def test_lanacion_emits_concurrency_offsets_on_full_page() -> None:
 
 
 def test_lanacion_empty_on_short_page() -> None:
-    scraper = _scraper(LaNacionScraper, LANACION_BASE_URL, concurrency=5, page_size=100)
+    scraper = _scraper(
+        LaNacionScraper, LANACION_BASE_URL, concurrency=5, params={"feedSize": "100"}
+    )
     seed = scraper.seed_urls()[0]
     response = _response_for(seed, json_body={"content_elements": [{} for _ in range(50)]})
 
@@ -134,7 +138,7 @@ def test_lanacion_empty_on_short_page() -> None:
 
 
 def test_lanacion_raises_on_malformed_seed() -> None:
-    scraper = _scraper(LaNacionScraper, LANACION_BASE_URL)
+    scraper = _scraper(LaNacionScraper, LANACION_BASE_URL, params={"feedSize": "100"})
     # response.request has no `query` param — get_next_urls should fail loudly
     bare_request = FakeHttpRequest(url=LANACION_BASE_URL)
     response = FakeHttpResponse(

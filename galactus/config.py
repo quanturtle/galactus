@@ -41,7 +41,6 @@ class ExtractConfig(BaseModel):
     allowed_domains: frozenset[str] = frozenset()
     scrape_patterns: list[re.Pattern[str]] = Field(default_factory=list)
     ignore_patterns: list[re.Pattern[str]] = Field(default_factory=list)
-    page_size: int = 0
     max_pages: int = Field(default=-1, ge=-1)
     request_delay: float = 0.0
 

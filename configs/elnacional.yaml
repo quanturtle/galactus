@@ -12,7 +12,6 @@ extract:
   - /autor/
   - /multimedia/
   - /galeria/
-  page_size: 0
   max_pages: -1
   allowed_domains:
   - www.elnacional.com.py

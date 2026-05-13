@@ -16,7 +16,7 @@ class Scraper(BaseScraper):
     def build_url(self, offset: int) -> HttpRequest:
         query = json.dumps(
             {
-                "feedSize": str(self.config.page_size),
+                "feedSize": self.config.params["feedSize"],
                 "feedFrom": str(offset),
                 "website": self.WEBSITE,
                 "feedQuery": "type:story",
@@ -41,15 +41,15 @@ class Scraper(BaseScraper):
         return await super().process_response(response)
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        page_size = self.config.page_size
+        feed_size = int(self.config.params["feedSize"])
         elements = response.json().get("content_elements", [])
-        if len(elements) < page_size:
+        if len(elements) < feed_size:
             return []
         blob = json.loads(response.request.params["query"])
         current = int(blob["feedFrom"])
         # ES caps feedFrom+feedSize at MAX_RESULT_WINDOW; never queue a request that would 400.
         return [
-            self.build_url(current + i * page_size)
+            self.build_url(current + i * feed_size)
             for i in range(1, self.concurrency + 1)
-            if current + i * page_size + page_size <= self.MAX_RESULT_WINDOW
+            if current + i * feed_size + feed_size <= self.MAX_RESULT_WINDOW
         ]

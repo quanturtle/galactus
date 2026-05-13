@@ -15,7 +15,7 @@ class Scraper(BaseScraper):
             {
                 "query": "type:story",
                 "offset": offset,
-                "size": self.config.page_size,
+                "size": int(self.config.params["size"]),
             }
         )
         return HttpRequest(
@@ -28,10 +28,10 @@ class Scraper(BaseScraper):
         return [self.build_url(0)]
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        page_size = self.config.page_size
+        size = int(self.config.params["size"])
         elements = response.json().get("content_elements", [])
-        if len(elements) < page_size:
+        if len(elements) < size:
             return []
         blob = json.loads(response.request.params.get("query", "{}"))
-        next_offset = int(blob.get("offset", 0)) + page_size
+        next_offset = int(blob.get("offset", 0)) + size
         return [self.build_url(next_offset)]

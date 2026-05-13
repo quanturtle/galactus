@@ -21,7 +21,6 @@ extract:
   - \?.*brands=
   - \?.*discounts=
   - \?.*page=
-  page_size: 0
   max_pages: -1
   allowed_domains:
   - www.superseis.com.py
