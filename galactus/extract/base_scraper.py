@@ -200,7 +200,9 @@ class BaseScraper:
                         try:
                             response = await task
                         except HttpError as exc:
-                            logger.warning("%s: skipping URL after fetch failed: %s", self.source, exc)
+                            logger.warning(
+                                "%s: skipping URL after fetch failed: %s", self.source, exc
+                            )
                             continue
                         for next_request in await self.process_response(response):
                             if next_request in seen or not self.should_enqueue(next_request):
