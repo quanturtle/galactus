@@ -38,44 +38,22 @@ def test_core_has_no_forbidden_imports() -> None:
     assert not bad, f"core/ has forbidden imports: {bad}"
 
 
+def leaf_modules(package_name: str) -> list[str]:
+    # walk every leaf module under the given package (skip subpackages themselves)
+    package = importlib.import_module(package_name)
+    return [
+        info.name
+        for info in pkgutil.walk_packages(package.__path__, prefix=f"{package_name}.")
+        if not info.ispkg
+    ]
+
+
 def test_plugin_modules_export_strategy_class() -> None:
-    # each plugin module must expose a Scraper or Parser attribute
-    scraper_mods = (
-        "galactus.extract.scrapers.noticias.abc_color",
-        "galactus.extract.scrapers.noticias.elnacional",
-        "galactus.extract.scrapers.noticias.hoy",
-        "galactus.extract.scrapers.noticias.lanacion",
-        "galactus.extract.scrapers.noticias.latribuna",
-        "galactus.extract.scrapers.noticias.megacadena",
-        "galactus.extract.scrapers.noticias.npy",
-        "galactus.extract.scrapers.noticias.ultimahora",
-        "galactus.extract.scrapers.supermercados.arete",
-        "galactus.extract.scrapers.supermercados.biggie",
-        "galactus.extract.scrapers.supermercados.casarica",
-        "galactus.extract.scrapers.supermercados.grutter",
-        "galactus.extract.scrapers.supermercados.stock",
-        "galactus.extract.scrapers.supermercados.superseis",
-    )
-    parser_mods = (
-        "galactus.transform.parsers.noticias.abc_color",
-        "galactus.transform.parsers.noticias.elnacional",
-        "galactus.transform.parsers.noticias.hoy",
-        "galactus.transform.parsers.noticias.lanacion",
-        "galactus.transform.parsers.noticias.latribuna",
-        "galactus.transform.parsers.noticias.megacadena",
-        "galactus.transform.parsers.noticias.npy",
-        "galactus.transform.parsers.noticias.ultimahora",
-        "galactus.transform.parsers.supermercados.arete",
-        "galactus.transform.parsers.supermercados.biggie",
-        "galactus.transform.parsers.supermercados.casarica",
-        "galactus.transform.parsers.supermercados.grutter",
-        "galactus.transform.parsers.supermercados.stock",
-        "galactus.transform.parsers.supermercados.superseis",
-    )
-    for name in scraper_mods:
+    # each leaf plugin module must expose a Scraper or Parser attribute
+    for name in leaf_modules("galactus.extract.scrapers"):
         mod = importlib.import_module(name)
         assert hasattr(mod, "Scraper"), f"{name} missing Scraper"
-    for name in parser_mods:
+    for name in leaf_modules("galactus.transform.parsers"):
         mod = importlib.import_module(name)
         assert hasattr(mod, "Parser"), f"{name} missing Parser"
 
