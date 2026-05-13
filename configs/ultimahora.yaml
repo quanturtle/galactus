@@ -17,7 +17,7 @@ extract:
       - /contacto-uh
       - /codigo-etico
     page_size: 0
-    max_pages: 0
+    max_pages: 10
 transform:
   parser: noticias.ultimahora
   options: {}

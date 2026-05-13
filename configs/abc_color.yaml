@@ -9,7 +9,7 @@ extract:
     scrape_url_patterns: []
     ignore_url_patterns: []
     page_size: 100
-    max_pages: 0
+    max_pages: 10
 transform:
   parser: noticias.abc_color
   options: {}

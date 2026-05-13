@@ -15,7 +15,7 @@ extract:
       - /checkout
       - /register
     page_size: 0
-    max_pages: 0
+    max_pages: 10
 transform:
   parser: supermercados.arete
   options: {}

@@ -10,7 +10,7 @@ extract:
       - "npy\\.com\\.py/noticias/.+/[^/]+-[^/]+-[^/]+-[^/]+"
     ignore_url_patterns: []
     page_size: 0
-    max_pages: 0
+    max_pages: 10
 transform:
   parser: noticias.npy
   options: {}
