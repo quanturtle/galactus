@@ -4,18 +4,18 @@ extract:
   scraper: supermercados.casarica
   timeout_seconds: 30.0
   concurrency: 5
-  options:
-    base_url: https://www.casarica.com.py
-    scrape_url_patterns:
-      - "-p\\d+"
-    ignore_url_patterns:
-      - /login
-      - /cart
-      - /account
-      - /checkout
-      - /register
-    page_size: 0
-    max_pages: 10
+  base_url: https://www.casarica.com.py
+  scrape_patterns:
+  - -p\d+
+  ignore_patterns:
+  - /login
+  - /cart
+  - /account
+  - /checkout
+  - /register
+  page_size: 0
+  max_pages: 10
+  allowed_domains:
+  - www.casarica.com.py
 transform:
   parser: supermercados.casarica
-  options: {}

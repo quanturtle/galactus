@@ -5,14 +5,14 @@ extract:
   timeout_seconds: 30.0
   concurrency: 5
   params:
-    per_page: "100"
-  options:
-    base_url: https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products
-    scrape_url_patterns: []
-    ignore_url_patterns: []
-    page_size: 100
-    max_pages: 10
-    request_delay: 1.0
+    per_page: '100'
+  base_url: https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products
+  scrape_patterns: []
+  ignore_patterns: []
+  page_size: 100
+  max_pages: 10
+  request_delay: 1.0
+  allowed_domains:
+  - grutteronline.casagrutter.com.py
 transform:
   parser: supermercados.grutter
-  options: {}

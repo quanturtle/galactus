@@ -10,7 +10,6 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from galactus.config import ExtractOptions
 from galactus.core.errors import ScraperError
 from galactus.extract.base_scraper import BaseScraper
 from galactus.extract.scrapers.noticias.hoy import Scraper as HoyScraper
@@ -18,7 +17,7 @@ from galactus.extract.scrapers.noticias.lanacion import Scraper as LaNacionScrap
 from galactus.extract.scrapers.noticias.megacadena import Scraper as MegacadenaScraper
 from galactus.extract.scrapers.supermercados.biggie import Scraper as BiggieScraper
 from galactus.extract.scrapers.supermercados.grutter import Scraper as GrutterScraper
-from tests.unit.fakes import FakeDatabase, FakeHttpClient, FakeResponse
+from tests.unit.fakes import FakeResponse, make_scraper
 
 
 def _scraper(
@@ -28,12 +27,10 @@ def _scraper(
     concurrency: int = 1,
     page_size: int = 100,
 ) -> BaseScraper:
-    options = ExtractOptions(base_url=base_url, page_size=page_size)
-    return cls(
-        source="testsrc",
-        http=FakeHttpClient(),  # type: ignore[arg-type]
-        db=FakeDatabase(),  # type: ignore[arg-type]
-        options=options,
+    return make_scraper(
+        cls,
+        base_url=base_url,
+        page_size=page_size,
         concurrency=concurrency,
     )
 

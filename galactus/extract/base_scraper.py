@@ -1,5 +1,4 @@
 import asyncio
-import re
 from collections import deque
 from pathlib import Path
 from typing import Any, ClassVar
@@ -7,7 +6,7 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from galactus.config import ExtractConfig, ExtractOptions
+from galactus.config import ExtractConfig
 from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
@@ -46,41 +45,49 @@ STORE_HTML_BODY = True
 class BaseScraper:
     """Template Method base for all scrapers.
 
-    run() drives a BFS over seed_urls(): fetch, persist if eligible, expand
-    the frontier with each page's next URLs. Subclasses override the hooks
-    below; every hook ships a usable default.
+    run() opens the HTTP client and DB for this run, then drives a BFS over
+    seed_urls(): fetch, persist if eligible, expand the frontier with each
+    page's next URLs. Subclasses override the hooks below; every hook ships
+    a usable default. Per-site transport tweaks (legacy ciphers, custom DB
+    engine kwargs) live on the subclass via http_extras() / db_extras().
     """
 
     snapshot_model: ClassVar[type[Base]] = HtmlSnapshot
-    # extra kwargs forwarded to HttpClient at instantiation — sources that need
-    # site-specific transport tweaks (legacy ciphers, custom verify, ...) override.
-    http_kwargs: ClassVar[dict[str, Any]] = {}
 
-    def __init__(
-        self,
-        source: str,
-        http: HttpClient,
-        db: Database,
-        options: ExtractOptions,
-        concurrency: int,
-    ) -> None:
-        self.source = source
-        self.http = http
-        self.db = db
-        self.options = options
-        self.concurrency = concurrency
-        self._allowed_hosts: frozenset[str] = frozenset(
-            {urlparse(self.options.base_url).netloc, *self.options.allowed_hosts}
+    def __init__(self, config: ExtractConfig) -> None:
+        self.config = config
+        self.source = config.source
+        self.concurrency = config.concurrency
+        # populated in run(), inside the async with
+        self.http: HttpClient
+        self.db: Database
+
+    def http_extras(self) -> dict[str, Any]:
+        return {}
+
+    def db_extras(self) -> dict[str, Any]:
+        return {}
+
+    def make_http_client(self) -> HttpClient:
+        return HttpClient(
+            timeout=self.config.timeout_seconds,
+            headers=self.config.headers,
+            params=self.config.params,
+            retries=self.config.retries,
+            retry_delay=self.config.retry_delay,
+            pool_size=self.config.concurrency,
+            **self.http_extras(),
         )
-        self._scrape_patterns: list[re.Pattern] = [
-            re.compile(p) for p in self.options.scrape_url_patterns
-        ]
-        self._ignore_patterns: list[re.Pattern] = [
-            re.compile(p) for p in self.options.ignore_url_patterns
-        ]
+
+    def make_database(self) -> Database:
+        return Database(
+            database_url=self.config.database_url,
+            pool_size=self.config.db_pool_size,
+            **self.db_extras(),
+        )
 
     def seed_urls(self) -> list[str]:
-        return [self.options.base_url]
+        return [self.config.base_url]
 
     async def fetch(self, url: str) -> HttpResponse:
         try:
@@ -109,16 +116,16 @@ class BaseScraper:
     # empty netloc on mailto:/tel:/javascript: makes them fall through to False.
     def should_enqueue(self, url: str) -> bool:
         parsed = urlparse(url)
-        if parsed.netloc not in self._allowed_hosts:
+        if parsed.netloc not in self.config.allowed_domains:
             return False
         if Path(parsed.path).suffix.lower() in SKIP_EXTENSIONS:
             return False
-        return not any(p.search(url) for p in self._ignore_patterns)
+        return not any(p.search(url) for p in self.config.ignore_patterns)
 
     def should_persist(self, url: str) -> bool:
-        if not self._scrape_patterns:
+        if not self.config.scrape_patterns:
             return True
-        return any(p.search(url) for p in self._scrape_patterns)
+        return any(p.search(url) for p in self.config.scrape_patterns)
 
     async def process_response(self, url: str, response: HttpResponse) -> list[str]:
         # dispatch on snapshot_model — subclasses set ApiSnapshot to swap the bronze record shape.
@@ -155,44 +162,48 @@ class BaseScraper:
         return self.get_next_urls(url, response)
 
     async def run(self) -> None:
-        """Lifecycle: BFS over seed_urls(); fetch up to self.concurrency URLs in parallel."""
-        frontier: deque[str] = deque(self.seed_urls())
-        seen: set[str] = set(frontier)
-        dispatched = 0
-        max_pages = self.options.max_pages
-        in_flight: dict[asyncio.Task[HttpResponse], str] = {}
+        """Lifecycle: open clients; BFS over seed_urls(); fetch up to self.concurrency in parallel."""
+        async with self.make_http_client() as http, self.make_database() as db:
+            self.http = http
+            self.db = db
 
-        # spawn-and-drain: top up to `concurrency` fetches, then drain on FIRST_COMPLETED.
-        # max_pages is a hard cap on dispatched fetches — counted at spawn time so no extras slip through.
-        try:
-            while frontier or in_flight:
-                while (
-                    frontier
-                    and len(in_flight) < self.concurrency
-                    and (max_pages == 0 or dispatched < max_pages)
-                ):
-                    url = frontier.popleft()
-                    in_flight[asyncio.create_task(self.fetch(url))] = url
-                    dispatched += 1
+            frontier: deque[str] = deque(self.seed_urls())
+            seen: set[str] = set(frontier)
+            dispatched = 0
+            max_pages = self.config.max_pages
+            in_flight: dict[asyncio.Task[HttpResponse], str] = {}
 
-                if not in_flight:
-                    break
+            # spawn-and-drain: top up to `concurrency` fetches, then drain on FIRST_COMPLETED.
+            # max_pages is a hard cap on dispatched fetches — counted at spawn time so no extras slip through.
+            try:
+                while frontier or in_flight:
+                    while (
+                        frontier
+                        and len(in_flight) < self.concurrency
+                        and (max_pages == 0 or dispatched < max_pages)
+                    ):
+                        url = frontier.popleft()
+                        in_flight[asyncio.create_task(self.fetch(url))] = url
+                        dispatched += 1
 
-                done, _ = await asyncio.wait(in_flight.keys(), return_when=asyncio.FIRST_COMPLETED)
-                for task in done:
-                    url = in_flight.pop(task)
-                    response = await task
-                    for href in await self.process_response(url, response):
-                        if href in seen or not self.should_enqueue(href):
-                            continue
-                        seen.add(href)
-                        frontier.append(href)
-                    if self.options.request_delay:
-                        await asyncio.sleep(self.options.request_delay)
-        finally:
-            # drain remaining fetches so a mid-run raise doesn't leak tasks to the loop
-            for task in in_flight:
-                task.cancel()
-            if in_flight:
-                await asyncio.gather(*in_flight.keys(), return_exceptions=True)
+                    if not in_flight:
+                        break
+
+                    done, _ = await asyncio.wait(in_flight.keys(), return_when=asyncio.FIRST_COMPLETED)
+                    for task in done:
+                        url = in_flight.pop(task)
+                        response = await task
+                        for href in await self.process_response(url, response):
+                            if href in seen or not self.should_enqueue(href):
+                                continue
+                            seen.add(href)
+                            frontier.append(href)
+                        if self.config.request_delay:
+                            await asyncio.sleep(self.config.request_delay)
+            finally:
+                # drain remaining fetches so a mid-run raise doesn't leak tasks to the loop
+                for task in in_flight:
+                    task.cancel()
+                if in_flight:
+                    await asyncio.gather(*in_flight.keys(), return_exceptions=True)
         return

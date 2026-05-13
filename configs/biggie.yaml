@@ -5,14 +5,14 @@ extract:
   timeout_seconds: 30.0
   concurrency: 5
   params:
-    take: "100"
-  options:
-    base_url: https://api.app.biggie.com.py/api/articles
-    scrape_url_patterns: []
-    ignore_url_patterns: []
-    page_size: 100
-    max_pages: 10
-    request_delay: 0.5
+    take: '100'
+  base_url: https://api.app.biggie.com.py/api/articles
+  scrape_patterns: []
+  ignore_patterns: []
+  page_size: 100
+  max_pages: 10
+  request_delay: 0.5
+  allowed_domains:
+  - api.app.biggie.com.py
 transform:
   parser: supermercados.biggie
-  options: {}

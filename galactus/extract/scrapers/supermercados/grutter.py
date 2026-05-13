@@ -12,7 +12,7 @@ class Scraper(BaseScraper):
     snapshot_model = ApiSnapshot
 
     def build_url(self, page: int) -> str:
-        return f"{self.options.base_url}?{urlencode({'page': str(page)})}"
+        return f"{self.config.base_url}?{urlencode({'page': str(page)})}"
 
     def seed_urls(self) -> list[str]:
         return [self.build_url(1)]

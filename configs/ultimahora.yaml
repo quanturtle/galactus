@@ -4,20 +4,20 @@ extract:
   scraper: noticias.ultimahora
   timeout_seconds: 30.0
   concurrency: 5
-  options:
-    base_url: https://www.ultimahora.com
-    scrape_url_patterns:
-      - "ultimahora\\.com/[^/]+-[^/]+-[^/]+-[^/]+"
-    ignore_url_patterns:
-      - /anuario-
-      - /brand-
-      - /podcast-uh
-      - /editorial-uh
-      - /redaccion-uh
-      - /contacto-uh
-      - /codigo-etico
-    page_size: 0
-    max_pages: 10
+  base_url: https://www.ultimahora.com
+  scrape_patterns:
+  - ultimahora\.com/[^/]+-[^/]+-[^/]+-[^/]+
+  ignore_patterns:
+  - /anuario-
+  - /brand-
+  - /podcast-uh
+  - /editorial-uh
+  - /redaccion-uh
+  - /contacto-uh
+  - /codigo-etico
+  page_size: 0
+  max_pages: 10
+  allowed_domains:
+  - www.ultimahora.com
 transform:
   parser: noticias.ultimahora
-  options: {}

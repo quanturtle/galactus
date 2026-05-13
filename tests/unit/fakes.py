@@ -8,7 +8,7 @@ hooks without real HTTP or DB.
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from galactus.config import ExtractOptions, TransformOptions
+from galactus.config import ExtractConfig, TransformConfig
 from galactus.extract.base_scraper import BaseScraper
 from galactus.transform.base_parser import BaseParser
 from sql.base import Base
@@ -49,6 +49,12 @@ class FakeHttpClient:
         self.calls.append(url)
         return self.responses.get(url, FakeResponse(text=""))
 
+    async def __aenter__(self) -> "FakeHttpClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return
+
 
 class FakeDatabase:
     """Stand-in for Database — records inserts and load_unparsed calls in memory."""
@@ -86,17 +92,51 @@ class FakeDatabase:
             raise self._load_raises
         return list(self._load_unparsed_results)
 
+    async def __aenter__(self) -> "FakeDatabase":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return
+
+
+def make_extract_config(**overrides: Any) -> ExtractConfig:
+    """Construct a minimal ExtractConfig for tests."""
+    base: dict[str, Any] = {
+        "source": "testsrc",
+        "database_url": "placeholder://test",
+        "scraper": "unused",
+        "concurrency": 1,
+        "base_url": "https://example.test",
+        "allowed_domains": frozenset({"example.test"}),
+    }
+    base.update(overrides)
+    return ExtractConfig.model_validate(base)
+
+
+def make_transform_config(**overrides: Any) -> TransformConfig:
+    """Construct a minimal TransformConfig for tests."""
+    base: dict[str, Any] = {
+        "source": "testsrc",
+        "database_url": "placeholder://test",
+        "parser": "unused",
+    }
+    base.update(overrides)
+    return TransformConfig.model_validate(base)
+
 
 def make_scraper(scraper_cls: type[BaseScraper], **option_overrides: Any) -> BaseScraper:
-    """Construct a scraper of the given class with fake http+db and minimal options."""
-    options = ExtractOptions(base_url="https://example.test", **option_overrides)
-    return scraper_cls(
-        source="testsrc",
-        http=FakeHttpClient(),  # type: ignore[arg-type]
-        db=FakeDatabase(),  # type: ignore[arg-type]
-        options=options,
-        concurrency=1,
-    )
+    """Construct a scraper and attach fake http+db as instance attributes.
+
+    Suitable for tests that exercise hooks directly (extract_links,
+    should_enqueue, get_next_urls, process_response). Tests that call
+    scraper.run() should instead use WiredScraper, which routes the fakes
+    through the make_http_client/make_database hooks that run() opens.
+    """
+    config = make_extract_config(**option_overrides)
+    scraper = scraper_cls(config)
+    scraper.http = FakeHttpClient()  # type: ignore[assignment]
+    scraper.db = FakeDatabase()  # type: ignore[assignment]
+    return scraper
 
 
 def make_parser(
@@ -106,10 +146,32 @@ def make_parser(
     db: FakeDatabase | None = None,
     **option_overrides: Any,
 ) -> BaseParser:
-    """Construct a parser of the given class with a fake db and minimal options."""
-    options = TransformOptions(**option_overrides)
-    return parser_cls(
-        source=source,
-        db=db if db is not None else FakeDatabase(),  # type: ignore[arg-type]
-        options=options,
-    )
+    """Construct a parser and attach a fake db as an instance attribute.
+
+    Suitable for tests that exercise hooks directly (decode, build_entities,
+    parse_records). Tests that call parser.run() should instead define a
+    parser subclass that overrides make_database, see WiredScraper for the
+    extract counterpart pattern.
+    """
+    config = make_transform_config(source=source, **option_overrides)
+    parser = parser_cls(config)
+    parser.db = db if db is not None else FakeDatabase()  # type: ignore[assignment]
+    return parser
+
+
+class WiredScraper(BaseScraper):
+    """Test scraper that routes the fake http+db through the make_* hooks.
+
+    Use for tests that exercise BaseScraper.run() end-to-end. Caller sets
+    wired_http and wired_db before constructing, then run() opens them
+    via make_http_client / make_database.
+    """
+
+    wired_http: FakeHttpClient
+    wired_db: FakeDatabase
+
+    def make_http_client(self) -> FakeHttpClient:  # type: ignore[override]
+        return self.wired_http
+
+    def make_database(self) -> FakeDatabase:  # type: ignore[override]
+        return self.wired_db

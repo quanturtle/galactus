@@ -15,13 +15,13 @@ class Scraper(BaseScraper):
     def build_url(self, offset: int) -> str:
         query = json.dumps(
             {
-                "feedSize": str(self.options.page_size),
+                "feedSize": str(self.config.page_size),
                 "feedFrom": str(offset),
                 "website": self.WEBSITE,
                 "feedQuery": "type:story",
             }
         )
-        return f"{self.options.base_url}?{urlencode({'query': query})}"
+        return f"{self.config.base_url}?{urlencode({'query': query})}"
 
     def seed_urls(self) -> list[str]:
         return [self.build_url(0)]
@@ -33,7 +33,7 @@ class Scraper(BaseScraper):
         return await super().process_response(url, response)
 
     def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        page_size = self.options.page_size
+        page_size = self.config.page_size
         elements = response.json().get("content_elements", [])
         if len(elements) < page_size:
             return []

@@ -16,16 +16,16 @@ class Scraper(BaseScraper):
             {
                 "query": "type:story",
                 "offset": offset,
-                "size": self.options.page_size,
+                "size": self.config.page_size,
             }
         )
-        return f"{self.options.base_url}?{urlencode({'query': query})}"
+        return f"{self.config.base_url}?{urlencode({'query': query})}"
 
     def seed_urls(self) -> list[str]:
         return [self.build_url(0)]
 
     def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        page_size = self.options.page_size
+        page_size = self.config.page_size
         elements = response.json().get("content_elements", [])
         if len(elements) < page_size:
             return []

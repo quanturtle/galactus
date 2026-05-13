@@ -2,7 +2,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
-from galactus.config import TransformOptions
+from galactus.config import TransformConfig
 from galactus.core.errors import DatabaseError, ParserError
 from galactus.infra.db import Database
 from galactus.transform.html_parser import HtmlParser, decompress
@@ -34,22 +34,29 @@ class BaseParser(ABC):
             if not hasattr(cls, attr):
                 raise ParserError(f"{cls.__name__} must define class variable '{attr}'")
 
-    def __init__(
-        self,
-        source: str,
-        db: Database,
-        options: TransformOptions,
-    ) -> None:
-        self.source = source
-        self.db = db
-        self.html_parser = self._make_html_parser(options)
+    def __init__(self, config: TransformConfig) -> None:
+        self.config = config
+        self.source = config.source
+        self.html_parser = self._make_html_parser(config)
+        # populated in run(), inside the async with
+        self.db: Database
+
+    def db_extras(self) -> dict[str, Any]:
+        return {}
+
+    def make_database(self) -> Database:
+        return Database(
+            database_url=self.config.database_url,
+            pool_size=self.config.db_pool_size,
+            **self.db_extras(),
+        )
 
     # hook: override to provide code-level blocklist defaults per parser
-    def _make_html_parser(self, options: TransformOptions) -> HtmlParser:
+    def _make_html_parser(self, config: TransformConfig) -> HtmlParser:
         return HtmlParser(
             {
-                "blocklist_tags": options.blocklist_tags,
-                "blocklist_attributes": options.blocklist_attributes,
+                "blocklist_tags": config.blocklist_tags,
+                "blocklist_attributes": config.blocklist_attributes,
             }
         )
 
@@ -93,11 +100,13 @@ class BaseParser(ABC):
         return parsed_records
 
     async def run(self) -> None:
-        """Lifecycle: load all unparsed bronze for source; decode + build silver; insert."""
-        try:
-            records = await self.load_records()
-            parsed_records = self.parse_records(records)
-            await self.db.insert(parsed_records, model=self.silver_model)
-        except DatabaseError as exc:
-            raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
+        """Lifecycle: open db; load all unparsed bronze for source; decode + build silver; insert."""
+        async with self.make_database() as db:
+            self.db = db
+            try:
+                records = await self.load_records()
+                parsed_records = self.parse_records(records)
+                await self.db.insert(parsed_records, model=self.silver_model)
+            except DatabaseError as exc:
+                raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
         return

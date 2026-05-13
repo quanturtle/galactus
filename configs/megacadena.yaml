@@ -5,14 +5,14 @@ extract:
   timeout_seconds: 30.0
   concurrency: 5
   params:
-    per_page: "100"
-    _embed: "true"
-  options:
-    base_url: https://megacadena.com.py/wp-json/wp/v2/posts
-    scrape_url_patterns: []
-    ignore_url_patterns: []
-    page_size: 100
-    max_pages: 10
+    per_page: '100'
+    _embed: 'true'
+  base_url: https://megacadena.com.py/wp-json/wp/v2/posts
+  scrape_patterns: []
+  ignore_patterns: []
+  page_size: 100
+  max_pages: 10
+  allowed_domains:
+  - megacadena.com.py
 transform:
   parser: noticias.megacadena
-  options: {}

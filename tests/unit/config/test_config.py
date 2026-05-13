@@ -35,11 +35,11 @@ def test_each_extract_source_has_plugin(monkeypatch: pytest.MonkeyPatch) -> None
             assert config.transform.parser
 
 
-def test_default_concurrency_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_concurrency_is_at_least_one(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config = load_config(ABC_COLOR_YAML)
-    if config.extract is not None:
-        assert config.extract.concurrency >= 1
+    assert config.extract is not None
+    assert config.extract.concurrency >= 1
 
 
 def test_explicit_concurrency_parses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -52,7 +52,7 @@ def test_explicit_concurrency_parses(monkeypatch: pytest.MonkeyPatch, tmp_path: 
                 "extract": {
                     "scraper": "pkg.alpha",
                     "concurrency": 7,
-                    "options": {"base_url": "https://example.com"},
+                    "base_url": "https://example.com",
                 },
             }
         )
@@ -72,7 +72,7 @@ def test_concurrency_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
                 "extract": {
                     "scraper": "pkg.x",
                     "concurrency": 0,
-                    "options": {"base_url": "https://example.com"},
+                    "base_url": "https://example.com",
                 },
             }
         )
@@ -104,7 +104,7 @@ def test_extract_http_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
                 "name": "alpha",
                 "extract": {
                     "scraper": "pkg.x",
-                    "options": {"base_url": "https://example.com"},
+                    "base_url": "https://example.com",
                 },
             }
         )
@@ -117,10 +117,9 @@ def test_extract_http_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
     assert config.extract.params == {}
-    assert config.extract.http_pool_size == 100
 
 
-def test_pool_size_defaults_and_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_db_pool_size_trickles_to_extract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "demo.yaml"
     config_file.write_text(
@@ -130,8 +129,10 @@ def test_pool_size_defaults_and_overrides(monkeypatch: pytest.MonkeyPatch, tmp_p
                 "db_pool_size": 12,
                 "extract": {
                     "scraper": "pkg.x",
-                    "http_pool_size": 25,
-                    "options": {"base_url": "https://example.com"},
+                    "base_url": "https://example.com",
+                },
+                "transform": {
+                    "parser": "pkg.x",
                 },
             }
         )
@@ -139,7 +140,33 @@ def test_pool_size_defaults_and_overrides(monkeypatch: pytest.MonkeyPatch, tmp_p
     config = load_config(config_file)
     assert config.db_pool_size == 12
     assert config.extract is not None
-    assert config.extract.http_pool_size == 25
+    assert config.extract.db_pool_size == 12
+    assert config.transform is not None
+    assert config.transform.db_pool_size == 12
+
+
+def test_source_trickles_from_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
+    config_file = tmp_path / "demo.yaml"
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "name": "alpha",
+                "extract": {
+                    "scraper": "pkg.x",
+                    "base_url": "https://example.com",
+                },
+                "transform": {
+                    "parser": "pkg.x",
+                },
+            }
+        )
+    )
+    config = load_config(config_file)
+    assert config.extract is not None
+    assert config.extract.source == "alpha"
+    assert config.transform is not None
+    assert config.transform.source == "alpha"
 
 
 def test_db_pool_size_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -157,7 +184,7 @@ def test_db_pool_size_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: P
         load_config(config_file)
 
 
-def test_batch_size_in_extract_options_rejected(
+def test_unknown_extract_field_rejected(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
@@ -168,13 +195,37 @@ def test_batch_size_in_extract_options_rejected(
                 "name": "alpha",
                 "extract": {
                     "scraper": "pkg.x",
-                    "options": {
-                        "base_url": "https://example.com",
-                        "batch_size": 20,
-                    },
+                    "base_url": "https://example.com",
+                    "batch_size": 20,
                 },
             }
         )
     )
     with pytest.raises(ConfigError):
         load_config(config_file)
+
+
+def test_scrape_patterns_compiled_at_load(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import re
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
+    config_file = tmp_path / "demo.yaml"
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "name": "alpha",
+                "extract": {
+                    "scraper": "pkg.x",
+                    "base_url": "https://example.com",
+                    "scrape_patterns": [r"/product/\d+"],
+                    "ignore_patterns": [r"/private/"],
+                },
+            }
+        )
+    )
+    config = load_config(config_file)
+    assert config.extract is not None
+    assert len(config.extract.scrape_patterns) == 1
+    assert isinstance(config.extract.scrape_patterns[0], re.Pattern)
+    assert config.extract.scrape_patterns[0].search("/product/123")
+    assert len(config.extract.ignore_patterns) == 1
+    assert isinstance(config.extract.ignore_patterns[0], re.Pattern)

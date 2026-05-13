@@ -13,7 +13,7 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.article import Article
 from sql.base import Base
-from tests.unit.fakes import FakeDatabase, make_parser
+from tests.unit.fakes import FakeDatabase, make_parser, make_transform_config
 
 
 class _StubParser(BaseParser):
@@ -28,6 +28,15 @@ class _StubParser(BaseParser):
                 title="title",
             )
         ]
+
+
+class _WiredStubParser(_StubParser):
+    """_StubParser that routes a pre-set fake db through make_database."""
+
+    wired_db: FakeDatabase
+
+    def make_database(self) -> FakeDatabase:  # type: ignore[override]
+        return self.wired_db
 
 
 def _html_snapshot(html: str, bronze_id: int = 1) -> HtmlSnapshot:
@@ -141,7 +150,8 @@ def test_run_executes_load_then_parse_then_insert() -> None:
         _html_snapshot("<html><p>two</p></html>", bronze_id=2),
     ]
     db = FakeDatabase(load_unparsed_results=records)
-    parser = make_parser(_StubParser, db=db)
+    parser = _WiredStubParser(make_transform_config(source="testsrc"))
+    parser.wired_db = db
 
     asyncio.run(parser.run())
 
@@ -157,7 +167,8 @@ def test_run_wraps_database_error_as_parsererror() -> None:
         load_unparsed_results=[_html_snapshot("<html></html>")],
         insert_raises=db_error,
     )
-    parser = make_parser(_StubParser, db=db)
+    parser = _WiredStubParser(make_transform_config(source="testsrc"))
+    parser.wired_db = db
 
     with pytest.raises(ParserError) as exc_info:
         asyncio.run(parser.run())

@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from galactus.config import TransformOptions
 from galactus.transform.html_parser import compress
 from galactus.transform.parsers.noticias.ultimahora import Parser
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.article import Article
+from tests.unit.fakes import make_parser
 
 ARTICLE_HTML = """
 <!DOCTYPE html>
@@ -54,7 +54,7 @@ def _snapshot(html: str) -> HtmlSnapshot:
 
 
 def _parser() -> Parser:
-    return Parser(source="ultimahora", db=None, options=TransformOptions())
+    return make_parser(Parser, source="ultimahora")
 
 
 def test_build_entities_from_json_ld() -> None:

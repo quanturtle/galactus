@@ -2,11 +2,11 @@ import json
 from datetime import datetime
 from decimal import Decimal
 
-from galactus.config import TransformOptions
 from galactus.transform.html_parser import compress
 from galactus.transform.parsers.supermercados.biggie import Parser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.product import Product
+from tests.unit.fakes import make_parser
 
 RESPONSE = {
     "items": [
@@ -49,7 +49,7 @@ def _snapshot() -> ApiSnapshot:
 
 
 def _parser() -> Parser:
-    return Parser(source="biggie", db=None, options=TransformOptions())
+    return make_parser(Parser, source="biggie")
 
 
 def test_build_entities_maps_items() -> None:

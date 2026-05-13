@@ -12,13 +12,13 @@ class Scraper(BaseScraper):
     snapshot_model = ApiSnapshot
 
     def build_url(self, skip: int) -> str:
-        return f"{self.options.base_url}?{urlencode({'skip': str(skip)})}"
+        return f"{self.config.base_url}?{urlencode({'skip': str(skip)})}"
 
     def seed_urls(self) -> list[str]:
         return [self.build_url(0)]
 
     def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
-        page_size = self.options.page_size
+        page_size = self.config.page_size
         body = response.json()
         if "count" not in body:
             raise ScraperError(f"biggie: missing 'count' in {url}")

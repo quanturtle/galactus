@@ -1,31 +1,28 @@
 import os
+import re
 from pathlib import Path
+from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from galactus.core.errors import ConfigError
 
-
-class ExtractOptions(BaseModel):
-    """Scraper-strategy options: URLs, patterns, pagination, and per-task pacing."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    base_url: str
-    allowed_hosts: list[str] = []
-    scrape_url_patterns: list[str] = []
-    ignore_url_patterns: list[str] = []
-    page_size: int = 0
-    max_pages: int = 0
-    request_delay: float = 0.0
+# parent-to-child config propagation. INHERITED_FIELDS names the values
+# trickled into each child sub-dict listed in INHERITED_CHILDREN; "source"
+# is renamed from the parent's "name", the rest carry their name across.
+INHERITED_FIELDS: tuple[str, ...] = ("source", "database_url", "db_pool_size")
+INHERITED_CHILDREN: tuple[str, ...] = ("extract", "transform")
 
 
 class ExtractConfig(BaseModel):
-    """Extract block: which scraper strategy, HTTP knobs, fetch concurrency, and its options."""
+    """Extract block: scraper plugin, transport knobs, BFS settings, persistence target."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
+    source: str
+    database_url: str
+    db_pool_size: int = Field(default=5, ge=1)
     scraper: str
     timeout_seconds: float = 30.0
     headers: dict[str, str] = Field(
@@ -39,27 +36,39 @@ class ExtractConfig(BaseModel):
     params: dict[str, str] = {}
     retries: int = 3
     retry_delay: float = 2.0
-    http_pool_size: int = Field(default=100, ge=1)
-    concurrency: int = Field(default=1, ge=1)
-    options: ExtractOptions
+    concurrency: int = Field(default=5, ge=1)
+    base_url: str
+    allowed_domains: frozenset[str] = frozenset()
+    scrape_patterns: list[re.Pattern[str]] = Field(default_factory=list)
+    ignore_patterns: list[re.Pattern[str]] = Field(default_factory=list)
+    page_size: int = 0
+    max_pages: int = 0
+    request_delay: float = 0.0
 
-
-class TransformOptions(BaseModel):
-    """Parser-strategy options: HTML cleaning rules."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    blocklist_tags: list[str] = []
-    blocklist_attributes: list[str] = []
+    @model_validator(mode="before")
+    @classmethod
+    def compile_patterns(cls, body: Any) -> Any:
+        """Compile pattern strings from yaml into re.Pattern objects."""
+        if not isinstance(body, dict):
+            return body
+        for key in ("scrape_patterns", "ignore_patterns"):
+            raw = body.get(key)
+            if isinstance(raw, list):
+                body[key] = [re.compile(p) if isinstance(p, str) else p for p in raw]
+        return body
 
 
 class TransformConfig(BaseModel):
-    """Transform block: which parser strategy and its options."""
+    """Transform block: parser plugin and HTML cleaning rules."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    source: str
+    database_url: str
+    db_pool_size: int = Field(default=5, ge=1)
     parser: str
-    options: TransformOptions = Field(default_factory=TransformOptions)
+    blocklist_tags: list[str] = []
+    blocklist_attributes: list[str] = []
 
 
 class PipelineConfig(BaseModel):
@@ -73,6 +82,26 @@ class PipelineConfig(BaseModel):
     db_pool_size: int = Field(default=5, ge=1)
     extract: ExtractConfig | None = None
     transform: TransformConfig | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def trickle_inherited_fields(cls, body: Any) -> Any:
+        """Push parent fields onto each child sub-dict before child validation.
+
+        Maps the parent's `name` to the child's `source` (the only rename), then
+        copies the rest by identity. A child key already set in yaml wins.
+        """
+        if not isinstance(body, dict):
+            return body
+        for child_key in INHERITED_CHILDREN:
+            child = body.get(child_key)
+            if not isinstance(child, dict):
+                continue
+            for parent_name in INHERITED_FIELDS:
+                src_name = "name" if parent_name == "source" else parent_name
+                if parent_name not in child and src_name in body:
+                    child[parent_name] = body[src_name]
+        return body
 
 
 def load_config(path: str | Path) -> PipelineConfig:
