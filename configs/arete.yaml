@@ -6,13 +6,19 @@ extract:
   concurrency: 5
   base_url: https://www.arete.com.py
   scrape_patterns:
-  - -p\d+
+  - -p\d+(?:/|\?|#|$)
   ignore_patterns:
   - /login
   - /cart
   - /account
   - /checkout
   - /register
+  - /ingresar
+  - /contacto
+  - /sucursales
+  - /terminos-y-condiciones
+  - -c\d+\.\d+$
+  - \?(map|_q|filter)=
   page_size: 0
   max_pages: -1
   allowed_domains:
