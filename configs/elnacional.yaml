@@ -6,10 +6,12 @@ extract:
   concurrency: 5
   base_url: https://www.elnacional.com.py
   scrape_patterns:
-  - -n\d+$
+  - -n\d+(?:/|\?|#|$)
   ignore_patterns:
   - /tags/
   - /autor/
+  - /multimedia/
+  - /galeria/
   page_size: 0
   max_pages: -1
   allowed_domains:
