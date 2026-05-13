@@ -79,7 +79,7 @@ def load_config(path: str | Path) -> PipelineConfig:
     """Read a per-source YAML file and return a frozen PipelineConfig.
 
     database_url is injected from the DATABASE_URL env var — it must not
-    appear in the yaml file. Called exactly once at program startup (rule 6).
+    appear in the yaml file. Called exactly once at program startup.
     """
     config_path = Path(path)
     database_url = os.environ.get("DATABASE_URL")
