@@ -1,4 +1,5 @@
 import asyncio
+import ssl
 from collections.abc import Mapping
 from typing import Any
 
@@ -47,7 +48,16 @@ class HttpClient:
         retries: int = 3,
         retry_delay: float = 2.0,
         pool_size: int = 100,
+        **httpx_kwargs: Any,
     ) -> None:
+        # ssl_ciphers (string) builds a default SSLContext with those ciphers and
+        # routes it through `verify` — required for legacy hosts whose DH params
+        # fail Python's default SECLEVEL=2 even though their certs are valid.
+        ciphers = httpx_kwargs.pop("ssl_ciphers", None)
+        if ciphers is not None and "verify" not in httpx_kwargs:
+            ctx = ssl.create_default_context()
+            ctx.set_ciphers(ciphers)
+            httpx_kwargs["verify"] = ctx
         self.client = httpx.AsyncClient(
             timeout=timeout,
             headers=dict(headers) if headers else None,
@@ -57,6 +67,7 @@ class HttpClient:
                 max_connections=pool_size,
                 max_keepalive_connections=pool_size,
             ),
+            **httpx_kwargs,
         )
         self.retries = retries
         self.retry_delay = retry_delay

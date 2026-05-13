@@ -2,12 +2,12 @@ import asyncio
 import re
 from collections import deque
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from galactus.config import ExtractOptions
+from galactus.config import ExtractConfig, ExtractOptions
 from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpResponse
@@ -52,6 +52,9 @@ class BaseScraper:
     """
 
     snapshot_model: ClassVar[type[Base]] = HtmlSnapshot
+    # extra kwargs forwarded to HttpClient at instantiation — sources that need
+    # site-specific transport tweaks (legacy ciphers, custom verify, ...) override.
+    http_kwargs: ClassVar[dict[str, Any]] = {}
 
     def __init__(
         self,
