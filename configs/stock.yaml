@@ -6,9 +6,9 @@ extract:
   concurrency: 5
   base_url: https://www.stock.com.py
   scrape_patterns:
-  - /products/\d+
+  - /products/\d+[^/]*\.aspx(?:\?|#|$)
   ignore_patterns:
-  - /account
+  - /account\.aspx
   - /register
   - /shoppingcart
   - /login
@@ -17,6 +17,10 @@ extract:
   - /NewsArchive
   - /topic/
   - /manufacturer/
+  - /search
+  - /customer/
+  - \?pageindex=
+  - \?idFiltro=
   page_size: 0
   max_pages: -1
   allowed_domains:
