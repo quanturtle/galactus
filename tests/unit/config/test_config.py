@@ -6,7 +6,7 @@ import yaml
 from galactus.config import load_config
 from galactus.core.errors import ConfigError
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 ABC_COLOR_YAML = REPO_ROOT / "configs" / "abc_color.yaml"
 
 
