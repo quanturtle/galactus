@@ -26,6 +26,12 @@ class Scraper(BaseScraper):
     def seed_urls(self) -> list[str]:
         return [self.build_url(0)]
 
+    async def process_response(self, url: str, response: HttpResponse) -> list[str]:
+        # skip overshoot pages from in-flight fetches past the natural end — don't persist empty bronze rows
+        if not response.json().get("content_elements", []):
+            return []
+        return await super().process_response(url, response)
+
     def get_next_urls(self, url: str, response: HttpResponse) -> list[str]:
         page_size = self.options.page_size
         elements = response.json().get("content_elements", [])
