@@ -329,7 +329,7 @@ extract:
       - /login
       - /cart
     page_size: 0                             # > 0 for paginated APIs
-    max_pages: 10                            # soft cap; 0 = unbounded
+    max_pages: 10                            # hard cap on dispatched fetches; -1 = unbounded
 transform:
   parser: supermercados.<source>             # dotted path under galactus.transform.parsers
   options: {}                                # blocklist_tags / blocklist_attributes if needed
