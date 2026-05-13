@@ -6,13 +6,20 @@ extract:
   concurrency: 5
   base_url: https://www.casarica.com.py
   scrape_patterns:
-  - -p\d+
+  - -p\d+(?:/|\?|#|$)
   ignore_patterns:
   - /login
   - /cart
   - /account
   - /checkout
   - /register
+  - /mi-cuenta
+  - /contacto
+  - /sucursales
+  - /preguntas-frecuentes
+  - /como-comprar
+  - -c\d+\.\d+$
+  - \?(map|_q|filter)=
   page_size: 0
   max_pages: -1
   allowed_domains:
