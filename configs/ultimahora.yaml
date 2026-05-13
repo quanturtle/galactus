@@ -16,7 +16,7 @@ extract:
   - /contacto-uh
   - /codigo-etico
   page_size: 0
-  max_pages: 10
+  max_pages: -1
   allowed_domains:
   - www.ultimahora.com
 transform:

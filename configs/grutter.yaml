@@ -10,7 +10,7 @@ extract:
   scrape_patterns: []
   ignore_patterns: []
   page_size: 100
-  max_pages: 10
+  max_pages: -1
   request_delay: 1.0
   allowed_domains:
   - grutteronline.casagrutter.com.py

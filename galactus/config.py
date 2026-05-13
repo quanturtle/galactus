@@ -42,7 +42,7 @@ class ExtractConfig(BaseModel):
     scrape_patterns: list[re.Pattern[str]] = Field(default_factory=list)
     ignore_patterns: list[re.Pattern[str]] = Field(default_factory=list)
     page_size: int = 0
-    max_pages: int = 0
+    max_pages: int = -1
     request_delay: float = 0.0
 
     @model_validator(mode="before")

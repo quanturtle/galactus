@@ -8,7 +8,7 @@ extract:
   scrape_patterns: []
   ignore_patterns: []
   page_size: 100
-  max_pages: 10
+  max_pages: -1
   allowed_domains:
   - www.latribuna.com.py
 transform:

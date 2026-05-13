@@ -184,7 +184,7 @@ class BaseScraper:
                     while (
                         frontier
                         and len(in_flight) < self.concurrency
-                        and (max_pages == 0 or dispatched < max_pages)
+                        and (max_pages == -1 or dispatched < max_pages)
                     ):
                         request = frontier.popleft()
                         in_flight.add(asyncio.create_task(self.fetch(request)))
