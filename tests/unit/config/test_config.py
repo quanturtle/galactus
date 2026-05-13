@@ -184,9 +184,7 @@ def test_db_pool_size_zero_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: P
         load_config(config_file)
 
 
-def test_unknown_extract_field_rejected(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_unknown_extract_field_rejected(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "bad.yaml"
     config_file.write_text(
@@ -207,6 +205,7 @@ def test_unknown_extract_field_rejected(
 
 def test_scrape_patterns_compiled_at_load(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import re
+
     monkeypatch.setenv("DATABASE_URL", "postgresql://x/y")
     config_file = tmp_path / "demo.yaml"
     config_file.write_text(
