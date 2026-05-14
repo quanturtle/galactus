@@ -6,6 +6,8 @@ extract:
   concurrency: 5
   params:
     per_page: '100'
+    orderby: date
+    order: desc
   base_url: https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products
   scrape_patterns: []
   ignore_patterns: []
