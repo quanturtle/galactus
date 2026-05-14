@@ -78,7 +78,10 @@ def test_decode_html_snapshot_returns_beautifulsoup() -> None:
 
 
 def test_decode_api_snapshot_returns_dict() -> None:
-    parser = make_parser(_StubParser)
+    class ApiStubParser(_StubParser):
+        bronze_model = ApiSnapshot
+
+    parser = make_parser(ApiStubParser)
     record = _api_snapshot({"k": 1})
 
     decoded = parser.decode(record)
@@ -86,14 +89,7 @@ def test_decode_api_snapshot_returns_dict() -> None:
     assert decoded == {"k": 1}
 
 
-def test_decode_unknown_record_raises_notimplemented() -> None:
-    parser = make_parser(_StubParser)
-
-    with pytest.raises(NotImplementedError):
-        parser.decode(Article(source="testsrc", source_url="x", title="t"))
-
-
-def test_parse_records_stamps_bronze_provenance() -> None:
+def test_process_record_stamps_bronze_provenance() -> None:
     class MultiEntityParser(_StubParser):
         def build_entities(self, record: Base, decoded: Any) -> list[Base]:
             return [
@@ -105,7 +101,7 @@ def test_parse_records_stamps_bronze_provenance() -> None:
     record = _html_snapshot("<html></html>", bronze_id=42)
     record.created_at = datetime(2026, 3, 14, 9, 0, 0)
 
-    entities = parser.parse_records([record])
+    entities = parser.process_record(record)
 
     assert len(entities) == 2
     for entity in entities:
@@ -113,7 +109,7 @@ def test_parse_records_stamps_bronze_provenance() -> None:
         assert entity.created_at == datetime(2026, 3, 14, 9, 0, 0)
 
 
-def test_parse_records_wraps_subclass_errors_as_parsererror() -> None:
+def test_process_record_wraps_subclass_errors_as_parsererror() -> None:
     class BoomParser(_StubParser):
         def build_entities(self, record: Base, decoded: Any) -> list[Base]:
             raise ValueError("boom")
@@ -122,13 +118,13 @@ def test_parse_records_wraps_subclass_errors_as_parsererror() -> None:
     record = _html_snapshot("<html></html>", bronze_id=7)
 
     with pytest.raises(ParserError) as exc_info:
-        parser.parse_records([record])
+        parser.process_record(record)
 
     assert "7" in str(exc_info.value)
     assert isinstance(exc_info.value.__cause__, ValueError)
 
 
-def test_parse_records_passes_parsererror_through() -> None:
+def test_process_record_passes_parsererror_through() -> None:
     sentinel = ParserError("explicit")
 
     class ExplicitParser(_StubParser):
@@ -139,7 +135,7 @@ def test_parse_records_passes_parsererror_through() -> None:
     record = _html_snapshot("<html></html>")
 
     with pytest.raises(ParserError) as exc_info:
-        parser.parse_records([record])
+        parser.process_record(record)
 
     assert exc_info.value is sentinel
 

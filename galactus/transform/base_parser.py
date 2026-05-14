@@ -16,28 +16,22 @@ class BaseParser(ABC):
 
     run() owns the bronze->silver lifecycle: load the bronze rows for the
     source that no silver row references yet, decode each, build silver
-    entities, insert them all in one transaction. No dedup here — one silver
-    row per (entity, bronze sighting); the gold layer collapses across
-    sightings. A bronze row counts as parsed once any silver row carries its
-    (source, bronze_id), so a re-run skips bronze rows whose silver already
-    committed. Concrete parsers define bronze_model / silver_model and
-    implement build_entities(); decode() and _make_html_parser() ship with
-    working defaults.
+    entities, stamp provenance, insert them all in one transaction. No dedup
+    here — one silver row per (entity, bronze sighting); the gold layer
+    collapses across sightings. A bronze row counts as parsed once any silver
+    row carries its (source, bronze_id), so a re-run skips bronze rows whose
+    silver already committed. Concrete parsers define silver_model and
+    implement build_entities(); bronze_model defaults to HtmlSnapshot and the
+    other hooks ship with working defaults.
     """
 
-    bronze_model: ClassVar[type[Base]]
+    bronze_model: ClassVar[type[Base]] = HtmlSnapshot
     silver_model: ClassVar[type[Base]]
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        for attr in ("bronze_model", "silver_model"):
-            if not hasattr(cls, attr):
-                raise ParserError(f"{cls.__name__} must define class variable '{attr}'")
 
     def __init__(self, config: TransformConfig) -> None:
         self.config = config
         self.source = config.source
-        self.html_parser = self._make_html_parser(config)
+        self.html_parser = self.make_html_parser()
         # populated in run(), inside the async with
         self.db: Database
 
@@ -52,61 +46,61 @@ class BaseParser(ABC):
         )
 
     # hook: override to provide code-level blocklist defaults per parser
-    def _make_html_parser(self, config: TransformConfig) -> HtmlParser:
+    def make_html_parser(self) -> HtmlParser:
         return HtmlParser(
             {
-                "blocklist_tags": config.blocklist_tags,
-                "blocklist_attributes": config.blocklist_attributes,
+                "blocklist_tags": self.config.blocklist_tags,
+                "blocklist_attributes": self.config.blocklist_attributes,
             }
         )
 
-    # 1. load_records — all bronze rows for this source not yet in silver
     async def load_records(self) -> list[Base]:
         return await self.db.load_unparsed(self.bronze_model, self.silver_model, self.source)
 
-    # 2. decode — bronze row -> parsed payload. Default dispatches on the row type:
-    # BeautifulSoup for HtmlSnapshot, dict for ApiSnapshot. Override for a custom bronze model.
+    # dispatch on bronze_model — subclasses set ApiSnapshot to swap the bronze record shape.
     def decode(self, record: Base) -> Any:
-        if isinstance(record, HtmlSnapshot):
+        model = self.bronze_model
+        if model is HtmlSnapshot:
             return self.html_parser.parse(decompress(record.html))
-        if isinstance(record, ApiSnapshot):
+        if model is ApiSnapshot:
             return json.loads(decompress(record.body))
-        raise NotImplementedError(f"no default decode for {type(record).__name__}")
+        raise ParserError(f"{self.source}: no decoder for {model}")
 
-    # 3. build_entities — bronze row + decoded payload -> silver records
     @abstractmethod
     def build_entities(self, record: Base, decoded: Any) -> list[Base]: ...
 
-    # 4. parse_records — decode + build every bronze row, stamping its provenance onto each entity
-    def parse_records(self, records: list[Base]) -> list[Base]:
-        parsed_records: list[Base] = []
-        for record in records:
-            # decode + build silver; surface subclass failures as ParserError
-            try:
-                decoded = self.decode(record)
-                entities = self.build_entities(record, decoded)
-            except ParserError:
-                raise
-            except Exception as exc:
-                raise ParserError(
-                    f"source {self.source!r}: bronze_id {record.bronze_id} decode/build failed"
-                ) from exc
+    def stamp(self, entity: Base, record: Base) -> None:
+        entity.bronze_id = record.bronze_id
+        entity.created_at = record.created_at
+        return
 
-            # stamp bronze provenance: which bronze row this came from, and its snapshot time
-            for entity in entities:
-                entity.bronze_id = record.bronze_id
-                entity.created_at = record.created_at
-            parsed_records.extend(entities)
-        return parsed_records
+    def process_record(self, record: Base) -> list[Base]:
+        # decode + build silver; surface subclass failures as ParserError
+        try:
+            decoded = self.decode(record)
+            entities = self.build_entities(record, decoded)
+        except ParserError:
+            raise
+        except Exception as exc:
+            raise ParserError(
+                f"source {self.source!r}: bronze_id {record.bronze_id} decode/build failed"
+            ) from exc
+
+        # stamp bronze provenance: which bronze row this came from, and its snapshot time
+        for entity in entities:
+            self.stamp(entity, record)
+        return entities
 
     async def run(self) -> None:
-        """Lifecycle: open db; load all unparsed bronze for source; decode + build silver; insert."""
+        """Lifecycle: open db; load unparsed bronze; decode + build + stamp; insert silver."""
         async with self.make_database() as db:
             self.db = db
             try:
                 records = await self.load_records()
-                parsed_records = self.parse_records(records)
-                await self.db.insert(parsed_records, model=self.silver_model)
+                entities: list[Base] = []
+                for record in records:
+                    entities.extend(self.process_record(record))
+                await self.db.insert(entities, model=self.silver_model)
             except DatabaseError as exc:
                 raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
         return
