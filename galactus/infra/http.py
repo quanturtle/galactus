@@ -16,6 +16,8 @@ class HttpRequest:
     dicts on each access, so callers cannot mutate the stored state.
     """
 
+    __slots__ = ("url", "_headers", "_params")
+
     def __init__(
         self,
         url: str,
@@ -52,6 +54,8 @@ class HttpRequest:
 
 class HttpResponse:
     """Adapter exposing the fields scrapers read from an httpx.Response."""
+
+    __slots__ = ("_response", "request", "status_code", "headers")
 
     def __init__(self, response: httpx.Response, request: HttpRequest) -> None:
         self._response = response
