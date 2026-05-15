@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from galactus.transform.base_parser import BaseParser
+from galactus.transform.product_parser import ProductParser
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.product import Product
 from sql.base import Base
@@ -13,7 +14,7 @@ from sql.base import Base
 _PRICE_DIGITS = re.compile(r"[\d.]+")
 
 
-class Parser(BaseParser):
+class Parser(BaseParser, ProductParser):
     """Parses HtmlSnapshots from stock.com.py into Product entities.
 
     Stock is a classic ASP.NET shop; each /products/ page exposes name,
@@ -26,6 +27,28 @@ class Parser(BaseParser):
 
     SITE_BASE = "https://www.stock.com.py"
     CURRENCY = "PYG"
+
+    def extract_source_url(self, item: BeautifulSoup, record: Base) -> str:
+        return record.source_url
+
+    # "Código de Barras:8007150902781" -> "8007150902781"
+    def _parse_sku(self, text: str) -> str | None:
+        _, _, after = text.partition(":")
+        sku = after.strip()
+        return sku or None
+
+    def extract_sku(self, item: BeautifulSoup, record: Base) -> str | None:
+        node = item.select_one("div.sku[itemprop=sku]")
+        return self._parse_sku(node.get_text(strip=True)) if node else None
+
+    # presence guaranteed by build_entities; re-selects to stay self-contained
+    def extract_name(self, item: BeautifulSoup, record: Base) -> str:
+        node = item.select_one("h1.productname")
+        return node.get_text(strip=True) if node else ""
+
+    def extract_brand(self, item: BeautifulSoup, record: Base) -> str | None:
+        node = item.select_one(".manufacturers a")
+        return node.get_text(strip=True) if node else None
 
     # "Gs   195.000" -> Decimal("195000"); "." is the Paraguayan thousands separator
     def _parse_price(self, text: str) -> Decimal | None:
@@ -40,15 +63,24 @@ class Parser(BaseParser):
         except ValueError:
             return None
 
-    # "Código de Barras:8007150902781" -> "8007150902781"
-    def _parse_sku(self, text: str) -> str | None:
-        _, _, after = text.partition(":")
-        sku = after.strip()
-        return sku or None
+    def extract_price(self, item: BeautifulSoup, record: Base) -> Decimal | None:
+        # main variant's lblPriceValue; fall back to first .productPrice on the page
+        node = item.select_one(
+            "span[id*='ctrlProductVariantsInGrid'][id$='lblPriceValue'].productPrice"
+        )
+        if node is None:
+            node = item.select_one("span.productPrice")
+        return self._parse_price(node.get_text(" ", strip=True)) if node else None
+
+    def extract_currency(self, item: BeautifulSoup, record: Base) -> str:
+        return self.CURRENCY
+
+    def extract_unit(self, item: BeautifulSoup, record: Base) -> str | None:
+        return None
 
     # absolutize + dedupe image srcs from the main product slider
-    def _image_urls(self, soup: BeautifulSoup) -> list[str]:
-        slider = soup.select_one("#img-slider .ubislider-inner")
+    def extract_image_urls(self, item: BeautifulSoup, record: Base) -> list[str]:
+        slider = item.select_one("#img-slider .ubislider-inner")
         if slider is None:
             return []
         seen: set[str] = set()
@@ -66,38 +98,8 @@ class Parser(BaseParser):
 
     def build_entities(self, record: Base, decoded: Any) -> list[Base]:
         soup: BeautifulSoup = decoded
-
         # name is the only required field; skip non-product pages outright
         name_node = soup.select_one("h1.productname")
-        if name_node is None:
+        if name_node is None or not name_node.get_text(strip=True):
             return []
-        name = name_node.get_text(strip=True)
-        if not name:
-            return []
-
-        brand_node = soup.select_one(".manufacturers a")
-        brand = brand_node.get_text(strip=True) if brand_node else None
-
-        # price = main variant's lblPriceValue; fall back to first .productPrice on the page
-        price_node = soup.select_one(
-            "span[id*='ctrlProductVariantsInGrid'][id$='lblPriceValue'].productPrice"
-        )
-        if price_node is None:
-            price_node = soup.select_one("span.productPrice")
-        price = self._parse_price(price_node.get_text(" ", strip=True)) if price_node else None
-
-        sku_node = soup.select_one("div.sku[itemprop=sku]")
-        sku = self._parse_sku(sku_node.get_text(strip=True)) if sku_node else None
-
-        return [
-            Product(
-                source=self.source,
-                source_url=record.source_url,
-                name=name,
-                brand=brand,
-                sku=sku,
-                price=price,
-                currency=self.CURRENCY,
-                image_urls=self._image_urls(soup),
-            )
-        ]
+        return [self.build_entity(soup, record)]
