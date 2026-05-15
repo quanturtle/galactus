@@ -55,28 +55,31 @@ class HttpRequest:
 class HttpResponse:
     """Adapter exposing the fields scrapers read from an httpx.Response."""
 
-    __slots__ = ("_response", "request", "status_code", "headers")
+    __slots__ = ("response", "request", "status_code")
 
     def __init__(self, response: httpx.Response, request: HttpRequest) -> None:
-        self._response = response
+        self.response = response
         self.request = request
         self.status_code = response.status_code
-        self.headers: dict[str, str] = dict(response.headers)
 
     @property
     def url(self) -> str:
-        return str(self._response.url)
+        return str(self.response.url)
 
     @property
     def content(self) -> bytes:
-        return self._response.content
+        return self.response.content
 
     @property
     def text(self) -> str:
-        return self._response.text
+        return self.response.text
+
+    @property
+    def headers(self) -> httpx.Headers:
+        return self.response.headers
 
     def json(self) -> Any:
-        return self._response.json()
+        return self.response.json()
 
 
 class HttpClient:
