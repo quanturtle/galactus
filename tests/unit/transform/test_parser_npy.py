@@ -66,8 +66,7 @@ def test_build_entities_extracts_fields() -> None:
         "Tres selecciones oficializan las primeras listas para el Mundial 2026"
     )
     assert article.body == (
-        "Primer párrafo de la nota deportiva.\n\n"
-        "Segundo párrafo con detalle de las convocatorias."
+        "Primer párrafo de la nota deportiva.\n\nSegundo párrafo con detalle de las convocatorias."
     )
     # section comes from the URL
     assert article.section == "Deportes"

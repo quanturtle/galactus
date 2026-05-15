@@ -15,10 +15,7 @@ RESPONSE = [
         "link": "https://www.hoy.com.py/nacionales/articulo-importante",
         "title": {"rendered": "Artículo importante de hoy"},
         "content": {
-            "rendered": (
-                "<p>Primer párrafo del cuerpo.</p>"
-                "<p>Segundo párrafo con detalle.</p>"
-            )
+            "rendered": ("<p>Primer párrafo del cuerpo.</p><p>Segundo párrafo con detalle.</p>")
         },
         "_embedded": {
             "author": [{"id": 1, "name": "Juan Pérez"}, {"id": 2, "name": "María Gómez"}],

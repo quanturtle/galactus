@@ -56,9 +56,7 @@ def test_build_entities_maps_stories() -> None:
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "lanacion"
-    assert article.source_url == (
-        "https://www.lanacion.com.py/politica/2026/04/05/nota-de-prueba/"
-    )
+    assert article.source_url == ("https://www.lanacion.com.py/politica/2026/04/05/nota-de-prueba/")
     assert article.title == "Nota de prueba en La Nación"
     assert article.body == "Cuerpo principal.\n\nCierre."
     assert article.authors == ["Ana Báez"]

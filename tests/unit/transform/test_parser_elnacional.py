@@ -76,9 +76,7 @@ def test_build_entities_from_json_ld() -> None:
     assert article.authors == ["El Nacional"]
     assert article.section == "Política"
     assert article.tags == ["Justicia", "Ministerio Público"]
-    assert article.body == (
-        "Primer párrafo de la nota.\n\nSegundo párrafo, con más detalle."
-    )
+    assert article.body == ("Primer párrafo de la nota.\n\nSegundo párrafo, con más detalle.")
     # hero image first, body image next, the icon filtered out
     assert article.image_urls == [
         "https://elnacional.com.py/img/hero.jpg",

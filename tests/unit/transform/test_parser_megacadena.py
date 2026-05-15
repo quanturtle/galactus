@@ -14,9 +14,7 @@ RESPONSE = [
         "date_gmt": "2026-03-04T12:00:00",
         "link": "https://megacadena.com.py/2026/03/04/nota-de-prueba/",
         "title": {"rendered": "Nota de prueba en Megacadena"},
-        "content": {
-            "rendered": "<p>Cuerpo uno.</p><p>Cuerpo dos.</p>"
-        },
+        "content": {"rendered": "<p>Cuerpo uno.</p><p>Cuerpo dos.</p>"},
         "_embedded": {
             "author": [{"id": 7, "name": "Redacción"}],
             "wp:featuredmedia": [{"source_url": "https://megacadena.com.py/img/cover.jpg"}],

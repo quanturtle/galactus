@@ -20,9 +20,7 @@ RESPONSE = {
                 "sections": [{"name": "Economía"}],
                 "tags": [{"text": "Mercados"}],
             },
-            "content_elements": [
-                {"type": "text", "content": "<p>Resumen de la jornada.</p>"}
-            ],
+            "content_elements": [{"type": "text", "content": "<p>Resumen de la jornada.</p>"}],
         },
         {"type": "story", "headlines": {"basic": ""}},
     ]
