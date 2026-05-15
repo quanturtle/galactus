@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from galactus.transform.base_parser import BaseParser
+from galactus.transform.product_parser import ProductParser
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.product import Product
 from sql.base import Base
@@ -17,7 +18,7 @@ PRICE_PATTERN = re.compile(r"₲\.?\s*([\d.]+)")
 SKU_PATTERN = re.compile(r"C[ÓO]DIGO\s*:\s*(\w+)", re.IGNORECASE)
 
 
-class Parser(BaseParser):
+class Parser(BaseParser, ProductParser):
     """Parses HtmlSnapshots from arete.com.py into Product entities.
 
     arete runs on the Dattamax SaaS platform: no JSON-LD, no OpenGraph,
@@ -35,6 +36,27 @@ class Parser(BaseParser):
     PRODUCT_IMAGE_PATH = "/userfiles/images/productos/{sku}.jpg"
     CURRENCY = "PYG"
 
+    def extract_source_url(self, item: BeautifulSoup, record: Base) -> str:
+        return record.source_url
+
+    # "CÓDIGO: 72000" -> "72000"
+    def _parse_sku(self, text: str) -> str | None:
+        match = SKU_PATTERN.search(text)
+        if not match:
+            return None
+        return match.group(1).strip() or None
+
+    def extract_sku(self, item: BeautifulSoup, record: Base) -> str | None:
+        return self._parse_sku(item.get_text(" ", strip=True))
+
+    # presence guaranteed by build_entities; re-selects to stay self-contained
+    def extract_name(self, item: BeautifulSoup, record: Base) -> str:
+        h1 = item.find("h1")
+        return h1.get_text(" ", strip=True) if h1 else ""
+
+    def extract_brand(self, item: BeautifulSoup, record: Base) -> str | None:
+        return None
+
     # "Gs   195.000" / "₲. 195.000" -> Decimal("195000")
     def _parse_price(self, text: str) -> Decimal | None:
         match = PRICE_PATTERN.search(text)
@@ -48,41 +70,26 @@ class Parser(BaseParser):
         except (ValueError, ArithmeticError):
             return None
 
-    # "CÓDIGO: 72000" -> "72000"
-    def _parse_sku(self, text: str) -> str | None:
-        match = SKU_PATTERN.search(text)
-        if not match:
-            return None
-        return match.group(1).strip() or None
+    def extract_price(self, item: BeautifulSoup, record: Base) -> Decimal | None:
+        return self._parse_price(item.get_text(" ", strip=True))
+
+    def extract_currency(self, item: BeautifulSoup, record: Base) -> str:
+        return self.CURRENCY
+
+    def extract_unit(self, item: BeautifulSoup, record: Base) -> str | None:
+        return None
+
+    # image is reconstructed from the sku; absent without one
+    def extract_image_urls(self, item: BeautifulSoup, record: Base) -> list[str]:
+        sku = self.extract_sku(item, record)
+        if not sku:
+            return []
+        return [urljoin(self.SITE_BASE, self.PRODUCT_IMAGE_PATH.format(sku=sku))]
 
     def build_entities(self, record: Base, decoded: Any) -> list[Base]:
         soup: BeautifulSoup = decoded
-
         # name is required; skip non-product pages outright
         h1 = soup.find("h1")
-        if h1 is None:
+        if h1 is None or not h1.get_text(" ", strip=True):
             return []
-        name = h1.get_text(" ", strip=True)
-        if not name:
-            return []
-
-        page_text = soup.get_text(" ", strip=True)
-        price = self._parse_price(page_text)
-        sku = self._parse_sku(page_text)
-
-        # image is reconstructed from the sku; absent without one
-        image_urls: list[str] = []
-        if sku:
-            image_urls.append(urljoin(self.SITE_BASE, self.PRODUCT_IMAGE_PATH.format(sku=sku)))
-
-        return [
-            Product(
-                source=self.source,
-                source_url=record.source_url,
-                name=name,
-                sku=sku,
-                price=price,
-                currency=self.CURRENCY,
-                image_urls=image_urls,
-            )
-        ]
+        return [self.build_entity(soup, record)]
