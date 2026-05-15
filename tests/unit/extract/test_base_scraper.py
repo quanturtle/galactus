@@ -35,6 +35,33 @@ def test_build_url_default_returns_request_with_config_headers_and_params() -> N
     assert "User-Agent" in request.headers
 
 
+def test_build_url_strips_tracking_params_and_lowercases_host() -> None:
+    scraper = make_scraper(BaseScraper)
+
+    # utm_*, fbclid, gclid drop out; non-tracking params remain in original order
+    tracked = scraper.build_url(
+        "https://Example.Test/A?id=1&utm_source=foo&fbclid=zzz&utm_medium=email"
+    )
+    assert tracked.url == "https://example.test/A?id=1"
+
+    # url with only tracking params collapses to a bare path (no trailing "?")
+    only_tracking = scraper.build_url("https://example.test/p?gclid=abc&utm_campaign=spring")
+    assert only_tracking.url == "https://example.test/p"
+
+    # fragment is preserved verbatim
+    with_fragment = scraper.build_url("https://example.test/p?utm_source=x#section")
+    assert with_fragment.url == "https://example.test/p#section"
+
+
+def test_build_url_deduplicates_links_that_differ_only_in_tracking_params() -> None:
+    # canonicalization runs inside build_url, so HttpRequest equality collapses
+    # tracked and untracked variants of the same URL into one frontier entry
+    scraper = make_scraper(BaseScraper)
+    a = scraper.build_url("https://example.test/p?id=1&utm_source=newsletter")
+    b = scraper.build_url("https://example.test/p?id=1")
+    assert a.url == b.url
+
+
 def test_extract_links_default_returns_a_hrefs_joined_with_response_url() -> None:
     scraper = make_scraper(BaseScraper)
     html = (

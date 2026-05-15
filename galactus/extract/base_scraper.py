@@ -3,7 +3,7 @@ import logging
 from collections import deque
 from pathlib import Path
 from typing import Any, ClassVar
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
@@ -43,6 +43,30 @@ SKIP_EXTENSIONS = frozenset(
 
 # persist full HTML bodies in bronze.html_snapshots (the parsers need them).
 STORE_HTML_BODY = True
+
+# marketing/tracking query parameters stripped from every URL build_url touches.
+# without this, the same product/article reaches bronze twice whenever a site
+# links itself with utm tags, producing duplicate silver rows.
+TRACKING_PARAMS = frozenset(
+    {
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+        "utm_id",
+        "utm_name",
+        "utm_reader",
+        "fbclid",
+        "gclid",
+        "mc_eid",
+        "mc_cid",
+        "yclid",
+        "msclkid",
+        "_ga",
+        "_gl",
+    }
+)
 
 
 class BaseScraper:
@@ -107,9 +131,26 @@ class BaseScraper:
 
     # *args/**kwargs lets paginating subclasses reshape the signature (e.g. build_url(page)).
     # one place per scraper that constructs an HttpRequest — config headers/params attach here.
+    # also the single seam where every URL gets canonicalized (tracking params stripped,
+    # scheme + host lowercased) so duplicates collapse in `seen` and in bronze.
     def build_url(self, *args, **kwargs) -> HttpRequest:
+        parts = urlsplit(args[0])
+        kept = [
+            (k, v)
+            for k, v in parse_qsl(parts.query, keep_blank_values=True)
+            if k not in TRACKING_PARAMS
+        ]
+        url = urlunsplit(
+            (
+                parts.scheme.lower(),
+                parts.netloc.lower(),
+                parts.path,
+                urlencode(kept),
+                parts.fragment,
+            )
+        )
         return HttpRequest(
-            url=args[0],
+            url=url,
             headers=dict(self.config.headers),
             params=dict(self.config.params),
         )
