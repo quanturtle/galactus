@@ -8,12 +8,19 @@ class Scraper(BaseScraper):
     """Scraper for megacadena — WordPress REST, page-bounded pagination into bronze.api_snapshots."""
 
     snapshot_model = ApiSnapshot
+    PER_PAGE = 100
 
     def build_url(self, page: int) -> HttpRequest:
         return HttpRequest(
             url=self.config.base_url,
             headers=dict(self.config.headers),
-            params={**self.config.params, "page": str(page)},
+            params={
+                "per_page": str(self.PER_PAGE),
+                "_embed": "true",
+                "orderby": "date",
+                "order": "desc",
+                "page": str(page),
+            },
         )
 
     def seed_urls(self) -> list[HttpRequest]:

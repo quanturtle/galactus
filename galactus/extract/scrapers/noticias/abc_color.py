@@ -9,6 +9,8 @@ class Scraper(BaseScraper):
     """Scraper for abc_color — Arc Publishing sections-api, per-section pagination into bronze.api_snapshots."""
 
     snapshot_model = ApiSnapshot
+    WEBSITE = "abc-color"
+    LIMIT = 100
     SECTIONS = (
         "/nacionales",
         "/internacionales",
@@ -29,24 +31,23 @@ class Scraper(BaseScraper):
             {
                 "section_id": section,
                 "sort": "display_date:desc",
-                "limit": self.config.params["limit"],
+                "limit": str(self.LIMIT),
                 "offset": str(offset),
             }
         )
         return HttpRequest(
             url=self.config.base_url,
             headers=dict(self.config.headers),
-            params={**self.config.params, "query": query},
+            params={"_website": self.WEBSITE, "query": query},
         )
 
     def seed_urls(self) -> list[HttpRequest]:
         return [self.build_url(section, 0) for section in self.SECTIONS]
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        limit = int(self.config.params["limit"])
         elements = response.json().get("content_elements", [])
-        if len(elements) < limit:
+        if len(elements) < self.LIMIT:
             return []
         blob = json.loads(response.request.params.get("query", "{}"))
         section, offset = blob["section_id"], int(blob.get("offset", "0"))
-        return [self.build_url(section, offset + limit)]
+        return [self.build_url(section, offset + self.LIMIT)]

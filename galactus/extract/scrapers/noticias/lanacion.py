@@ -10,13 +10,14 @@ class Scraper(BaseScraper):
 
     snapshot_model = ApiSnapshot
     WEBSITE = "lanacionpy"
+    FEED_SIZE = 100
     # Arc's feed sits on Elasticsearch; ES rejects feedFrom+feedSize > index.max_result_window (default 10000).
     MAX_RESULT_WINDOW = 10000
 
     def build_url(self, offset: int) -> HttpRequest:
         query = json.dumps(
             {
-                "feedSize": self.config.params["feedSize"],
+                "feedSize": str(self.FEED_SIZE),
                 "feedFrom": str(offset),
                 "website": self.WEBSITE,
                 "feedQuery": "type:story",
@@ -25,7 +26,7 @@ class Scraper(BaseScraper):
         return HttpRequest(
             url=self.config.base_url,
             headers=dict(self.config.headers),
-            params={**self.config.params, "query": query},
+            params={"query": query},
         )
 
     def seed_urls(self) -> list[HttpRequest]:
@@ -41,15 +42,14 @@ class Scraper(BaseScraper):
         return await super().process_response(response)
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        feed_size = int(self.config.params["feedSize"])
         elements = response.json().get("content_elements", [])
-        if len(elements) < feed_size:
+        if len(elements) < self.FEED_SIZE:
             return []
         blob = json.loads(response.request.params["query"])
         current = int(blob["feedFrom"])
         # ES caps feedFrom+feedSize at MAX_RESULT_WINDOW; never queue a request that would 400.
         return [
-            self.build_url(current + i * feed_size)
+            self.build_url(current + i * self.FEED_SIZE)
             for i in range(1, self.concurrency + 1)
-            if current + i * feed_size + feed_size <= self.MAX_RESULT_WINDOW
+            if current + i * self.FEED_SIZE + self.FEED_SIZE <= self.MAX_RESULT_WINDOW
         ]
