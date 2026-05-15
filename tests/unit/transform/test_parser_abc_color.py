@@ -86,15 +86,53 @@ def test_build_entities_maps_stories() -> None:
     # primary_section wins over sections[]
     assert article.section == "Nacionales"
     assert article.tags == ["Senado", "Reforma"]
-    # promo image first, then inline image
+    # inline (per-article) image wins over promo (sections-api lead image)
     assert article.image_urls == [
-        "https://www.abc.com.py/img/promo.jpg",
         "https://www.abc.com.py/img/inline.jpg",
+        "https://www.abc.com.py/img/promo.jpg",
     ]
     assert isinstance(article.published_at, datetime)
     assert article.published_at.year == 2026
     assert article.published_at.month == 1
     assert article.published_at.day == 2
+
+
+def test_promo_image_is_fallback_when_no_inline_image() -> None:
+    parser = _parser()
+    payload = {
+        "content_elements": [
+            {
+                "_id": "PROMOONLY",
+                "type": "story",
+                "canonical_url": "/nada/sin-inline/",
+                "headlines": {"basic": "Sin imagen en el cuerpo"},
+                "promo_items": {
+                    "basic": {
+                        "type": "image",
+                        "url": "https://www.abc.com.py/img/promo.jpg",
+                    }
+                },
+                "content_elements": [
+                    {"type": "text", "content": "<p>Texto sin imagen.</p>"},
+                ],
+            },
+        ]
+    }
+    record = ApiSnapshot(
+        bronze_id=3,
+        source="abc_color",
+        source_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
+        created_at=datetime(2026, 1, 2, 10, 0, 0),
+        request_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
+        request_params={},
+        status_code=200,
+        response_headers={},
+        body=compress(json.dumps(payload)),
+    )
+
+    articles = parser.process_record(record)
+
+    assert articles[0].image_urls == ["https://www.abc.com.py/img/promo.jpg"]
 
 
 def test_empty_feed_returns_no_entities() -> None:

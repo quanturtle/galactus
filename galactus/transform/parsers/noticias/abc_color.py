@@ -113,18 +113,20 @@ class Parser(BaseParser, ArticleParser):
                 out.append(text)
         return out
 
-    # promo image first, then inner content_elements images, deduped
+    # inner content_elements images first (per-article), then promo as fallback.
+    # the sections-api feed reuses the section's lead image across every story's
+    # promo_items.basic.url, so promo can only be trusted when no inline image exists.
     def extract_image_urls(self, item: dict) -> list[str]:
         out: list[str] = []
-        promo = (item.get("promo_items") or {}).get("basic")
-        if isinstance(promo, dict) and promo.get("type") == "image":
-            url = (promo.get("url") or "").strip()
-            if url:
-                out.append(url)
         for el in item.get("content_elements") or []:
             if not isinstance(el, dict) or el.get("type") != "image":
                 continue
             url = (el.get("url") or "").strip()
+            if url and url not in out:
+                out.append(url)
+        promo = (item.get("promo_items") or {}).get("basic")
+        if isinstance(promo, dict) and promo.get("type") == "image":
+            url = (promo.get("url") or "").strip()
             if url and url not in out:
                 out.append(url)
         return out
