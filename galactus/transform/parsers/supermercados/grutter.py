@@ -15,6 +15,11 @@ class Parser(BaseParser, ProductParser):
     item per entry. Prices are strings in minor units, scaled by
     ``prices.currency_minor_unit``; PYG runs at 0 minor units so the
     value passes through as an integer.
+
+    The Store API returns ``images: []`` for every product in this
+    catalog: the source store has no uploaded imagery (its PDPs show the
+    default WooCommerce placeholder). extract_image_urls is therefore
+    expected to return ``[]`` until that changes upstream.
     """
 
     bronze_model = ApiSnapshot
