@@ -55,7 +55,7 @@ def test_build_entities_extracts_fields() -> None:
         "https://www.npy.com.py/noticias/deportes/tres-selecciones-oficializan-las-primeras-listas",
     )
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
     assert len(articles) == 1
     article = articles[0]
@@ -83,13 +83,16 @@ def test_pm_meridiem_converts_to_24h() -> None:
         "https://www.npy.com.py/noticias/deportes/foo",
     )
 
-    article = parser.build_entities(record, parser.decode(record))[0]
+    article = parser.process_record(record)[0]
 
     assert article.published_at == datetime(2026, 5, 14, 20, 45)
 
 
-def test_page_without_title_is_skipped() -> None:
+def test_page_without_title_yields_empty_titled_article() -> None:
     parser = _parser()
     record = _snapshot(EMPTY_HTML, "https://www.npy.com.py/noticias/deportes/x")
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    articles = parser.process_record(record)
+
+    assert len(articles) == 1
+    assert articles[0].title == ""

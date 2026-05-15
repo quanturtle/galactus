@@ -50,7 +50,7 @@ def test_build_entities_maps_stories() -> None:
     parser = make_parser(Parser, source="lanacion")
     record = _snapshot()
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
     assert len(articles) == 1
     article = articles[0]

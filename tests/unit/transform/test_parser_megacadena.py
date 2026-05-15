@@ -58,9 +58,10 @@ def test_build_entities_maps_posts() -> None:
     parser = _parser()
     record = _snapshot()
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
-    assert len(articles) == 1
+    # every post becomes an Article, even the title-less one
+    assert len(articles) == 2
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "megacadena"

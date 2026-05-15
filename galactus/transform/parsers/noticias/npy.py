@@ -1,10 +1,10 @@
 import re
 from datetime import datetime
-from typing import Any
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
+from galactus.transform.article_parser import ArticleParser
 from galactus.transform.base_parser import BaseParser
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.article import Article
@@ -51,7 +51,30 @@ IMAGE_EXCLUDE = frozenset(
 )
 
 
-class Parser(BaseParser):
+# parse "Mayo 14, 2026 11:20 a. m." style strings; None on no match
+def _parse_spanish_datetime(text: str) -> datetime | None:
+    match = DATE_PATTERN.search(text)
+    if not match:
+        return None
+    month = SPANISH_MONTHS.get(match.group(1).lower())
+    if month is None:
+        return None
+    day = int(match.group(2))
+    year = int(match.group(3))
+    hour = int(match.group(4)) if match.group(4) else 0
+    minute = int(match.group(5)) if match.group(5) else 0
+    meridiem = (match.group(6) or "").lower()
+    if meridiem == "p" and hour < 12:
+        hour += 12
+    elif meridiem == "a" and hour == 12:
+        hour = 0
+    try:
+        return datetime(year, month, day, hour, minute)
+    except ValueError:
+        return None
+
+
+class Parser(BaseParser, ArticleParser):
     """Parses HtmlSnapshots from npy.com.py into Article entities.
 
     NPY runs Brightspot and emits no JSON-LD or OpenGraph. Title falls back
@@ -59,14 +82,25 @@ class Parser(BaseParser):
     paragraph text from the first article-shaped container; the section is
     the first path segment after ``/noticias/``; the published timestamp is
     parsed from a visible Spanish-language date string ("Mayo 14, 2026
-    11:20 a. m."). Pages without a resolvable title are skipped.
+    11:20 a. m.").
+
+    decode() bundles the parsed soup with the bronze source_url so the
+    eight extract_* hooks need nothing else. One Article per bronze
+    record, so build_item is inherited.
     """
 
     bronze_model = HtmlSnapshot
     silver_model = Article
 
+    def decode(self, record: Base) -> dict:
+        return {"soup": super().decode(record), "source_url": record.source_url}
+
+    def extract_source_url(self, item: dict) -> str:
+        return item["source_url"]
+
     # h1 first, then <title> with the site suffix stripped
-    def _title(self, soup: BeautifulSoup) -> str | None:
+    def extract_title(self, item: dict) -> str:
+        soup: BeautifulSoup = item["soup"]
         h1 = soup.find("h1")
         if h1:
             text = h1.get_text(" ", strip=True)
@@ -76,10 +110,11 @@ class Parser(BaseParser):
             cleaned = TITLE_SUFFIX_PATTERN.sub("", soup.title.string).strip()
             if cleaned:
                 return cleaned
-        return None
+        return ""
 
     # first article-shaped container's paragraphs, joined with blank lines
-    def _body(self, soup: BeautifulSoup) -> str | None:
+    def extract_body(self, item: dict) -> str | None:
+        soup: BeautifulSoup = item["soup"]
         for selector in BODY_SELECTORS:
             container = soup.select_one(selector)
             if container is None:
@@ -90,39 +125,27 @@ class Parser(BaseParser):
                 return text
         return None
 
-    # section = first path segment after /noticias/
-    def _section_from_url(self, url: str) -> str | None:
-        parts = [p for p in urlparse(url).path.split("/") if p]
+    def extract_authors(self, item: dict) -> list[str]:
+        return []
+
+    # visible Spanish-language date string anywhere on the page
+    def extract_published_at(self, item: dict) -> datetime | None:
+        return _parse_spanish_datetime(item["soup"].get_text(" ", strip=True))
+
+    # first path segment after /noticias/, normalized
+    def extract_section(self, item: dict) -> str | None:
+        parts = [p for p in urlparse(item["source_url"]).path.split("/") if p]
         if len(parts) >= 2 and parts[0] == "noticias":
             return parts[1].replace("-", " ").title() or None
         return None
 
-    # parse "Mayo 14, 2026 11:20 a. m." style strings; None on no match
-    def _parse_spanish_datetime(self, text: str) -> datetime | None:
-        match = DATE_PATTERN.search(text)
-        if not match:
-            return None
-        month = SPANISH_MONTHS.get(match.group(1).lower())
-        if month is None:
-            return None
-        day = int(match.group(2))
-        year = int(match.group(3))
-        hour = int(match.group(4)) if match.group(4) else 0
-        minute = int(match.group(5)) if match.group(5) else 0
-        meridiem = (match.group(6) or "").lower()
-        if meridiem == "p" and hour < 12:
-            hour += 12
-        elif meridiem == "a" and hour == 12:
-            hour = 0
-        try:
-            return datetime(year, month, day, hour, minute)
-        except ValueError:
-            return None
+    def extract_tags(self, item: dict) -> list[str]:
+        return []
 
-    # http image URLs anywhere in the page that look editorial (Brightspot CDN), deduped
-    def _image_urls(self, soup: BeautifulSoup) -> list[str]:
+    # http image URLs anywhere in the page that look editorial, deduped
+    def extract_image_urls(self, item: dict) -> list[str]:
         out: list[str] = []
-        for img in soup.find_all("img", src=True):
+        for img in item["soup"].find_all("img", src=True):
             src = img.get("src", "")
             if not src.startswith("http"):
                 continue
@@ -131,29 +154,3 @@ class Parser(BaseParser):
             if src not in out:
                 out.append(src)
         return out
-
-    def build_entities(self, record: Base, decoded: Any) -> list[Base]:
-        soup: BeautifulSoup = decoded
-
-        # title is required; skip pages without one
-        title = self._title(soup)
-        if not title:
-            return []
-
-        body = self._body(soup)
-        section = self._section_from_url(record.source_url)
-        published_at = self._parse_spanish_datetime(soup.get_text(" ", strip=True))
-        image_urls = self._image_urls(soup)
-
-        return [
-            Article(
-                source=self.source,
-                source_url=record.source_url,
-                title=title,
-                body=body,
-                authors=[],
-                published_at=published_at,
-                section=section,
-                image_urls=image_urls,
-            )
-        ]

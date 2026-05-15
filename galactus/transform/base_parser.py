@@ -1,5 +1,5 @@
 import json
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any, ClassVar
 
 from galactus.config import TransformConfig
@@ -12,17 +12,25 @@ from sql.base import Base
 
 
 class BaseParser(ABC):
-    """Template Method base for all parsers.
+    """Template Method orchestrator for the bronze→silver lifecycle.
 
-    run() owns the bronze->silver lifecycle: load the bronze rows for the
-    source that no silver row references yet, decode each, build silver
-    entities, stamp provenance, insert them all in one transaction. No dedup
-    here — one silver row per (entity, bronze sighting); the gold layer
-    collapses across sightings. A bronze row counts as parsed once any silver
-    row carries its (source, bronze_id), so a re-run skips bronze rows whose
-    silver already committed. Concrete parsers define silver_model and
-    implement build_entities(); bronze_model defaults to HtmlSnapshot and the
-    other hooks ship with working defaults.
+    run() owns the lifecycle and nothing else: open the db, load the
+    bronze rows for the source whose silver row has not been written
+    yet, walk each through process_record (decode → build_item →
+    build_entity → stamp), and insert the resulting silver rows in one
+    transaction. No dedup here — one silver row per (entity, bronze
+    sighting); the gold layer collapses across sightings. A bronze row
+    counts as parsed once any silver row carries its (source,
+    bronze_id), so a re-run skips bronze rows whose silver already
+    committed.
+
+    Concrete parsers set silver_model and mix in ArticleParser or
+    ProductParser to contribute build_entity + the eight extract_*
+    hooks. bronze_model defaults to HtmlSnapshot. build_item defaults
+    to "the decoded payload is one item"; override only for listing-
+    style bronze payloads that pack many entities into one record.
+    Every silver field is optional, so build_entity always produces a
+    row — the parser does not filter out partial entities.
     """
 
     bronze_model: ClassVar[type[Base]] = HtmlSnapshot
@@ -66,8 +74,14 @@ class BaseParser(ABC):
             return json.loads(decompress(record.body))
         raise ParserError(f"{self.source}: no decoder for {model}")
 
-    @abstractmethod
-    def build_entities(self, record: Base, decoded: Any) -> list[Base]: ...
+    # default: one bronze record carries one entity, so the decoded payload is
+    # the single item. override when the bronze record packs many entities
+    # (e.g. a paginated API page or a category listing) and return one item per
+    # silver row the record should produce.
+    def build_item(self, decoded: Any) -> list[Any]:
+        return [decoded]
+
+    # build_entity is contributed by the ArticleParser / ProductParser mixin via MRO.
 
     def stamp(self, entity: Base, record: Base) -> None:
         entity.bronze_id = record.bronze_id
@@ -75,10 +89,10 @@ class BaseParser(ABC):
         return
 
     def process_record(self, record: Base) -> list[Base]:
-        # decode + build silver; surface subclass failures as ParserError
+        # decode + split into items + build silver; surface subclass failures as ParserError
         try:
             decoded = self.decode(record)
-            entities = self.build_entities(record, decoded)
+            entities = [self.build_entity(item) for item in self.build_item(decoded)]
         except ParserError:
             raise
         except Exception as exc:

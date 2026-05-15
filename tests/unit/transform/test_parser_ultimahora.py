@@ -61,7 +61,7 @@ def test_build_entities_from_json_ld() -> None:
     parser = _parser()
     record = _snapshot(ARTICLE_HTML)
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
     assert len(articles) == 1
     article = articles[0]
@@ -89,13 +89,16 @@ def test_section_falls_back_to_breadcrumb() -> None:
     html = ARTICLE_HTML.replace('<meta property="article:section" content="Política" />', "")
     record = _snapshot(html)
 
-    article = parser.build_entities(record, parser.decode(record))[0]
+    article = parser.process_record(record)[0]
 
     assert article.section == "Economía"
 
 
-def test_page_without_title_is_skipped() -> None:
+def test_page_without_title_yields_empty_titled_article() -> None:
     parser = _parser()
     record = _snapshot(EMPTY_HTML)
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    articles = parser.process_record(record)
+
+    assert len(articles) == 1
+    assert articles[0].title == ""

@@ -43,9 +43,10 @@ def test_build_entities_maps_stories() -> None:
         body=compress(json.dumps(RESPONSE)),
     )
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
-    assert len(articles) == 1
+    # every story becomes an Article, even the headline-less one
+    assert len(articles) == 2
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "latribuna"

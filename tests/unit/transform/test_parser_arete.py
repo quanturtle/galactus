@@ -42,11 +42,11 @@ def _parser() -> Parser:
     return make_parser(Parser, source="arete")
 
 
-def test_build_entities_extracts_product() -> None:
+def test_process_record_extracts_product() -> None:
     parser = _parser()
     record = _snapshot(PRODUCT_HTML, "https://www.arete.com.py/carimbata-x-kg-p101166")
 
-    products = parser.build_entities(record, parser.decode(record))
+    products = parser.process_record(record)
 
     assert len(products) == 1
     product = products[0]
@@ -60,8 +60,13 @@ def test_build_entities_extracts_product() -> None:
     assert product.image_urls == ["https://www.arete.com.py/userfiles/images/productos/72000.jpg"]
 
 
-def test_page_without_h1_is_skipped() -> None:
+def test_page_without_h1_yields_empty_named_product() -> None:
     parser = _parser()
     record = _snapshot(NO_H1_HTML, "https://www.arete.com.py/categoria-c1")
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    products = parser.process_record(record)
+
+    assert len(products) == 1
+    assert products[0].name == ""
+    assert products[0].sku is None
+    assert products[0].price is None

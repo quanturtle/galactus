@@ -52,14 +52,14 @@ def _parser() -> Parser:
     return make_parser(Parser, source="biggie")
 
 
-def test_build_entities_maps_items() -> None:
+def test_process_record_maps_items() -> None:
     parser = _parser()
     record = _snapshot()
 
-    products = parser.build_entities(record, parser.decode(record))
+    products = parser.process_record(record)
 
-    # the name-less item is skipped
-    assert len(products) == 2
+    # all entries become a Product, even the name-less one
+    assert len(products) == 3
     first = products[0]
     assert isinstance(first, Product)
     assert first.source == "biggie"
@@ -80,3 +80,7 @@ def test_build_entities_maps_items() -> None:
     assert second.price == Decimal(9500)
     assert second.image_urls == []
     assert second.source_url == "https://biggie.com.py/item/gaseosa-cola-2l-67890"
+
+    third = products[2]
+    assert third.name == ""
+    assert third.sku == "00000"

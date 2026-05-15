@@ -43,14 +43,14 @@ def _parser() -> Parser:
     return make_parser(Parser, source="casarica")
 
 
-def test_build_entities_extracts_product() -> None:
+def test_process_record_extracts_product() -> None:
     parser = _parser()
     record = _snapshot(
         PRODUCT_HTML,
         "https://www.casarica.com.py/leche-la-serenisima-entera-uat-1lt-p16949",
     )
 
-    products = parser.build_entities(record, parser.decode(record))
+    products = parser.process_record(record)
 
     assert len(products) == 1
     product = products[0]
@@ -66,8 +66,13 @@ def test_build_entities_extracts_product() -> None:
     ]
 
 
-def test_page_without_h2_is_skipped() -> None:
+def test_page_without_h2_yields_empty_named_product() -> None:
     parser = _parser()
     record = _snapshot(NO_H2_HTML, "https://www.casarica.com.py/categoria-c1")
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    products = parser.process_record(record)
+
+    assert len(products) == 1
+    assert products[0].name == ""
+    assert products[0].sku is None
+    assert products[0].price is None

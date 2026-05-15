@@ -74,14 +74,14 @@ def _parser() -> Parser:
     return make_parser(Parser, source="superseis")
 
 
-def test_build_entities_from_json_ld() -> None:
+def test_process_record_from_json_ld() -> None:
     parser = _parser()
     record = _snapshot(
         PRODUCT_HTML,
         "https://www.superseis.com.py/product/entrana-gruesa-por-kilo",
     )
 
-    products = parser.build_entities(record, parser.decode(record))
+    products = parser.process_record(record)
 
     assert len(products) == 1
     product = products[0]
@@ -97,17 +97,22 @@ def test_build_entities_from_json_ld() -> None:
     assert product.image_urls == ["https://cdn.sd.com.py/ocs6/.../product.jpg"]
 
 
-def test_page_without_product_jsonld_is_skipped() -> None:
+def test_page_without_product_jsonld_yields_empty_named_product() -> None:
     parser = _parser()
     record = _snapshot(NO_PRODUCT_HTML, "https://www.superseis.com.py/catalog/something")
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    products = parser.process_record(record)
+
+    assert len(products) == 1
+    assert products[0].name == ""
+    assert products[0].sku is None
+    assert products[0].price is None
 
 
 def test_image_falls_back_to_og() -> None:
     parser = _parser()
     record = _snapshot(OG_FALLBACK_HTML, "https://www.superseis.com.py/product/x")
 
-    product = parser.build_entities(record, parser.decode(record))[0]
+    product = parser.process_record(record)[0]
 
     assert product.image_urls == ["https://cdn.sd.com.py/ocs6/.../og-fallback.jpg"]

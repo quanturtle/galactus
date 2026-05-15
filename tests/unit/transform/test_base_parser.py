@@ -17,17 +17,17 @@ from tests.unit.fakes import FakeDatabase, make_parser, make_transform_config
 
 
 class _StubParser(BaseParser):
+    """BaseParser stub with build_entity inlined to keep the test isolated from the mixins."""
+
     bronze_model = HtmlSnapshot
     silver_model = Article
 
-    def build_entities(self, record: Base, decoded: Any) -> list[Base]:
-        return [
-            Article(
-                source=self.source,
-                source_url="https://example.test/a",
-                title="title",
-            )
-        ]
+    def build_entity(self, item: Any) -> Base:
+        return Article(
+            source=self.source,
+            source_url="https://example.test/a",
+            title="title",
+        )
 
 
 class _WiredStubParser(_StubParser):
@@ -91,11 +91,15 @@ def test_decode_api_snapshot_returns_dict() -> None:
 
 def test_process_record_stamps_bronze_provenance() -> None:
     class MultiEntityParser(_StubParser):
-        def build_entities(self, record: Base, decoded: Any) -> list[Base]:
+        def build_item(self, decoded: Any) -> list[Any]:
             return [
-                Article(source=self.source, source_url="https://example.test/1", title="one"),
-                Article(source=self.source, source_url="https://example.test/2", title="two"),
+                ("https://example.test/1", "one"),
+                ("https://example.test/2", "two"),
             ]
+
+        def build_entity(self, item: Any) -> Base:
+            source_url, title = item
+            return Article(source=self.source, source_url=source_url, title=title)
 
     parser = make_parser(MultiEntityParser)
     record = _html_snapshot("<html></html>", bronze_id=42)
@@ -111,7 +115,7 @@ def test_process_record_stamps_bronze_provenance() -> None:
 
 def test_process_record_wraps_subclass_errors_as_parsererror() -> None:
     class BoomParser(_StubParser):
-        def build_entities(self, record: Base, decoded: Any) -> list[Base]:
+        def build_item(self, decoded: Any) -> list[Any]:
             raise ValueError("boom")
 
     parser = make_parser(BoomParser)
@@ -128,7 +132,7 @@ def test_process_record_passes_parsererror_through() -> None:
     sentinel = ParserError("explicit")
 
     class ExplicitParser(_StubParser):
-        def build_entities(self, record: Base, decoded: Any) -> list[Base]:
+        def build_item(self, decoded: Any) -> list[Any]:
             raise sentinel
 
     parser = make_parser(ExplicitParser)

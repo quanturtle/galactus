@@ -65,7 +65,7 @@ def test_build_entities_from_json_ld() -> None:
     parser = _parser()
     record = _snapshot(ARTICLE_HTML)
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
     assert len(articles) == 1
     article = articles[0]
@@ -89,8 +89,11 @@ def test_build_entities_from_json_ld() -> None:
     assert article.published_at.month == 5
 
 
-def test_page_without_title_is_skipped() -> None:
+def test_page_without_title_yields_empty_titled_article() -> None:
     parser = _parser()
     record = _snapshot(EMPTY_HTML)
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    articles = parser.process_record(record)
+
+    assert len(articles) == 1
+    assert articles[0].title == ""

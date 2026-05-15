@@ -57,14 +57,14 @@ def _snapshot() -> ApiSnapshot:
     )
 
 
-def test_build_entities_maps_products() -> None:
+def test_process_record_maps_products() -> None:
     parser = make_parser(Parser, source="grutter")
     record = _snapshot()
 
-    products = parser.build_entities(record, parser.decode(record))
+    products = parser.process_record(record)
 
-    # name-less item is skipped
-    assert len(products) == 2
+    # all entries become a Product, even the name-less one
+    assert len(products) == 3
 
     first = products[0]
     assert isinstance(first, Product)
@@ -87,3 +87,7 @@ def test_build_entities_maps_products() -> None:
     assert second.currency == "USD"
     assert second.price == Decimal("1.99")
     assert second.image_urls == []
+
+    third = products[2]
+    assert third.name == ""
+    assert third.sku == "SKIP"

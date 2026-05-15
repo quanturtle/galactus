@@ -70,10 +70,10 @@ def test_build_entities_maps_stories() -> None:
     parser = _parser()
     record = _snapshot()
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
-    # headline-less story is skipped
-    assert len(articles) == 1
+    # every story becomes an Article, even the headline-less one
+    assert len(articles) == 2
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "abc_color"
@@ -111,4 +111,4 @@ def test_empty_feed_returns_no_entities() -> None:
         body=compress(json.dumps({"content_elements": []})),
     )
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    assert parser.process_record(record) == []

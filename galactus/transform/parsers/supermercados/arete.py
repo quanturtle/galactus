@@ -1,9 +1,6 @@
 import re
 from decimal import Decimal
-from typing import Any
 from urllib.parse import urljoin
-
-from bs4 import BeautifulSoup
 
 from galactus.transform.base_parser import BaseParser
 from galactus.transform.product_parser import ProductParser
@@ -26,7 +23,11 @@ class Parser(BaseParser, ProductParser):
     SKU are extracted by regex from visible text ("₲. 24.000" and "CÓDIGO:
     72000"); the hero image is reconstructed from the SKU
     (``/userfiles/images/productos/<sku>.jpg``) since no inline product
-    gallery selector is exposed. Pages without a name are skipped.
+    gallery selector is exposed.
+
+    decode() wraps the parsed soup together with the bronze source_url
+    so the eight extract_* hooks need nothing else. One Product per
+    bronze record, so build_item is inherited (returns [decoded]).
     """
 
     bronze_model = HtmlSnapshot
@@ -36,30 +37,29 @@ class Parser(BaseParser, ProductParser):
     PRODUCT_IMAGE_PATH = "/userfiles/images/productos/{sku}.jpg"
     CURRENCY = "PYG"
 
-    def extract_source_url(self, item: BeautifulSoup, record: Base) -> str:
-        return record.source_url
+    def decode(self, record: Base) -> dict:
+        return {"soup": super().decode(record), "source_url": record.source_url}
+
+    def extract_source_url(self, item: dict) -> str:
+        return item["source_url"]
 
     # "CÓDIGO: 72000" -> "72000"
-    def _parse_sku(self, text: str) -> str | None:
-        match = SKU_PATTERN.search(text)
+    def extract_sku(self, item: dict) -> str | None:
+        match = SKU_PATTERN.search(item["soup"].get_text(" ", strip=True))
         if not match:
             return None
         return match.group(1).strip() or None
 
-    def extract_sku(self, item: BeautifulSoup, record: Base) -> str | None:
-        return self._parse_sku(item.get_text(" ", strip=True))
-
-    # presence guaranteed by build_entities; re-selects to stay self-contained
-    def extract_name(self, item: BeautifulSoup, record: Base) -> str:
-        h1 = item.find("h1")
+    def extract_name(self, item: dict) -> str:
+        h1 = item["soup"].find("h1")
         return h1.get_text(" ", strip=True) if h1 else ""
 
-    def extract_brand(self, item: BeautifulSoup, record: Base) -> str | None:
+    def extract_brand(self, item: dict) -> str | None:
         return None
 
     # "Gs   195.000" / "₲. 195.000" -> Decimal("195000")
-    def _parse_price(self, text: str) -> Decimal | None:
-        match = PRICE_PATTERN.search(text)
+    def extract_price(self, item: dict) -> Decimal | None:
+        match = PRICE_PATTERN.search(item["soup"].get_text(" ", strip=True))
         if not match:
             return None
         digits = match.group(1).replace(".", "")
@@ -70,26 +70,15 @@ class Parser(BaseParser, ProductParser):
         except (ValueError, ArithmeticError):
             return None
 
-    def extract_price(self, item: BeautifulSoup, record: Base) -> Decimal | None:
-        return self._parse_price(item.get_text(" ", strip=True))
-
-    def extract_currency(self, item: BeautifulSoup, record: Base) -> str:
+    def extract_currency(self, item: dict) -> str:
         return self.CURRENCY
 
-    def extract_unit(self, item: BeautifulSoup, record: Base) -> str | None:
+    def extract_unit(self, item: dict) -> str | None:
         return None
 
     # image is reconstructed from the sku; absent without one
-    def extract_image_urls(self, item: BeautifulSoup, record: Base) -> list[str]:
-        sku = self.extract_sku(item, record)
+    def extract_image_urls(self, item: dict) -> list[str]:
+        sku = self.extract_sku(item)
         if not sku:
             return []
         return [urljoin(self.SITE_BASE, self.PRODUCT_IMAGE_PATH.format(sku=sku))]
-
-    def build_entities(self, record: Base, decoded: Any) -> list[Base]:
-        soup: BeautifulSoup = decoded
-        # name is required; skip non-product pages outright
-        h1 = soup.find("h1")
-        if h1 is None or not h1.get_text(" ", strip=True):
-            return []
-        return [self.build_entity(soup, record)]

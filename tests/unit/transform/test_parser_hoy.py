@@ -67,10 +67,10 @@ def test_build_entities_maps_posts() -> None:
     parser = _parser()
     record = _snapshot()
 
-    articles = parser.build_entities(record, parser.decode(record))
+    articles = parser.process_record(record)
 
-    # title-less post is skipped
-    assert len(articles) == 1
+    # every post becomes an Article, even the title-less one
+    assert len(articles) == 2
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "hoy"
@@ -103,4 +103,4 @@ def test_empty_array_returns_no_entities() -> None:
         body=compress(json.dumps([])),
     )
 
-    assert parser.build_entities(record, parser.decode(record)) == []
+    assert parser.process_record(record) == []

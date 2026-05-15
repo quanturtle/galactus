@@ -1,8 +1,5 @@
 import re
 from decimal import Decimal
-from typing import Any
-
-from bs4 import BeautifulSoup
 
 from galactus.transform.base_parser import BaseParser
 from galactus.transform.product_parser import ProductParser
@@ -26,8 +23,11 @@ class Parser(BaseParser, ProductParser):
     but its product detail block puts the name in ``<h2>`` instead of
     ``<h1>``. No JSON-LD, no OpenGraph: price and sku come from regex
     against visible text ("₲. 10.600", "CÓDIGO: 7790742363008") and the
-    image is reconstructed from the SKU on Dattamax's CDN. Pages without a
-    name are skipped.
+    image is reconstructed from the SKU on Dattamax's CDN.
+
+    decode() wraps the parsed soup together with the bronze source_url
+    so the eight extract_* hooks need nothing else. One Product per
+    bronze record, so build_item is inherited (returns [decoded]).
     """
 
     bronze_model = HtmlSnapshot
@@ -35,30 +35,29 @@ class Parser(BaseParser, ProductParser):
 
     CURRENCY = "PYG"
 
-    def extract_source_url(self, item: BeautifulSoup, record: Base) -> str:
-        return record.source_url
+    def decode(self, record: Base) -> dict:
+        return {"soup": super().decode(record), "source_url": record.source_url}
+
+    def extract_source_url(self, item: dict) -> str:
+        return item["source_url"]
 
     # "CÓDIGO: 7790742363008" -> "7790742363008"
-    def _parse_sku(self, text: str) -> str | None:
-        match = SKU_PATTERN.search(text)
+    def extract_sku(self, item: dict) -> str | None:
+        match = SKU_PATTERN.search(item["soup"].get_text(" ", strip=True))
         if not match:
             return None
         return match.group(1).strip() or None
 
-    def extract_sku(self, item: BeautifulSoup, record: Base) -> str | None:
-        return self._parse_sku(item.get_text(" ", strip=True))
-
-    # presence guaranteed by build_entities; re-selects to stay self-contained
-    def extract_name(self, item: BeautifulSoup, record: Base) -> str:
-        h2 = item.find("h2")
+    def extract_name(self, item: dict) -> str:
+        h2 = item["soup"].find("h2")
         return h2.get_text(" ", strip=True) if h2 else ""
 
-    def extract_brand(self, item: BeautifulSoup, record: Base) -> str | None:
+    def extract_brand(self, item: dict) -> str | None:
         return None
 
     # "₲. 10.600" -> Decimal("10600")
-    def _parse_price(self, text: str) -> Decimal | None:
-        match = PRICE_PATTERN.search(text)
+    def extract_price(self, item: dict) -> Decimal | None:
+        match = PRICE_PATTERN.search(item["soup"].get_text(" ", strip=True))
         if not match:
             return None
         digits = match.group(1).replace(".", "")
@@ -69,26 +68,15 @@ class Parser(BaseParser, ProductParser):
         except (ValueError, ArithmeticError):
             return None
 
-    def extract_price(self, item: BeautifulSoup, record: Base) -> Decimal | None:
-        return self._parse_price(item.get_text(" ", strip=True))
-
-    def extract_currency(self, item: BeautifulSoup, record: Base) -> str:
+    def extract_currency(self, item: dict) -> str:
         return self.CURRENCY
 
-    def extract_unit(self, item: BeautifulSoup, record: Base) -> str | None:
+    def extract_unit(self, item: dict) -> str | None:
         return None
 
     # image is reconstructed from the sku on Dattamax's CDN; absent without one
-    def extract_image_urls(self, item: BeautifulSoup, record: Base) -> list[str]:
-        sku = self.extract_sku(item, record)
+    def extract_image_urls(self, item: dict) -> list[str]:
+        sku = self.extract_sku(item)
         if not sku:
             return []
         return [CDN_IMAGE_TEMPLATE.format(sku=sku)]
-
-    def build_entities(self, record: Base, decoded: Any) -> list[Base]:
-        soup: BeautifulSoup = decoded
-        # name lives in the product detail's h2; skip pages without one
-        h2 = soup.find("h2")
-        if h2 is None or not h2.get_text(" ", strip=True):
-            return []
-        return [self.build_entity(soup, record)]

@@ -2,26 +2,41 @@ from decimal import Decimal
 from typing import Any
 
 from galactus.transform.base_parser import BaseParser
+from galactus.transform.product_parser import ProductParser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.product import Product
-from sql.base import Base
 
 
-class Parser(BaseParser):
+class Parser(BaseParser, ProductParser):
     """Parses ApiSnapshots from grutter (WooCommerce Store API) into Product entities.
 
     The bronze body is a ``/wp-json/wc/store/v1/products`` page — a JSON
-    array of WC product objects. Each becomes one Product. Prices are
-    strings in minor units, scaled by ``prices.currency_minor_unit``;
-    PYG runs at 0 minor units so the value passes through as an integer.
-    Items without a name are skipped (silver.products requires it).
+    array of WC product objects. build_item splits the array into one
+    item per entry. Prices are strings in minor units, scaled by
+    ``prices.currency_minor_unit``; PYG runs at 0 minor units so the
+    value passes through as an integer.
     """
 
     bronze_model = ApiSnapshot
     silver_model = Product
 
+    DEFAULT_CURRENCY = "PYG"
+
+    def extract_source_url(self, item: dict) -> str:
+        return (item.get("permalink") or "").strip()
+
+    def extract_sku(self, item: dict) -> str | None:
+        return (item.get("sku") or "").strip() or None
+
+    def extract_name(self, item: dict) -> str:
+        return (item.get("name") or "").strip()
+
+    def extract_brand(self, item: dict) -> str | None:
+        return None
+
     # `prices.price` (string, minor units) / 10**currency_minor_unit; None on missing/bad
-    def _price(self, prices: dict) -> Decimal | None:
+    def extract_price(self, item: dict) -> Decimal | None:
+        prices = item.get("prices") or {}
         raw = prices.get("price")
         if raw in (None, ""):
             return None
@@ -34,8 +49,15 @@ class Parser(BaseParser):
             value = value / (Decimal(10) ** minor)
         return value
 
+    def extract_currency(self, item: dict) -> str:
+        prices = item.get("prices") or {}
+        return (prices.get("currency_code") or self.DEFAULT_CURRENCY).strip() or self.DEFAULT_CURRENCY
+
+    def extract_unit(self, item: dict) -> str | None:
+        return None
+
     # `images[].src` URLs in feed order, deduped
-    def _image_urls(self, item: dict) -> list[str]:
+    def extract_image_urls(self, item: dict) -> list[str]:
         out: list[str] = []
         for img in item.get("images") or []:
             if not isinstance(img, dict):
@@ -45,37 +67,8 @@ class Parser(BaseParser):
                 out.append(src)
         return out
 
-    def build_entities(self, record: Base, decoded: Any) -> list[Base]:
+    def build_item(self, decoded: Any) -> list[dict]:
         # WC Store /products returns a JSON array; tolerate empty/odd pages
         if not isinstance(decoded, list):
             return []
-
-        products: list[Base] = []
-        for item in decoded:
-            if not isinstance(item, dict):
-                continue
-
-            # name is required; skip items without one
-            name = (item.get("name") or "").strip()
-            if not name:
-                continue
-
-            sku = (item.get("sku") or "").strip() or None
-            permalink = (item.get("permalink") or "").strip()
-
-            prices = item.get("prices") or {}
-            price = self._price(prices)
-            currency = (prices.get("currency_code") or "PYG").strip() or "PYG"
-
-            products.append(
-                Product(
-                    source=self.source,
-                    source_url=permalink,
-                    name=name,
-                    sku=sku,
-                    price=price,
-                    currency=currency,
-                    image_urls=self._image_urls(item),
-                )
-            )
-        return products
+        return [entry for entry in decoded if isinstance(entry, dict)]
