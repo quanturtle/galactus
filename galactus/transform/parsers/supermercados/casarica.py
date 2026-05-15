@@ -19,11 +19,11 @@ CDN_IMAGE_TEMPLATE = "https://casarica.cdn1.dattamax.com/userfiles/images/produc
 class Parser(BaseParser, ProductParser):
     """Parses HtmlSnapshots from casarica.com.py into Product entities.
 
-    casarica runs on the Dattamax SaaS platform (the same backend as arete)
-    but its product detail block puts the name in ``<h2>`` instead of
-    ``<h1>``. No JSON-LD, no OpenGraph: price and sku come from regex
-    against visible text ("₲. 10.600", "CÓDIGO: 7790742363008") and the
-    image is reconstructed from the SKU on Dattamax's CDN.
+    casarica runs on the Dattamax SaaS platform (the same backend as
+    arete): no JSON-LD, no OpenGraph. Name comes from
+    ``<h1 class="product_title">``; price and sku come from regex against
+    visible text ("₲. 10.600", "CÓDIGO: 7790742363008"); the image is
+    reconstructed from the SKU on Dattamax's CDN.
 
     decode() wraps the parsed soup together with the bronze source_url
     so the eight extract_* hooks need nothing else. One Product per
@@ -49,8 +49,8 @@ class Parser(BaseParser, ProductParser):
         return match.group(1).strip() or None
 
     def extract_name(self, item: dict) -> str:
-        h2 = item["soup"].find("h2")
-        return h2.get_text(" ", strip=True) if h2 else ""
+        h1 = item["soup"].select_one("h1.product_title")
+        return h1.get_text(" ", strip=True) if h1 else ""
 
     def extract_brand(self, item: dict) -> str | None:
         return None
