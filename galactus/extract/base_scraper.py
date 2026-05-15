@@ -214,7 +214,7 @@ class BaseScraper:
             self.db = db
 
             frontier: deque[HttpRequest] = deque(self.seed_urls())
-            seen: set[HttpRequest] = set(frontier)
+            seen: set[int] = {hash(r) for r in frontier}
             dispatched = 0
             max_pages = self.config.max_pages
             in_flight: set[asyncio.Task[HttpResponse]] = set()
@@ -246,9 +246,10 @@ class BaseScraper:
                             )
                             continue
                         for next_request in await self.process_response(response):
-                            if next_request in seen or not self.should_enqueue(next_request):
+                            key = hash(next_request)
+                            if key in seen or not self.should_enqueue(next_request):
                                 continue
-                            seen.add(next_request)
+                            seen.add(key)
                             frontier.append(next_request)
                         if self.config.request_delay:
                             await asyncio.sleep(self.config.request_delay)
