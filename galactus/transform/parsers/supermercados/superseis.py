@@ -102,10 +102,12 @@ class Parser(BaseParser, ProductParser):
         offer = offers[0] if isinstance(offers, list) and offers else offers
         if not isinstance(offer, dict):
             return self.DEFAULT_CURRENCY
-        return (offer.get("priceCurrency") or self.DEFAULT_CURRENCY).strip() or self.DEFAULT_CURRENCY
+        return (
+            offer.get("priceCurrency") or self.DEFAULT_CURRENCY
+        ).strip() or self.DEFAULT_CURRENCY
 
     def extract_unit(self, item: dict) -> str | None:
-        return None
+        return self.parse_unit_from_name(self.extract_name(item))
 
     # JSON-LD `image` is str | list[str]; preserve order, dedupe
     def extract_image_urls(self, item: dict) -> list[str]:

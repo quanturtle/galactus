@@ -78,7 +78,7 @@ class Parser(BaseParser, ProductParser):
         return self.CURRENCY
 
     def extract_unit(self, item: dict) -> str | None:
-        return None
+        return self.parse_unit_from_name(self.extract_name(item))
 
     # absolutize + dedupe image srcs from the main product slider
     def extract_image_urls(self, item: dict) -> list[str]:

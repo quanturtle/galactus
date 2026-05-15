@@ -59,7 +59,7 @@ class Parser(BaseParser, ProductParser):
         return self.CURRENCY
 
     def extract_unit(self, item: dict) -> str | None:
-        return None
+        return self.parse_unit_from_name(self.extract_name(item))
 
     # full-size image URLs for an item (type 0 = original)
     def extract_image_urls(self, item: dict) -> list[str]:

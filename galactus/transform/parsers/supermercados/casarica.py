@@ -72,7 +72,7 @@ class Parser(BaseParser, ProductParser):
         return self.CURRENCY
 
     def extract_unit(self, item: dict) -> str | None:
-        return None
+        return self.parse_unit_from_name(self.extract_name(item))
 
     # image is reconstructed from the sku on Dattamax's CDN; absent without one
     def extract_image_urls(self, item: dict) -> list[str]:

@@ -51,10 +51,12 @@ class Parser(BaseParser, ProductParser):
 
     def extract_currency(self, item: dict) -> str:
         prices = item.get("prices") or {}
-        return (prices.get("currency_code") or self.DEFAULT_CURRENCY).strip() or self.DEFAULT_CURRENCY
+        return (
+            prices.get("currency_code") or self.DEFAULT_CURRENCY
+        ).strip() or self.DEFAULT_CURRENCY
 
     def extract_unit(self, item: dict) -> str | None:
-        return None
+        return self.parse_unit_from_name(self.extract_name(item))
 
     # `images[].src` URLs in feed order, deduped
     def extract_image_urls(self, item: dict) -> list[str]:

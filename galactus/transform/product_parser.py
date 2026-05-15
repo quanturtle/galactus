@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import Any
@@ -29,6 +30,30 @@ class ProductParser(ABC):
     """
 
     source: str
+
+    # unit-extraction patterns evaluated in order; first match wins. cover the
+    # inline unit info embedded in ~80% of product names across the six
+    # supermercado sources. ordering puts kg ahead of g (so "X KG" wins on
+    # bulk-meat names) and l ahead of ml (so "1.8 LT" wins on detergents); cc
+    # is the rare per-oil case.
+    UNIT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+        (re.compile(r"\b(?:x\s*kg|kilos?|\d+\s*kg)\b\.?", re.IGNORECASE), "kg"),
+        (re.compile(r"\b\d+(?:[.,]\d+)?\s*lts?\b\.?", re.IGNORECASE), "l"),
+        (re.compile(r"\b\d+(?:[.,]\d+)?\s*l\b\.?", re.IGNORECASE), "l"),
+        (re.compile(r"\b\d+(?:[.,]\d{1,3})?\s*ml\b\.?", re.IGNORECASE), "ml"),
+        (re.compile(r"\b\d+\s*(?:gramos?|gr?s?)\b\.?", re.IGNORECASE), "g"),
+        (re.compile(r"\b\d+\s*cc\b\.?", re.IGNORECASE), "cc"),
+    ]
+
+    # extract a normalized unit symbol (kg | l | ml | g | cc) from a product
+    # name; None when no pattern matches (bundles, counts, name-only items).
+    # subclasses delegate extract_unit to this when no structured field is
+    # available on the source.
+    def parse_unit_from_name(self, name: str) -> str | None:
+        for pattern, unit in self.UNIT_PATTERNS:
+            if pattern.search(name):
+                return unit
+        return None
 
     @abstractmethod
     def extract_source_url(self, item: Any) -> str: ...
