@@ -14,7 +14,7 @@ PRODUCT_HTML = """
     <header><nav>Inicio</nav></header>
     <main>
       <div class="detalle">
-        <h2>LECHE LA SERENISIMA ENTERA UAT 1LT</h2>
+        <h1 class="product_title">LECHE LA SERENISIMA ENTERA UAT 1LT</h1>
         <span class="precio">₲. 10.600</span>
         <span class="codigo">CÓDIGO: 7790742363008</span>
       </div>
@@ -23,7 +23,7 @@ PRODUCT_HTML = """
 </html>
 """
 
-NO_H2_HTML = "<html><body><h1>Categoría</h1><p>nope</p></body></html>"
+NO_PRODUCT_TITLE_HTML = "<html><body><h1>Categoría</h1><p>nope</p></body></html>"
 
 
 def _snapshot(html: str, url: str) -> HtmlSnapshot:
@@ -66,9 +66,9 @@ def test_process_record_extracts_product() -> None:
     ]
 
 
-def test_page_without_h2_yields_empty_named_product() -> None:
+def test_page_without_product_title_yields_empty_named_product() -> None:
     parser = _parser()
-    record = _snapshot(NO_H2_HTML, "https://www.casarica.com.py/categoria-c1")
+    record = _snapshot(NO_PRODUCT_TITLE_HTML, "https://www.casarica.com.py/categoria-c1")
 
     products = parser.process_record(record)
 
