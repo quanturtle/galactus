@@ -4,7 +4,7 @@ extract:
   scraper: noticias.elnacional
   timeout_seconds: 30.0
   concurrency: 5
-  base_url: https://www.elnacional.com.py
+  base_url: https://elnacional.com.py
   scrape_patterns:
   - -n\d+(?:/|\?|#|$)
   ignore_patterns:
@@ -14,6 +14,6 @@ extract:
   - /galeria/
   max_pages: -1
   allowed_domains:
-  - www.elnacional.com.py
+  - elnacional.com.py
 transform:
   parser: noticias.elnacional
