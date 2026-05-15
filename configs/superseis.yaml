@@ -21,7 +21,7 @@ extract:
   - \?.*brands=
   - \?.*discounts=
   - \?.*page=
-  max_pages: 1000
+  max_pages: -1
   allowed_domains:
   - www.superseis.com.py
 transform:

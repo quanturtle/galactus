@@ -7,7 +7,7 @@ extract:
   base_url: https://api.app.biggie.com.py/api/articles
   scrape_patterns: []
   ignore_patterns: []
-  max_pages: 300
+  max_pages: -1
   request_delay: 0.5
   allowed_domains:
   - api.app.biggie.com.py

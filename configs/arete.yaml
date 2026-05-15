@@ -19,7 +19,7 @@ extract:
   - /terminos-y-condiciones
   - -c\d+\.\d+$
   - \?(map|_q|filter)=
-  max_pages: 300
+  max_pages: -1
   allowed_domains:
   - www.arete.com.py
 transform:

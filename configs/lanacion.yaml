@@ -7,7 +7,7 @@ extract:
   base_url: https://www.lanacion.com.py/pf/api/v3/content/fetch/content-search-feed-full
   scrape_patterns: []
   ignore_patterns: []
-  max_pages: 300
+  max_pages: -1
   allowed_domains:
   - www.lanacion.com.py
 transform:

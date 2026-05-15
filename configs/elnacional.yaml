@@ -12,7 +12,7 @@ extract:
   - /autor/
   - /multimedia/
   - /galeria/
-  max_pages: 300
+  max_pages: -1
   allowed_domains:
   - elnacional.com.py
 transform:

@@ -7,7 +7,7 @@ extract:
   base_url: https://www.hoy.com.py/wp-json/wp/v2/posts
   scrape_patterns: []
   ignore_patterns: []
-  max_pages: 300
+  max_pages: -1
   allowed_domains:
   - www.hoy.com.py
 transform:
