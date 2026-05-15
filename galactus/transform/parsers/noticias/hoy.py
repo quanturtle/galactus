@@ -10,9 +10,13 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.article import Article
 
 
-# strip HTML out of a WordPress rendered field; separator splits block-level text
+# strip HTML out of a WordPress rendered field; separator splits block-level text.
+# WP content occasionally carries stray NUL bytes (embed encoder bugs); postgres
+# text columns reject them, so drop them here before they reach silver.
 def _text(rendered: str, separator: str = " ") -> str:
-    return BeautifulSoup(rendered, "html.parser").get_text(separator, strip=True)
+    return (
+        BeautifulSoup(rendered, "html.parser").get_text(separator, strip=True).replace("\x00", "")
+    )
 
 
 # date_gmt is naive UTC; date is the site's local time. Prefer date_gmt.
