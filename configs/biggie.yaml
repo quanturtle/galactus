@@ -4,12 +4,10 @@ extract:
   scraper: supermercados.biggie
   timeout_seconds: 30.0
   concurrency: 5
-  params:
-    take: '50'
   base_url: https://api.app.biggie.com.py/api/articles
   scrape_patterns: []
   ignore_patterns: []
-  max_pages: -1
+  max_pages: 300
   request_delay: 0.5
   allowed_domains:
   - api.app.biggie.com.py

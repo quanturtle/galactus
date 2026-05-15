@@ -4,13 +4,10 @@ extract:
   scraper: noticias.abc_color
   timeout_seconds: 30.0
   concurrency: 5
-  params:
-    _website: abc-color
-    limit: '100'
   base_url: https://www.abc.com.py/pf/api/v3/content/fetch/sections-api
   scrape_patterns: []
   ignore_patterns: []
-  max_pages: -1
+  max_pages: 300
   allowed_domains:
   - www.abc.com.py
 transform:

@@ -4,14 +4,10 @@ extract:
   scraper: supermercados.grutter
   timeout_seconds: 30.0
   concurrency: 5
-  params:
-    per_page: '100'
-    orderby: date
-    order: desc
   base_url: https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products
   scrape_patterns: []
   ignore_patterns: []
-  max_pages: -1
+  max_pages: 300
   request_delay: 1.0
   allowed_domains:
   - grutteronline.casagrutter.com.py

@@ -4,15 +4,10 @@ extract:
   scraper: noticias.hoy
   timeout_seconds: 30.0
   concurrency: 5
-  params:
-    per_page: '100'
-    _embed: 'true'
-    orderby: date
-    order: desc
   base_url: https://www.hoy.com.py/wp-json/wp/v2/posts
   scrape_patterns: []
   ignore_patterns: []
-  max_pages: -1
+  max_pages: 300
   allowed_domains:
   - www.hoy.com.py
 transform:

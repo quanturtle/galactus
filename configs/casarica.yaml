@@ -20,7 +20,7 @@ extract:
   - /como-comprar
   - -c\d+\.\d+$
   - \?(map|_q|filter)=
-  max_pages: -1
+  max_pages: 1000
   allowed_domains:
   - www.casarica.com.py
 transform:

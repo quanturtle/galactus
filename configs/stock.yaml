@@ -21,7 +21,7 @@ extract:
   - /customer/
   - \?pageindex=
   - \?idFiltro=
-  max_pages: -1
+  max_pages: 1000
   allowed_domains:
   - www.stock.com.py
 transform:
