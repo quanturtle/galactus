@@ -88,12 +88,14 @@ class FakeDatabase:
         insert_raises: Exception | None = None,
     ) -> None:
         self.inserts: list[tuple[Base, type[Base]]] = []
+        self.insert_call_count = 0
         self.load_calls: list[tuple[type[Base], type[Base], str]] = []
         self._load_unparsed_results = load_unparsed_results or []
         self._load_raises = load_raises
         self._insert_raises = insert_raises
 
     async def insert(self, records: Base | Iterable[Base], model: type[Base]) -> None:
+        self.insert_call_count += 1
         if self._insert_raises is not None:
             raise self._insert_raises
         if isinstance(records, Base):

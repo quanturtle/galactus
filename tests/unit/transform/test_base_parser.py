@@ -161,6 +161,21 @@ def test_run_executes_load_then_parse_then_insert() -> None:
     assert {entity.bronze_id for entity, _ in db.inserts} == {1, 2}
 
 
+def test_run_inserts_after_each_bronze_record() -> None:
+    records = [
+        _html_snapshot("<html><p>one</p></html>", bronze_id=1),
+        _html_snapshot("<html><p>two</p></html>", bronze_id=2),
+        _html_snapshot("<html><p>three</p></html>", bronze_id=3),
+    ]
+    db = FakeDatabase(load_unparsed_results=records)
+    parser = _WiredStubParser(make_transform_config(source="testsrc"))
+    parser.wired_db = db
+
+    asyncio.run(parser.run())
+
+    assert db.insert_call_count == 3
+
+
 def test_run_wraps_database_error_as_parsererror() -> None:
     db_error = DatabaseError("insert failed")
     db = FakeDatabase(

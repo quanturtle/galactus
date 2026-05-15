@@ -17,12 +17,12 @@ class BaseParser(ABC):
     run() owns the lifecycle and nothing else: open the db, load the
     bronze rows for the source whose silver row has not been written
     yet, walk each through process_record (decode → build_item →
-    build_entity → stamp), and insert the resulting silver rows in one
-    transaction. No dedup here — one silver row per (entity, bronze
-    sighting); the gold layer collapses across sightings. A bronze row
-    counts as parsed once any silver row carries its (source,
-    bronze_id), so a re-run skips bronze rows whose silver already
-    committed.
+    build_entity → stamp), and insert the silver rows for each bronze
+    sighting before moving to the next. No dedup here — one silver row
+    per (entity, bronze sighting); the gold layer collapses across
+    sightings. A bronze row counts as parsed once any silver row
+    carries its (source, bronze_id), so a re-run skips bronze rows
+    whose silver already committed.
 
     Concrete parsers set silver_model and mix in ArticleParser or
     ProductParser to contribute build_entity + the eight extract_*
@@ -106,15 +106,14 @@ class BaseParser(ABC):
         return entities
 
     async def run(self) -> None:
-        """Lifecycle: open db; load unparsed bronze; decode + build + stamp; insert silver."""
+        """Lifecycle: open db; load unparsed bronze; decode + build + stamp; insert silver per bronze record."""
         async with self.make_database() as db:
             self.db = db
             try:
                 records = await self.load_records()
-                entities: list[Base] = []
                 for record in records:
-                    entities.extend(self.process_record(record))
-                await self.db.insert(entities, model=self.silver_model)
+                    entities = self.process_record(record)
+                    await self.db.insert(entities, model=self.silver_model)
             except DatabaseError as exc:
                 raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
         return
