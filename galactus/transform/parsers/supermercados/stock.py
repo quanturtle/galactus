@@ -1,5 +1,7 @@
+import json
 import re
 from decimal import Decimal
+from typing import Any
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -48,8 +50,37 @@ class Parser(BaseParser, ProductParser):
         node = item["soup"].select_one("h1.productname")
         return node.get_text(strip=True) if node else ""
 
+    # prefer JSON-LD brand (canonical); fall back to .manufacturers a, which the
+    # site populates inconsistently and occasionally with the wrong brand
     def extract_brand(self, item: dict) -> str | None:
-        node = item["soup"].select_one(".manufacturers a")
+        soup: BeautifulSoup = item["soup"]
+
+        # scan for the first Schema.org Product JSON-LD block and read its brand
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or "")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            candidates: list[Any] = []
+            if isinstance(data, dict):
+                candidates = [data, *data.get("@graph", [])]
+            elif isinstance(data, list):
+                candidates = data
+            for entry in candidates:
+                if not isinstance(entry, dict) or entry.get("@type") != "Product":
+                    continue
+                value = entry.get("brand")
+                if isinstance(value, dict):
+                    name = (value.get("name") or "").strip()
+                    if name:
+                        return name
+                elif isinstance(value, str):
+                    name = value.strip()
+                    if name:
+                        return name
+
+        # fall back to the manufacturer link block
+        node = soup.select_one(".manufacturers a")
         return node.get_text(strip=True) if node else None
 
     # "Gs   195.000" -> Decimal("195000"); "." is the Paraguayan thousands separator.
