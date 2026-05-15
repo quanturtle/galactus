@@ -94,11 +94,44 @@ def test_section_falls_back_to_breadcrumb() -> None:
     assert article.section == "Economía"
 
 
-def test_page_without_title_yields_empty_titled_article() -> None:
+def test_page_without_article_json_ld_is_skipped() -> None:
     parser = _parser()
     record = _snapshot(EMPTY_HTML)
 
-    articles = parser.process_record(record)
+    # pages without a NewsArticle/Article JSON-LD are hub/topic templates;
+    # build_item drops them so they don't show up in silver as all-null rows
+    assert parser.process_record(record) == []
 
-    assert len(articles) == 1
-    assert articles[0].title == ""
+
+def test_og_image_logo_falls_back_to_first_body_image() -> None:
+    parser = _parser()
+    html = """
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta property="og:image" content="https://www.ultimahora.com/img/logo-completo.png" />
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "NewsArticle",
+          "headline": "Editorial sin imagen en el JSON-LD",
+          "datePublished": "2026-01-02T10:30:00-03:00",
+          "author": {"@type": "Person", "name": "Editorial UH"}
+        }
+        </script>
+      </head>
+      <body>
+        <div class="RichTextArticleBody">
+          <p>Texto editorial.</p>
+          <img src="https://www.ultimahora.com/img/real-hero.jpg" />
+        </div>
+      </body>
+    </html>
+    """
+    record = _snapshot(html)
+
+    article = parser.process_record(record)[0]
+
+    # og:image is the publication logo, so it's rejected; the first body
+    # image becomes the hero and is the only entry (no dedup against a logo)
+    assert article.image_urls == ["https://www.ultimahora.com/img/real-hero.jpg"]

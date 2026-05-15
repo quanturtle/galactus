@@ -79,7 +79,9 @@ class Parser(BaseParser, ArticleParser):
 
     decode() bundles the parsed soup, the JSON-LD Article block, and the
     bronze source_url so the eight extract_* hooks need nothing else.
-    One Article per bronze record, so build_item is inherited.
+    build_item drops records that lack an Article JSON-LD — the site
+    serves hub/topic templates under the same hostname that are not
+    individual articles and would otherwise yield all-null silver rows.
     """
 
     bronze_model = HtmlSnapshot
@@ -96,6 +98,13 @@ class Parser(BaseParser, ArticleParser):
             "source_url": record.source_url,
             "json_ld": _find_json_ld(soup),
         }
+
+    # _find_json_ld returns {} when no NewsArticle/Article block is present;
+    # those pages are hub/topic templates, not articles — skip them.
+    def build_item(self, decoded: dict) -> list[dict]:
+        if not decoded.get("json_ld"):
+            return []
+        return [decoded]
 
     def extract_source_url(self, item: dict) -> str:
         return item["source_url"]
@@ -146,12 +155,10 @@ class Parser(BaseParser, ArticleParser):
     def extract_tags(self, item: dict) -> list[str]:
         return []
 
-    # hero (JSON-LD `image`, then og:image) + body images, http only, deduped
+    # hero (JSON-LD `image`, then og:image-if-not-logo, then first body image)
+    # + body images, http only, deduped. Editorial pages drop og:image because
+    # UH serves the publication logo there.
     def extract_image_urls(self, item: dict) -> list[str]:
-        hero = _ld_image_url(item["json_ld"].get("image")) or _meta_content(
-            item["soup"], "og:image"
-        )
-
         # collect http images inside the body, minus logos/icons/tracking pixels
         body_images: list[str] = []
         container = item["soup"].select_one(self.BODY_CONTAINER_SELECTOR)
@@ -164,6 +171,15 @@ class Parser(BaseParser, ArticleParser):
                     continue
                 if src not in body_images:
                     body_images.append(src)
+
+        # pick a hero, refusing the publication logo and other non-editorial assets
+        hero = _ld_image_url(item["json_ld"].get("image"))
+        if not hero:
+            og = _meta_content(item["soup"], "og:image")
+            if og and not any(kw in og.lower() for kw in IMAGE_EXCLUDE):
+                hero = og
+        if not hero and body_images:
+            hero = body_images[0]
 
         out: list[str] = []
         for url in (hero, *body_images):
