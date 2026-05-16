@@ -160,7 +160,7 @@ class BaseScraper:
         return HttpRequest(
             url=url,
             headers=dict(self.config.headers),
-            params=dict(self.config.params),
+            params={},
         )
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:

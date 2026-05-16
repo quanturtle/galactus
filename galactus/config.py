@@ -33,7 +33,6 @@ class ExtractConfig(BaseModel):
             )
         }
     )
-    params: dict[str, str] = {}
     retries: int = 3
     retry_delay: float = 2.0
     follow_redirects: bool = True
