@@ -2,13 +2,13 @@ name: latribuna
 log_level: INFO
 extract:
   scraper: noticias.latribuna
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://www.latribuna.com.py/pf/api/v3/content/fetch/story-feed-query
+  allowed_domains:
+  - www.latribuna.com.py
   scrape_patterns: []
   ignore_patterns: []
   max_pages: -1
-  allowed_domains:
-  - www.latribuna.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: noticias.latribuna

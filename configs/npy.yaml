@@ -2,14 +2,14 @@ name: npy
 log_level: INFO
 extract:
   scraper: noticias.npy
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://www.npy.com.py
+  allowed_domains:
+  - www.npy.com.py
   scrape_patterns:
   - npy\.com\.py/noticias/.+/[^/]+-[^/]+-[^/]+-[^/]+
   ignore_patterns: []
   max_pages: -1
-  allowed_domains:
-  - www.npy.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: noticias.npy

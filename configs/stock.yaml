@@ -2,9 +2,9 @@ name: stock
 log_level: INFO
 extract:
   scraper: supermercados.stock
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://www.stock.com.py
+  allowed_domains:
+  - www.stock.com.py
   scrape_patterns:
   - /products/\d+[^/]*\.aspx(?:\?|#|$)
   ignore_patterns:
@@ -22,7 +22,7 @@ extract:
   - \?pageindex=
   - \?idFiltro=
   max_pages: -1
-  allowed_domains:
-  - www.stock.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: supermercados.stock

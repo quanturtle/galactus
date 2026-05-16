@@ -2,9 +2,9 @@ name: elnacional
 log_level: INFO
 extract:
   scraper: noticias.elnacional
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://elnacional.com.py
+  allowed_domains:
+  - elnacional.com.py
   scrape_patterns:
   - -n\d+(?:/|\?|#|$)
   ignore_patterns:
@@ -13,7 +13,7 @@ extract:
   - /multimedia/
   - /galeria/
   max_pages: -1
-  allowed_domains:
-  - elnacional.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: noticias.elnacional

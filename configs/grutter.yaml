@@ -2,14 +2,14 @@ name: grutter
 log_level: INFO
 extract:
   scraper: supermercados.grutter
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products
+  allowed_domains:
+  - grutteronline.casagrutter.com.py
   scrape_patterns: []
   ignore_patterns: []
   max_pages: -1
+  concurrency: 5
+  timeout_seconds: 30.0
   request_delay: 1.0
-  allowed_domains:
-  - grutteronline.casagrutter.com.py
 transform:
   parser: supermercados.grutter

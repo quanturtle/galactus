@@ -2,13 +2,13 @@ name: abc_color
 log_level: INFO
 extract:
   scraper: noticias.abc_color
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://www.abc.com.py/pf/api/v3/content/fetch/sections-api
+  allowed_domains:
+  - www.abc.com.py
   scrape_patterns: []
   ignore_patterns: []
   max_pages: -1
-  allowed_domains:
-  - www.abc.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: noticias.abc_color

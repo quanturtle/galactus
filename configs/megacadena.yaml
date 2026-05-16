@@ -2,13 +2,13 @@ name: megacadena
 log_level: INFO
 extract:
   scraper: noticias.megacadena
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://megacadena.com.py/wp-json/wp/v2/posts
+  allowed_domains:
+  - megacadena.com.py
   scrape_patterns: []
   ignore_patterns: []
   max_pages: -1
-  allowed_domains:
-  - megacadena.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: noticias.megacadena

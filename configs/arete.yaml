@@ -2,9 +2,9 @@ name: arete
 log_level: INFO
 extract:
   scraper: supermercados.arete
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://www.arete.com.py
+  allowed_domains:
+  - www.arete.com.py
   scrape_patterns:
   - -p\d+(?:/|\?|#|$)
   ignore_patterns:
@@ -20,7 +20,7 @@ extract:
   - -c\d+\.\d+$
   - \?(map|_q|filter)=
   max_pages: -1
-  allowed_domains:
-  - www.arete.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: supermercados.arete

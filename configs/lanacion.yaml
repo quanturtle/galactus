@@ -2,13 +2,13 @@ name: lanacion
 log_level: INFO
 extract:
   scraper: noticias.lanacion
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://www.lanacion.com.py/pf/api/v3/content/fetch/content-search-feed-full
+  allowed_domains:
+  - www.lanacion.com.py
   scrape_patterns: []
   ignore_patterns: []
   max_pages: -1
-  allowed_domains:
-  - www.lanacion.com.py
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: noticias.lanacion

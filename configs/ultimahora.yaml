@@ -2,9 +2,9 @@ name: ultimahora
 log_level: INFO
 extract:
   scraper: noticias.ultimahora
-  timeout_seconds: 30.0
-  concurrency: 5
   base_url: https://www.ultimahora.com
+  allowed_domains:
+  - www.ultimahora.com
   scrape_patterns:
   - ultimahora\.com/[^/]+-[^/]+-[^/]+-[^/]+
   ignore_patterns:
@@ -16,7 +16,7 @@ extract:
   - /contacto-uh
   - /codigo-etico
   max_pages: -1
-  allowed_domains:
-  - www.ultimahora.com
+  concurrency: 5
+  timeout_seconds: 30.0
 transform:
   parser: noticias.ultimahora
