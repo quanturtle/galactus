@@ -83,7 +83,7 @@ def main() -> int:
         logger.error("%s", exc)
         return 2
     except PipelineError as exc:
-        logger.error("pipeline failed: %s", exc)
+        logger.exception("pipeline failed: %s", exc)
         return 1
     except ValueError as exc:
         logger.error("bad argument: %s", exc)

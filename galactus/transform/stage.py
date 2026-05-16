@@ -32,5 +32,5 @@ class TransformStage(PipelineStage):
         try:
             await parser.run()
         except Exception as exc:
-            raise TransformError(f"source {self.config.name!r} aborted") from exc
+            raise TransformError(f"source {self.config.name!r} aborted: {exc}") from exc
         return

@@ -33,5 +33,5 @@ class ExtractStage(PipelineStage):
         try:
             await scraper.run()
         except Exception as exc:
-            raise ExtractError(f"source {self.config.name!r} aborted") from exc
+            raise ExtractError(f"source {self.config.name!r} aborted: {exc}") from exc
         return
