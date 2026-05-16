@@ -121,12 +121,12 @@ class BaseScraper:
         # exceptions propagate so the run loop can skip the failed URL instead of aborting the crawl.
         return await self.http.get(request)
 
-    # JSON bodies yield no <a href>, so API subclasses inherit a no-op default.
+    # JSON bodies yield no matching tags, so API subclasses inherit a no-op default.
     def extract_links(self, response: HttpResponse) -> list[str]:
         soup = BeautifulSoup(response.text, "html.parser")
         out: list[str] = []
-        for a in soup.find_all("a", href=True):
-            href = str(a["href"]).strip()
+        for tag in soup.select('a[href], link[rel~="next"][href]'):
+            href = str(tag["href"]).strip()
             if not href:
                 continue
             out.append(urljoin(response.url, href))
