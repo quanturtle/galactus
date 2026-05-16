@@ -154,7 +154,7 @@ class BaseScraper:
                 parts.netloc.lower(),
                 parts.path,
                 urlencode(kept),
-                parts.fragment,
+                "",
             )
         )
         return HttpRequest(
