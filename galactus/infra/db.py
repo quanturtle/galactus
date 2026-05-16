@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from types import TracebackType
 from typing import Any, TypeVar
 
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.dialects import registry
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
@@ -95,6 +95,37 @@ class Database:
         except SQLAlchemyError as exc:
             raise DatabaseError(f"{model.__name__} insert failed") from exc
         return
+
+    async def load_visited_urls(
+        self,
+        model: type[M],
+        source: str,
+    ) -> list[str]:
+        """Return distinct source_url values for `source` captured since UTC midnight.
+
+        Restricted to 2xx responses — a 4xx/5xx from earlier today should be
+        retried on the next run, not treated as "already visited". The cutoff
+        is computed server-side so client clock drift doesn't matter.
+        """
+        today_start = func.date_trunc("day", func.timezone("UTC", func.now()))
+        stmt = (
+            select(model.source_url)
+            .where(
+                model.source == source,
+                model.created_at >= today_start,
+                model.status_code >= 200,
+                model.status_code < 300,
+            )
+            .distinct()
+        )
+        try:
+            async with self._sessionmaker() as session:
+                result = await session.scalars(stmt)
+                return list(result.all())
+        except SQLAlchemyError as exc:
+            raise DatabaseError(
+                f"loading visited URLs for {model.__name__} source {source!r} failed"
+            ) from exc
 
     async def load_unparsed(
         self,

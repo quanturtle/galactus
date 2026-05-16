@@ -169,6 +169,20 @@ class BaseScraper:
             return True
         return any(p.search(request.url) for p in self.config.scrape_patterns)
 
+    async def seen_today(self) -> set[int]:
+        """Hashes of URLs this source already captured (2xx) since UTC midnight.
+
+        Pre-loaded into the BFS `seen` set so a same-day rerun re-fetches the
+        seeds (to discover new content) but skips any link already in bronze.
+        Hashing goes through build_url so canonicalization matches the
+        HttpRequests produced during expansion.
+        """
+        urls = await self.db.load_visited_urls(
+            model=self.snapshot_model,
+            source=self.source,
+        )
+        return {hash(self.build_url(url)) for url in urls}
+
     async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
         # dispatch on snapshot_model — subclasses set ApiSnapshot to swap the bronze record shape.
         request = response.request
@@ -213,6 +227,7 @@ class BaseScraper:
             seeds = self.seed_urls()
             frontier: deque[HttpRequest] = deque(seeds)
             seen: set[int] = {hash(r) for r in seeds}
+            seen |= await self.seen_today()
             dispatched = 0
             max_pages = self.config.max_pages
             in_flight: set[asyncio.Task[HttpResponse]] = set()

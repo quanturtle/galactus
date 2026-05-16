@@ -199,6 +199,56 @@ def test_run_persists_and_expands_html_bfs() -> None:
     assert all(model is HtmlSnapshot for _, model in db.inserts)
 
 
+def test_run_skips_links_already_visited_today() -> None:
+    # seed lists two links — one already in today's bronze, one fresh.
+    seed_html = (
+        '<html>'
+        '<a href="/old">old</a>'
+        '<a href="/new">new</a>'
+        '</html>'
+    )
+    leaf_html = "<html>leaf</html>"
+    http = FakeHttpClient(
+        responses={
+            "https://example.test": FakeHttpResponse(text=seed_html, url="https://example.test"),
+            "https://example.test/old": FakeHttpResponse(text=leaf_html, url="https://example.test/old"),
+            "https://example.test/new": FakeHttpResponse(text=leaf_html, url="https://example.test/new"),
+        }
+    )
+    db = FakeDatabase(load_visited_results=["https://example.test/old"])
+
+    scraper = WiredScraper(make_extract_config(concurrency=2))
+    scraper.wired_http = http
+    scraper.wired_db = db
+    asyncio.run(scraper.run())
+
+    fetched = sorted(call.url for call in http.calls)
+    assert fetched == ["https://example.test", "https://example.test/new"]
+    assert db.visited_calls == [(HtmlSnapshot, "testsrc")]
+
+
+def test_run_refetches_seed_even_when_in_todays_bronze() -> None:
+    # seed itself appears in today's visited set — must still be fetched so we
+    # can discover new links added since the earlier crawl.
+    seed_html = '<html><a href="/new">new</a></html>'
+    leaf_html = "<html>leaf</html>"
+    http = FakeHttpClient(
+        responses={
+            "https://example.test": FakeHttpResponse(text=seed_html, url="https://example.test"),
+            "https://example.test/new": FakeHttpResponse(text=leaf_html, url="https://example.test/new"),
+        }
+    )
+    db = FakeDatabase(load_visited_results=["https://example.test"])
+
+    scraper = WiredScraper(make_extract_config(concurrency=2))
+    scraper.wired_http = http
+    scraper.wired_db = db
+    asyncio.run(scraper.run())
+
+    fetched = sorted(call.url for call in http.calls)
+    assert fetched == ["https://example.test", "https://example.test/new"]
+
+
 def test_fetch_sends_request_headers_and_params_through_client() -> None:
     scraper = make_scraper(BaseScraper, params={"static": "yes"})
     http: FakeHttpClient = scraper.http  # type: ignore[assignment]
