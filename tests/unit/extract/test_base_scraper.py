@@ -27,8 +27,8 @@ def test_seed_urls_default_is_base_url_as_request() -> None:
 
 
 def test_build_url_default_returns_request_with_config_headers_and_params() -> None:
-    scraper = make_scraper(BaseScraper, params={"k": "v"})
-    request = scraper.build_url("https://example.test/a?b=2")
+    scraper = make_scraper(BaseScraper)
+    request = scraper.build_url("https://example.test/a?b=2", params={"k": "v"})
     assert isinstance(request, HttpRequest)
     assert request.url == "https://example.test/a?b=2"
     assert request.params == {"k": "v"}
@@ -48,9 +48,9 @@ def test_build_url_strips_tracking_params_and_lowercases_host() -> None:
     only_tracking = scraper.build_url("https://example.test/p?gclid=abc&utm_campaign=spring")
     assert only_tracking.url == "https://example.test/p"
 
-    # fragment is preserved verbatim
+    # fragments are dropped — they don't travel over HTTP and would split the BFS seen set
     with_fragment = scraper.build_url("https://example.test/p?utm_source=x#section")
-    assert with_fragment.url == "https://example.test/p#section"
+    assert with_fragment.url == "https://example.test/p"
 
 
 def test_build_url_deduplicates_links_that_differ_only_in_tracking_params() -> None:
@@ -226,9 +226,9 @@ def test_run_skips_links_already_visited_today() -> None:
     assert db.visited_calls == [(HtmlSnapshot, "testsrc")]
 
 
-def test_run_refetches_seed_even_when_in_todays_bronze() -> None:
-    # seed itself appears in today's visited set — must still be fetched so we
-    # can discover new links added since the earlier crawl.
+def test_run_skips_seed_when_already_in_todays_bronze() -> None:
+    # seed itself appears in today's visited set — skip it so a same-day rerun
+    # doesn't write duplicate bronze rows for the section entrypoint.
     seed_html = '<html><a href="/new">new</a></html>'
     leaf_html = "<html>leaf</html>"
     http = FakeHttpClient(
@@ -246,8 +246,8 @@ def test_run_refetches_seed_even_when_in_todays_bronze() -> None:
     scraper.wired_db = db
     asyncio.run(scraper.run())
 
-    fetched = sorted(call.url for call in http.calls)
-    assert fetched == ["https://example.test", "https://example.test/new"]
+    # seed skipped → no fetch and so no link expansion either
+    assert http.calls == []
 
 
 def test_run_skips_api_page_already_visited_today() -> None:
@@ -302,18 +302,18 @@ def test_run_skips_api_page_already_visited_today() -> None:
     scraper.wired_db = db
     asyncio.run(scraper.run())
 
-    # both seeds fetch (seeds always dispatch even if seen_today already covers them);
-    # the assertion checks that seen_today builds matching hashes via build_url(url=, params=)
-    # so the paginated request doesn't crash on a positional URL string.
-    assert len(http.calls) == 2
-    offsets = sorted(call.params["offset"] for call in http.calls)
-    assert offsets == ["0", "100"]
+    # offset=0 seed is skipped (in today's bronze); offset=100 stays fresh.
+    # The assertion also checks that seen_today builds matching hashes via
+    # build_url(url=, params=) so the paginated request doesn't crash on a
+    # positional URL string.
+    assert len(http.calls) == 1
+    assert http.calls[0].params["offset"] == "100"
 
 
 def test_fetch_sends_request_headers_and_params_through_client() -> None:
-    scraper = make_scraper(BaseScraper, params={"static": "yes"})
+    scraper = make_scraper(BaseScraper)
     http: FakeHttpClient = scraper.http  # type: ignore[assignment]
-    request = scraper.build_url("https://example.test/q")
+    request = scraper.build_url("https://example.test/q", params={"static": "yes"})
     asyncio.run(scraper.fetch(request))
     assert len(http.calls) == 1
     sent = http.calls[0]

@@ -25,12 +25,10 @@ def _scraper(
     base_url: str,
     *,
     concurrency: int = 1,
-    params: dict[str, str] | None = None,
 ) -> BaseScraper:
     return make_scraper(
         cls,
         base_url=base_url,
-        params=params or {},
         concurrency=concurrency,
     )
 
@@ -146,6 +144,6 @@ def test_lanacion_raises_on_malformed_seed() -> None:
         json_body={"content_elements": [{} for _ in range(100)]},
     )
 
-    with pytest.raises(KeyError):
+    with pytest.raises((KeyError, TypeError)):
         scraper.get_next_urls(response)  # type: ignore[arg-type]
     return

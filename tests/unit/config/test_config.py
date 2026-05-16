@@ -116,7 +116,6 @@ def test_extract_http_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
-    assert config.extract.params == {}
 
 
 def test_db_pool_size_trickles_to_extract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
