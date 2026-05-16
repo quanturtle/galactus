@@ -210,14 +210,8 @@ class BaseScraper:
             self.http = http
             self.db = db
 
-            # frontier stores the per-request state — (url, params_tuple) — that
-            # actually varies between requests; headers come from config at dispatch.
-            # roughly 3x cheaper than holding full HttpRequest objects across a long crawl.
-            # _params is the already-sorted tuple form; using it skips a re-sort.
             seeds = self.seed_urls()
-            frontier: deque[tuple[str, tuple[tuple[str, str], ...]]] = deque(
-                (r.url, r._params) for r in seeds
-            )
+            frontier: deque[HttpRequest] = deque(seeds)
             seen: set[int] = {hash(r) for r in seeds}
             dispatched = 0
             max_pages = self.config.max_pages
@@ -232,12 +226,7 @@ class BaseScraper:
                         and len(in_flight) < self.concurrency
                         and (max_pages == -1 or dispatched < max_pages)
                     ):
-                        url, params_tuple = frontier.popleft()
-                        request = HttpRequest(
-                            url=url,
-                            headers=self.config.headers,
-                            params=self.config.params | dict(params_tuple),
-                        )
+                        request = frontier.popleft()
                         in_flight.add(asyncio.create_task(self.fetch(request)))
                         dispatched += 1
 
@@ -259,7 +248,7 @@ class BaseScraper:
                             if key in seen or not self.should_enqueue(next_request):
                                 continue
                             seen.add(key)
-                            frontier.append((next_request.url, next_request._params))
+                            frontier.append(next_request)
                         if self.config.request_delay:
                             await asyncio.sleep(self.config.request_delay)
             finally:
