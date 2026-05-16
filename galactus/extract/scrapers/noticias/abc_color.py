@@ -45,7 +45,12 @@ class Scraper(BaseScraper):
         return [self.build_url(section, 0) for section in self.SECTIONS]
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        elements = response.json().get("content_elements", [])
+        # the API returns HTTP 400 with a non-JSON body once offset crosses its hard ceiling;
+        # treat any non-JSON response as end-of-feed for the section.
+        try:
+            elements = response.json().get("content_elements", [])
+        except ValueError:
+            return []
         if len(elements) < self.LIMIT:
             return []
         blob = json.loads(response.request.params.get("query", "{}"))

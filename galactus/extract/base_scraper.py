@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlsplit, urlu
 from bs4 import BeautifulSoup
 
 from galactus.config import ExtractConfig
-from galactus.core.errors import DatabaseError, HttpError, ScraperError
+from galactus.core.errors import DatabaseError, ScraperError
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
 from galactus.transform.html_parser import compress
@@ -112,7 +112,7 @@ class BaseScraper:
         return [self.build_url(self.config.base_url)]
 
     async def fetch(self, request: HttpRequest) -> HttpResponse:
-        # HttpError propagates so the run loop can skip the failed URL instead of aborting the crawl.
+        # exceptions propagate so the run loop can skip the failed URL instead of aborting the crawl.
         return await self.http.get(request)
 
     # JSON bodies yield no <a href>, so API subclasses inherit a no-op default.
@@ -236,14 +236,19 @@ class BaseScraper:
                     done, _ = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
                     for task in done:
                         in_flight.discard(task)
+                        # per-URL isolation: fetch, persist, and next-url derivation can each fail
+                        # for one URL without aborting the source. cancellation still propagates.
                         try:
                             response = await task
-                        except HttpError as exc:
+                            next_requests = await self.process_response(response)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
                             logger.warning(
-                                "%s: skipping URL after fetch failed: %s", self.source, exc
+                                "%s: skipping URL after error: %s", self.source, exc
                             )
                             continue
-                        for next_request in await self.process_response(response):
+                        for next_request in next_requests:
                             key = hash(next_request)
                             if key in seen or not self.should_enqueue(next_request):
                                 continue
