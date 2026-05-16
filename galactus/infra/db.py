@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Iterable
 from types import TracebackType
 from typing import Any, TypeVar
 
@@ -55,7 +55,10 @@ class Database:
         url = make_url(database_url)
         logger.info(
             "Database initialized (host=%s, db=%s, pool_size=%s, max_overflow=%s)",
-            url.host, url.database, pool_size, max_overflow,
+            url.host,
+            url.database,
+            pool_size,
+            max_overflow,
         )
 
     async def open(self) -> None:
@@ -152,17 +155,20 @@ class Database:
             return [(row[0], dict(row[1] or {})) for row in rows]
         return [(row[0], {}) for row in rows]
 
-    async def load_unparsed(
+    async def stream_unparsed(
         self,
         bronze_model: type[M],
         silver_model: type[Base],
         source: str,
-    ) -> list[M]:
-        """Return the bronze rows for `source` that no silver row references yet.
+        chunk_size: int = 100,
+    ) -> AsyncIterator[M]:
+        """Yield bronze rows for `source` that no silver row references yet.
 
         A bronze row counts as parsed once any silver row carries its
         (source, bronze_id) — one bronze row may yield many silver entities.
-        Ordered by created_at then bronze_id. Safe to re-run: bronze rows whose
+        Ordered by created_at then bronze_id. Rows are fetched from the server
+        in chunks of `chunk_size`, so memory stays bounded regardless of how
+        many bronze rows remain unparsed. Safe to re-run: bronze rows whose
         silver already committed are not returned on the next pass.
         """
         already_parsed = (
@@ -175,12 +181,14 @@ class Database:
             select(bronze_model)
             .where(bronze_model.source == source, ~already_parsed)
             .order_by(bronze_model.created_at, bronze_model.bronze_id)
+            .execution_options(yield_per=chunk_size)
         )
         try:
             async with self._sessionmaker() as session:
-                result = await session.scalars(stmt)
-                return list(result.all())
+                result = await session.stream_scalars(stmt)
+                async for row in result:
+                    yield row
         except SQLAlchemyError as exc:
             raise DatabaseError(
-                f"loading unparsed {bronze_model.__name__} for source {source!r} failed"
+                f"streaming unparsed {bronze_model.__name__} for source {source!r} failed"
             ) from exc

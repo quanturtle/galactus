@@ -66,6 +66,7 @@ class TransformConfig(BaseModel):
     database_url: str
     db_pool_size: int = Field(default=5, ge=1)
     parser: str
+    batch_size: int = Field(default=100, ge=1)
     blocklist_tags: list[str] = []
     blocklist_attributes: list[str] = []
 

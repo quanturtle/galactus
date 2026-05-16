@@ -47,8 +47,10 @@ class BaseParser(ABC):
         self.db: Database
         logger.info(
             "Parser initialized (source=%s, parser=%s, bronze_model=%s, silver_model=%s)",
-            self.source, type(self).__name__,
-            self.bronze_model.__name__, self.silver_model.__name__,
+            self.source,
+            type(self).__name__,
+            self.bronze_model.__name__,
+            self.silver_model.__name__,
         )
 
     def db_extras(self) -> dict[str, Any]:
@@ -69,9 +71,6 @@ class BaseParser(ABC):
                 "blocklist_attributes": self.config.blocklist_attributes,
             }
         )
-
-    async def load_records(self) -> list[Base]:
-        return await self.db.load_unparsed(self.bronze_model, self.silver_model, self.source)
 
     # dispatch on bronze_model — subclasses set ApiSnapshot to swap the bronze record shape.
     def decode(self, record: Base) -> Any:
@@ -111,26 +110,34 @@ class BaseParser(ABC):
         return entities
 
     async def run(self) -> None:
-        """Lifecycle: open db; load unparsed bronze; decode + build + stamp; insert silver per bronze record."""
+        """Lifecycle: open db; stream unparsed bronze; decode + build + stamp; insert silver per record."""
         async with self.make_database() as db:
             self.db = db
             processed = 0
             skipped = 0
             silver_rows = 0
+            batch_size = self.config.batch_size
+            logger.info(
+                "transform[%s]: parser run start (batch_size=%s)",
+                self.source,
+                batch_size,
+            )
             try:
-                records = await self.load_records()
-                logger.info(
-                    "transform[%s]: parser run start (records=%s)",
-                    self.source, len(records),
-                )
-                for record in records:
+                async for record in self.db.stream_unparsed(
+                    self.bronze_model,
+                    self.silver_model,
+                    self.source,
+                    chunk_size=batch_size,
+                ):
                     try:
                         entities = self.process_record(record)
                     except ParserError as exc:
                         skipped += 1
                         logger.warning(
                             "transform[%s]: skipping bronze_id=%s: %s",
-                            self.source, record.bronze_id, exc,
+                            self.source,
+                            record.bronze_id,
+                            exc,
                         )
                         continue
                     await self.db.insert(entities, model=self.silver_model)
@@ -138,13 +145,26 @@ class BaseParser(ABC):
                     silver_rows += len(entities)
                     logger.info(
                         "transform[%s]: inserted %s %s for bronze_id=%s",
-                        self.source, len(entities), self.silver_model.__name__,
+                        self.source,
+                        len(entities),
+                        self.silver_model.__name__,
                         record.bronze_id,
                     )
+                    if processed % batch_size == 0:
+                        logger.info(
+                            "transform[%s]: progress checkpoint (processed=%s, skipped=%s, silver_rows=%s)",
+                            self.source,
+                            processed,
+                            skipped,
+                            silver_rows,
+                        )
             except DatabaseError as exc:
                 raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
         logger.info(
             "transform[%s]: parser run complete (processed=%s, skipped=%s, silver_rows=%s)",
-            self.source, processed, skipped, silver_rows,
+            self.source,
+            processed,
+            skipped,
+            silver_rows,
         )
         return

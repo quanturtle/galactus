@@ -156,19 +156,23 @@ async def test_insert_silver_products_with_decimal(db, engine) -> None:
     assert row.currency == "USD"
 
 
-async def test_load_unparsed_filters_by_source(db, engine) -> None:
+async def _drain_unparsed(db, bronze_model, silver_model, source):
+    return [r async for r in db.stream_unparsed(bronze_model, silver_model, source)]
+
+
+async def test_stream_unparsed_filters_by_source(db, engine) -> None:
     a = _html_snapshot(source="src_a", source_url="https://example.com/a")
     b = _html_snapshot(source="src_b", source_url="https://example.com/b")
     await db.insert([a, b], ScratchHtmlSnapshot)
 
-    loaded = await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_b")
+    loaded = await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "src_b")
     assert [r.source for r in loaded] == ["src_b"]
 
-    loaded_a = await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")
+    loaded_a = await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "src_a")
     assert [r.source for r in loaded_a] == ["src_a"]
 
 
-async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
+async def test_stream_unparsed_skips_rows_already_in_silver(db, engine) -> None:
     one = _html_snapshot(source_url="https://example.com/a")
     two = _html_snapshot(source_url="https://example.com/b")
     await db.insert([one, two], ScratchHtmlSnapshot)
@@ -177,7 +181,7 @@ async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
     # nothing parsed yet -> both bronze rows are unparsed
     pending = [
         r.bronze_id
-        for r in await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
+        for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [first_id, second_id]
 
@@ -192,12 +196,12 @@ async def test_load_unparsed_skips_rows_already_in_silver(db, engine) -> None:
     # only the still-unparsed bronze row is returned now
     pending = [
         r.bronze_id
-        for r in await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "test_source")
+        for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [second_id]
 
 
-async def test_load_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
+async def test_stream_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
     # a silver row for a different source must not mask a bronze row that shares its bronze_id
     a = _html_snapshot(source="src_a", source_url="https://example.com/a")
     await db.insert(a, ScratchHtmlSnapshot)
@@ -210,6 +214,6 @@ async def test_load_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
     )
 
     pending = [
-        r.bronze_id for r in await db.load_unparsed(ScratchHtmlSnapshot, ScratchArticle, "src_a")
+        r.bronze_id for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "src_a")
     ]
     assert pending == [bronze_id]

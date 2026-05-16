@@ -5,7 +5,7 @@ canned responses inline. Imported on demand by tests that exercise scraper
 hooks without real HTTP or DB.
 """
 
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Iterable
 from typing import Any
 
 from galactus.config import ExtractConfig, TransformConfig
@@ -108,16 +108,18 @@ class FakeDatabase:
                 self.inserts.append((r, model))
         return
 
-    async def load_unparsed(
+    async def stream_unparsed(
         self,
         bronze_model: type[Base],
         silver_model: type[Base],
         source: str,
-    ) -> list[Base]:
+        chunk_size: int = 100,
+    ) -> AsyncIterator[Base]:
         self.load_calls.append((bronze_model, silver_model, source))
         if self._load_raises is not None:
             raise self._load_raises
-        return list(self._load_unparsed_results)
+        for row in list(self._load_unparsed_results):
+            yield row
 
     async def load_visited_requests(
         self,
