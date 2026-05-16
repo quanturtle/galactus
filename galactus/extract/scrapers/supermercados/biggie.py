@@ -21,6 +21,10 @@ class Scraper(BaseScraper):
         return [self.build_url(0)]
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+        # fan out the full offset list only from the seed; later responses already
+        # carry offsets enqueued by the seed, so re-emitting them just wastes hashing.
+        if response.request.params.get("skip") != "0":
+            return []
         body = response.json()
         if "count" not in body:
             raise ScraperError(f"biggie: missing 'count' in {response.url}")

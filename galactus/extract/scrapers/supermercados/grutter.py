@@ -26,6 +26,10 @@ class Scraper(BaseScraper):
         return [self.build_url(1)]
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+        # fan out the full page list only from the seed; later responses already
+        # carry pages enqueued by the seed, so re-emitting them just wastes hashing.
+        if response.request.params.get("page") != "1":
+            return []
         header = response.headers.get("x-wp-totalpages")
         if header is None:
             raise ScraperError(f"grutter: missing x-wp-totalpages header at {response.url}")
