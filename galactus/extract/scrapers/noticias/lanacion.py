@@ -36,18 +36,13 @@ class Scraper(BaseScraper):
         # non-200 bodies aren't JSON; bail before .json() crashes the run
         if response.status_code != 200:
             return []
-        # parse the feed body once and hand the elements to get_next_urls via a
-        # scratch attribute; httpx re-decodes on every .json() call. Race-free
-        # because run() awaits each process_response before starting the next.
-        elements = response.json().get("content_elements", [])
         # skip overshoot pages from in-flight fetches past the natural end — don't persist empty bronze rows
-        if not elements:
+        if not response.json().get("content_elements", []):
             return []
-        self._last_elements = elements
         return await super().process_response(response)
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        if len(self._last_elements) < self.FEED_SIZE:
+        if len(response.json().get("content_elements", [])) < self.FEED_SIZE:
             return []
         blob = json.loads(response.request.params["query"])
         current = int(blob["feedFrom"])
