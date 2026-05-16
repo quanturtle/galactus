@@ -37,8 +37,10 @@ class HttpRequest:
         return dict(self._headers)
 
     @property
-    def params(self) -> dict[str, str]:
-        return dict(self._params)
+    def params(self) -> dict[str, str] | None:
+        # None when empty so httpx preserves any query string baked into self.url
+        # (httpx with params={} rewrites the URL's query to empty).
+        return dict(self._params) if self._params else None
 
     def __hash__(self) -> int:
         return hash((self.url, self._headers, self._params))
