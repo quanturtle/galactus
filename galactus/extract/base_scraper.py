@@ -217,7 +217,7 @@ class BaseScraper:
                     source=self.source,
                     source_url=request.url,
                     request_url=request.url,
-                    request_params=request.params,
+                    request_params=request.params or {},
                     status_code=response.status_code,
                     response_headers=dict(response.headers),
                     body=compress(response.text),

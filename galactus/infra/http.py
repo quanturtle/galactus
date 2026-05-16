@@ -38,8 +38,7 @@ class HttpRequest:
 
     @property
     def params(self) -> dict[str, str] | None:
-        # None when empty so httpx preserves any query string baked into self.url
-        # (httpx with params={} rewrites the URL's query to empty).
+        """Returns None when no params were set so httpx preserves any query string baked into self.url; returns a dict copy otherwise. API scrapers that read params back (get_next_urls) only call this on requests they constructed with non-empty params and so always see a dict."""
         return dict(self._params) if self._params else None
 
     def __hash__(self) -> int:
