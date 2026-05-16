@@ -1,3 +1,5 @@
+from typing import Any
+
 from galactus.core.errors import ScraperError
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpRequest, HttpResponse
@@ -10,11 +12,18 @@ class Scraper(BaseScraper):
     snapshot_model = ApiSnapshot
     PER_PAGE = 100
 
-    def build_url(self, page: int) -> HttpRequest:
+    def build_url(
+        self,
+        page: int | None = None,
+        url: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> HttpRequest:
         return HttpRequest(
-            url=self.config.base_url,
+            url=url if url is not None else self.config.base_url,
             headers=dict(self.config.headers),
-            params={
+            params=params
+            if params is not None
+            else {
                 "per_page": str(self.PER_PAGE),
                 "_embed": "true",
                 "orderby": "date",

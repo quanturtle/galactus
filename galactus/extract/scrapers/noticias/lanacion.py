@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpRequest, HttpResponse
@@ -14,7 +15,12 @@ class Scraper(BaseScraper):
     # Arc's feed sits on Elasticsearch; ES rejects feedFrom+feedSize > index.max_result_window (default 10000).
     MAX_RESULT_WINDOW = 10000
 
-    def build_url(self, offset: int) -> HttpRequest:
+    def build_url(
+        self,
+        offset: int | None = None,
+        url: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> HttpRequest:
         query = json.dumps(
             {
                 "feedSize": str(self.FEED_SIZE),
@@ -24,9 +30,9 @@ class Scraper(BaseScraper):
             }
         )
         return HttpRequest(
-            url=self.config.base_url,
+            url=url if url is not None else self.config.base_url,
             headers=dict(self.config.headers),
-            params={"query": query},
+            params=params if params is not None else {"query": query},
         )
 
     def seed_urls(self) -> list[HttpRequest]:

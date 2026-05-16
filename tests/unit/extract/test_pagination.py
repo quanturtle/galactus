@@ -113,9 +113,7 @@ def test_lanacion_emits_concurrency_offsets_on_full_page() -> None:
     scraper = _scraper(LaNacionScraper, LANACION_BASE_URL, concurrency=5)
     seed = scraper.seed_urls()[0]
     feed_size = LaNacionScraper.FEED_SIZE
-    response = _response_for(
-        seed, json_body={"content_elements": [{} for _ in range(feed_size)]}
-    )
+    response = _response_for(seed, json_body={"content_elements": [{} for _ in range(feed_size)]})
 
     requests = scraper.get_next_urls(response)  # type: ignore[arg-type]
 

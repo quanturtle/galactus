@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpRequest, HttpResponse
@@ -11,7 +12,12 @@ class Scraper(BaseScraper):
     snapshot_model = ApiSnapshot
     SIZE = 100
 
-    def build_url(self, offset: int) -> HttpRequest:
+    def build_url(
+        self,
+        offset: int | None = None,
+        url: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> HttpRequest:
         query = json.dumps(
             {
                 "query": "type:story",
@@ -20,9 +26,9 @@ class Scraper(BaseScraper):
             }
         )
         return HttpRequest(
-            url=self.config.base_url,
+            url=url if url is not None else self.config.base_url,
             headers=dict(self.config.headers),
-            params={"query": query},
+            params=params if params is not None else {"query": query},
         )
 
     def seed_urls(self) -> list[HttpRequest]:

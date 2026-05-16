@@ -84,7 +84,7 @@ class FakeDatabase:
     def __init__(
         self,
         load_unparsed_results: list[Base] | None = None,
-        load_visited_results: list[str] | None = None,
+        load_visited_results: list[tuple[str, dict[str, Any]]] | None = None,
         load_raises: Exception | None = None,
         insert_raises: Exception | None = None,
     ) -> None:
@@ -119,11 +119,11 @@ class FakeDatabase:
             raise self._load_raises
         return list(self._load_unparsed_results)
 
-    async def load_visited_urls(
+    async def load_visited_requests(
         self,
         model: type[Base],
         source: str,
-    ) -> list[str]:
+    ) -> list[tuple[str, dict[str, Any]]]:
         self.visited_calls.append((model, source))
         if self._load_raises is not None:
             raise self._load_raises

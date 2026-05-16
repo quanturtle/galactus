@@ -4,7 +4,7 @@ import pytest
 
 from galactus.core.errors import ScraperError
 from galactus.extract.base_scraper import BaseScraper
-from galactus.infra.http import HttpRequest
+from galactus.infra.http import HttpRequest, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
@@ -201,21 +201,20 @@ def test_run_persists_and_expands_html_bfs() -> None:
 
 def test_run_skips_links_already_visited_today() -> None:
     # seed lists two links — one already in today's bronze, one fresh.
-    seed_html = (
-        '<html>'
-        '<a href="/old">old</a>'
-        '<a href="/new">new</a>'
-        '</html>'
-    )
+    seed_html = '<html><a href="/old">old</a><a href="/new">new</a></html>'
     leaf_html = "<html>leaf</html>"
     http = FakeHttpClient(
         responses={
             "https://example.test": FakeHttpResponse(text=seed_html, url="https://example.test"),
-            "https://example.test/old": FakeHttpResponse(text=leaf_html, url="https://example.test/old"),
-            "https://example.test/new": FakeHttpResponse(text=leaf_html, url="https://example.test/new"),
+            "https://example.test/old": FakeHttpResponse(
+                text=leaf_html, url="https://example.test/old"
+            ),
+            "https://example.test/new": FakeHttpResponse(
+                text=leaf_html, url="https://example.test/new"
+            ),
         }
     )
-    db = FakeDatabase(load_visited_results=["https://example.test/old"])
+    db = FakeDatabase(load_visited_results=[("https://example.test/old", {})])
 
     scraper = WiredScraper(make_extract_config(concurrency=2))
     scraper.wired_http = http
@@ -235,10 +234,12 @@ def test_run_refetches_seed_even_when_in_todays_bronze() -> None:
     http = FakeHttpClient(
         responses={
             "https://example.test": FakeHttpResponse(text=seed_html, url="https://example.test"),
-            "https://example.test/new": FakeHttpResponse(text=leaf_html, url="https://example.test/new"),
+            "https://example.test/new": FakeHttpResponse(
+                text=leaf_html, url="https://example.test/new"
+            ),
         }
     )
-    db = FakeDatabase(load_visited_results=["https://example.test"])
+    db = FakeDatabase(load_visited_results=[("https://example.test", {})])
 
     scraper = WiredScraper(make_extract_config(concurrency=2))
     scraper.wired_http = http
@@ -247,6 +248,66 @@ def test_run_refetches_seed_even_when_in_todays_bronze() -> None:
 
     fetched = sorted(call.url for call in http.calls)
     assert fetched == ["https://example.test", "https://example.test/new"]
+
+
+def test_run_skips_api_page_already_visited_today() -> None:
+    # paginating API scraper: same base URL, page differentiator lives in params.
+    # bronze row for offset=0 must dedupe against the seed request for offset=0
+    # while offset=100 remains fresh.
+    base_url = "https://api.example.test/feed"
+
+    class PagingApiScraper(BaseScraper):
+        snapshot_model = ApiSnapshot
+
+        def build_url(  # type: ignore[override]
+            self,
+            offset: int | None = None,
+            url: str | None = None,
+            params: dict[str, object] | None = None,
+        ) -> HttpRequest:
+            return HttpRequest(
+                url=url if url is not None else base_url,
+                headers=dict(self.config.headers),
+                params=params if params is not None else {"offset": str(offset)},
+            )
+
+        def seed_urls(self) -> list[HttpRequest]:
+            return [self.build_url(0), self.build_url(100)]
+
+        def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+            return []
+
+    http = FakeHttpClient(
+        responses={
+            base_url: FakeHttpResponse(text='{"ok":true}', url=base_url),
+        }
+    )
+    # already visited: offset=0
+    db = FakeDatabase(load_visited_results=[(base_url, {"offset": "0"})])
+
+    class PagingApiWired(PagingApiScraper):
+        wired_http: FakeHttpClient
+        wired_db: FakeDatabase
+
+        def make_http_client(self) -> FakeHttpClient:  # type: ignore[override]
+            return self.wired_http
+
+        def make_database(self) -> FakeDatabase:  # type: ignore[override]
+            return self.wired_db
+
+    scraper = PagingApiWired(
+        make_extract_config(base_url=base_url, allowed_domains=frozenset({"api.example.test"}))
+    )
+    scraper.wired_http = http
+    scraper.wired_db = db
+    asyncio.run(scraper.run())
+
+    # both seeds fetch (seeds always dispatch even if seen_today already covers them);
+    # the assertion checks that seen_today builds matching hashes via build_url(url=, params=)
+    # so the paginated request doesn't crash on a positional URL string.
+    assert len(http.calls) == 2
+    offsets = sorted(call.params["offset"] for call in http.calls)
+    assert offsets == ["0", "100"]
 
 
 def test_fetch_sends_request_headers_and_params_through_client() -> None:

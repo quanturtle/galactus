@@ -130,7 +130,16 @@ class BaseScraper:
     # one place per scraper that constructs an HttpRequest — config headers/params attach here.
     # also the single seam where every URL gets canonicalized (tracking params stripped,
     # scheme + host lowercased) so duplicates collapse in `seen` and in bronze.
-    def build_url(self, *args, **kwargs) -> HttpRequest:
+    # the kwargs branch (url=, params=) is the seen_today path: bronze already stores
+    # the canonical url and the exact params that produced today's hash, so we wrap
+    # without re-canonicalizing.
+    def build_url(self, *args: Any, **kwargs: Any) -> HttpRequest:
+        if "url" in kwargs:
+            return HttpRequest(
+                url=kwargs["url"],
+                headers=dict(self.config.headers),
+                params=dict(kwargs.get("params") or {}),
+            )
         parts = urlsplit(args[0])
         kept = [
             (k, v)
@@ -170,18 +179,21 @@ class BaseScraper:
         return any(p.search(request.url) for p in self.config.scrape_patterns)
 
     async def seen_today(self) -> set[int]:
-        """Hashes of URLs this source already captured (2xx) since UTC midnight.
+        """Hashes of requests this source already captured (2xx) since UTC midnight.
 
         Pre-loaded into the BFS `seen` set so a same-day rerun re-fetches the
-        seeds (to discover new content) but skips any link already in bronze.
-        Hashing goes through build_url so canonicalization matches the
-        HttpRequests produced during expansion.
+        seeds (to discover new content) but skips any request already in bronze.
+        Each hash is produced via build_url so the keys match what BFS expansion
+        produces for in-flight requests. Paginating subclasses override build_url
+        with non-URL signatures, so we go through the keyword path (url=, params=)
+        that every build_url accepts; the stored source_url is already canonical
+        and request_params (when present) carries the per-page differentiator.
         """
-        urls = await self.db.load_visited_urls(
+        rows = await self.db.load_visited_requests(
             model=self.snapshot_model,
             source=self.source,
         )
-        return {hash(self.build_url(url)) for url in urls}
+        return {hash(self.build_url(url=url, params=params)) for url, params in rows}
 
     async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
         # dispatch on snapshot_model — subclasses set ApiSnapshot to swap the bronze record shape.
@@ -259,9 +271,7 @@ class BaseScraper:
                         except asyncio.CancelledError:
                             raise
                         except Exception as exc:
-                            logger.warning(
-                                "%s: skipping URL after error: %s", self.source, exc
-                            )
+                            logger.warning("%s: skipping URL after error: %s", self.source, exc)
                             continue
                         for next_request in next_requests:
                             key = hash(next_request)
