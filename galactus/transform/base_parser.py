@@ -1,4 +1,5 @@
 import json
+import logging
 from abc import ABC
 from typing import Any, ClassVar
 
@@ -9,6 +10,8 @@ from galactus.transform.html_parser import HtmlParser, decompress
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
+
+logger = logging.getLogger(__name__)
 
 
 class BaseParser(ABC):
@@ -112,7 +115,11 @@ class BaseParser(ABC):
             try:
                 records = await self.load_records()
                 for record in records:
-                    entities = self.process_record(record)
+                    try:
+                        entities = self.process_record(record)
+                    except ParserError as exc:
+                        logger.warning("%s", exc)
+                        continue
                     await self.db.insert(entities, model=self.silver_model)
             except DatabaseError as exc:
                 raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
