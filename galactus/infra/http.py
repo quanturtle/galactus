@@ -1,6 +1,7 @@
 import asyncio
 import ssl
 from collections.abc import Mapping
+from types import TracebackType
 from typing import Any
 
 import httpx
@@ -151,6 +152,11 @@ class HttpClient:
     async def __aenter__(self) -> "HttpClient":
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         await self.client.aclose()
         return

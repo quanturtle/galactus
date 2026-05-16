@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from types import TracebackType
 from typing import Any, TypeVar
 
 from sqlalchemy import insert, select
@@ -64,7 +65,12 @@ class Database:
         await self.open()
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         await self.close()
         return
 
