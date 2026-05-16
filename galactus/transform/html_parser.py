@@ -1,6 +1,5 @@
 """HTML parsing, compression helpers, and per-source filter configuration."""
 
-import hashlib
 import zlib
 from typing import Any
 
@@ -41,10 +40,6 @@ class HtmlParser:
 
         return soup
 
-    def clean(self, html: str) -> str:
-        """Apply all filters and return a cleaned HTML string."""
-        return str(self.parse(html))
-
 
 def compress(text: str) -> bytes:
     """zlib-compress a UTF-8 string for BYTEA storage."""
@@ -54,8 +49,3 @@ def compress(text: str) -> bytes:
 def decompress(blob: bytes) -> str:
     """Decompress a zlib blob back to a UTF-8 string."""
     return zlib.decompress(blob).decode("utf-8")
-
-
-def compute_content_hash(cleaned_html: str) -> str:
-    """SHA-256 of cleaned HTML for change-detection dedup."""
-    return hashlib.sha256(cleaned_html.encode("utf-8")).hexdigest()

@@ -1,12 +1,9 @@
 import importlib
-import logging
 
 from galactus.config import PipelineConfig
 from galactus.core.errors import ExtractError
 from galactus.core.pipeline import PipelineStage
 from galactus.extract.base_scraper import BaseScraper
-
-logger = logging.getLogger(__name__)
 
 
 class ExtractStage(PipelineStage):

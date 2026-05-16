@@ -41,9 +41,6 @@ SKIP_EXTENSIONS = frozenset(
     }
 )
 
-# persist full HTML bodies in bronze.html_snapshots (the parsers need them).
-STORE_HTML_BODY = True
-
 # marketing/tracking query parameters stripped from every URL build_url touches.
 # without this, the same product/article reaches bronze twice whenever a site
 # links itself with utm tags, producing duplicate silver rows.
@@ -184,7 +181,7 @@ class BaseScraper:
                     status_code=response.status_code,
                     content_type=response.headers.get("content-type", ""),
                     response_headers=dict(response.headers),
-                    html=compress(response.text) if STORE_HTML_BODY else b"",
+                    html=compress(response.text),
                     is_diff=False,
                 )
             elif model is ApiSnapshot:

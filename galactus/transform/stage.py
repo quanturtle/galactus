@@ -1,12 +1,9 @@
 import importlib
-import logging
 
 from galactus.config import PipelineConfig
 from galactus.core.errors import TransformError
 from galactus.core.pipeline import PipelineStage
 from galactus.transform.base_parser import BaseParser
-
-logger = logging.getLogger(__name__)
 
 
 class TransformStage(PipelineStage):
