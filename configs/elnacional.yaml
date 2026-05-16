@@ -12,6 +12,7 @@ extract:
   - /autor/
   - /multimedia/
   - /galeria/
+  - email-protection
   max_pages: -1
   concurrency: 5
   timeout_seconds: 30.0
