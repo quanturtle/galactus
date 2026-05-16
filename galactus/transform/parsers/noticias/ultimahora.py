@@ -127,7 +127,12 @@ class Parser(BaseParser, ArticleParser):
         value = item["json_ld"].get("author")
         if isinstance(value, list) and value:
             first = value[0]
-            name = first.get("name") if isinstance(first, dict) else str(first)
+            if isinstance(first, dict):
+                name = first.get("name")
+            elif isinstance(first, str) and first.strip():
+                name = first.strip()
+            else:
+                return []
             if name:
                 return [name]
             return []
