@@ -3,7 +3,7 @@ import logging
 from collections import deque
 from pathlib import Path
 from typing import Any, ClassVar
-from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlparse, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
@@ -133,34 +133,32 @@ class BaseScraper:
             out.append(urljoin(response.url, href))
         return out
 
-    # single seam: canonicalize URL (strip tracking, lowercase scheme+host) and attach config headers/params.
-    # kwargs branch (url=, params=) is the seen_today path — bronze is already canonical, don't re-canonicalize.
-    def build_url(self, *args: Any, **kwargs: Any) -> HttpRequest:
-        if "url" in kwargs:
-            return HttpRequest(
-                url=kwargs["url"],
-                headers=dict(self.config.headers),
-                params=dict(kwargs.get("params") or {}),
-            )
-        parts = urlsplit(args[0])
+    # canonicalize: lowercase scheme+host, strip TRACKING_PARAMS, drop fragment, keep %20 (quote, not quote_plus).
+    # path case and trailing slash are preserved — source sites link consistently within themselves.
+    def build_url(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+    ) -> HttpRequest:
+        parts = urlsplit(url)
         kept = [
             (k, v)
             for k, v in parse_qsl(parts.query, keep_blank_values=True)
             if k not in TRACKING_PARAMS
         ]
-        url = urlunsplit(
+        canonical = urlunsplit(
             (
                 parts.scheme.lower(),
                 parts.netloc.lower(),
                 parts.path,
-                urlencode(kept),
+                urlencode(kept, quote_via=quote),
                 "",
             )
         )
         return HttpRequest(
-            url=url,
+            url=canonical,
             headers=dict(self.config.headers),
-            params={},
+            params=dict(params or {}),
         )
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
