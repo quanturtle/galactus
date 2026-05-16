@@ -104,7 +104,7 @@ The pipeline is small and explicit; each piece is built around a named design pa
 `Pipeline` owns an ordered `list[PipelineStage]` plus a `{name: stage}` index. `run(stage_name=None)` runs every stage in order; `run("extract")` runs just that one. Each stage is an interchangeable strategy hidden behind the abstract `async run()` — adding a fourth stage is "append it to `stages`". Construction-time invariants (non-empty, no duplicate names) are enforced up front.
 
 ### `config.py` — `PipelineConfig` (frozen Pydantic) · *Configuration object, read at the edges*
-`load_config(path)` is the **single** read of the YAML file plus the `DATABASE_URL` env var, called once at startup; everything downstream gets the typed, frozen object. Nested models — `ExtractConfig` / `ExtractOptions` (base URL, URL patterns, pagination, pacing, HTTP knobs) and `TransformConfig` / `TransformOptions` (HTML blocklists) — keep each stage's knobs together. `extra="forbid"` means a typo in a YAML key is a startup error, not silent drift.
+`load_config(path)` is the **single** read of the YAML file plus the `DATABASE_URL` env var, called once at startup; everything downstream gets the typed, frozen object. `PipelineConfig` composes a flat `ExtractConfig` (base URL, URL patterns, pagination, pacing, HTTP knobs) and `TransformConfig` (HTML blocklists), each keeping its stage's knobs together. `extra="forbid"` means a typo in a YAML key is a startup error, not silent drift.
 
 ### `cli.py` — `main()` / `validate_plugins()` · *Fail-fast composition + boundary error handling*
 `validate_plugins()` imports the configured scraper and parser modules and checks they export `Scraper` / `Parser` *before* any I/O happens, so a bad config name fails immediately. `main()` is the one place that turns exceptions into exit codes: `ConfigError → 2`, `PipelineError → 1`, everything else propagates. Internal code never catches-and-logs.
@@ -324,22 +324,23 @@ name: <source>
 log_level: INFO
 extract:
   scraper: supermercados.<source>            # dotted path under galactus.extract.scrapers
+  base_url: https://www.<source>.com.py
+  allowed_domains:
+  - www.<source>.com.py
+  scrape_patterns:                           # empty list = persist every fetched URL
+  - /product/[a-z0-9-]+
+  ignore_patterns:
+  - /login
+  - /cart
+  params:                                    # paginated APIs read the page size from here
+    per_page: '100'                          #   under the API's native key (per_page, take, size, ...)
+  max_pages: -1                              # hard cap on dispatched fetches; -1 = unbounded
+  concurrency: 5                             # in-flight fetch tasks
   timeout_seconds: 30.0
-  user_agent: "Mozilla/5.0 ..."
-  concurrency: 1                             # in-flight fetch tasks
-  options:
-    base_url: https://www.<source>.com.py
-    scrape_url_patterns:                     # empty = persist everything fetched
-      - "/product/"
-    ignore_url_patterns:
-      - /login
-      - /cart
-    params:                                  # paginated APIs read the page size from here
-      per_page: '100'                        #   under the API's native key (per_page, take, size, ...)
-    max_pages: 10                            # hard cap on dispatched fetches; -1 = unbounded
 transform:
   parser: supermercados.<source>             # dotted path under galactus.transform.parsers
-  options: {}                                # blocklist_tags / blocklist_attributes if needed
+  blocklist_tags: []                         # populate to strip tag+subtree before parsing
+  blocklist_attributes: []                   # populate to strip attributes from remaining tags
 ```
 
 ### 2. Scraper — `galactus/extract/scrapers/<domain>/<source>.py`
