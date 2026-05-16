@@ -82,10 +82,7 @@ class BaseParser(ABC):
             return json.loads(decompress(record.body))
         raise ParserError(f"{self.source}: no decoder for {model}")
 
-    # default: one bronze record carries one entity, so the decoded payload is
-    # the single item. override when the bronze record packs many entities
-    # (e.g. a paginated API page or a category listing) and return one item per
-    # silver row the record should produce.
+    # default: decoded payload is one item. override when a bronze record packs many entities.
     def build_item(self, decoded: Any) -> list[Any]:
         return [decoded]
 

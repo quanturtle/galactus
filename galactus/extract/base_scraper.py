@@ -41,9 +41,7 @@ SKIP_EXTENSIONS = frozenset(
     }
 )
 
-# marketing/tracking query parameters stripped from every URL build_url touches.
-# without this, the same product/article reaches bronze twice whenever a site
-# links itself with utm tags, producing duplicate silver rows.
+# tracking params stripped on every build_url so utm-tagged dupes collapse in bronze.
 TRACKING_PARAMS = frozenset(
     {
         "utm_source",
@@ -85,7 +83,7 @@ class BaseScraper:
         # populated in run(), inside the async with
         self.http: HttpClient
         self.db: Database
-        # field order mirrors source yaml: scraper, base_url, max_pages, concurrency, timeout, retries, retry_delay, request_delay
+        # field order mirrors source yaml
         logger.info(
             "Scraper initialized (source=%s, scraper=%s, base_url=%s, max_pages=%s, "
             "concurrency=%s, timeout_seconds=%s, retries=%s, retry_delay=%s, request_delay=%s)",
@@ -134,13 +132,8 @@ class BaseScraper:
             out.append(urljoin(response.url, href))
         return out
 
-    # *args/**kwargs lets paginating subclasses reshape the signature (e.g. build_url(page)).
-    # one place per scraper that constructs an HttpRequest — config headers/params attach here.
-    # also the single seam where every URL gets canonicalized (tracking params stripped,
-    # scheme + host lowercased) so duplicates collapse in `seen` and in bronze.
-    # the kwargs branch (url=, params=) is the seen_today path: bronze already stores
-    # the canonical url and the exact params that produced today's hash, so we wrap
-    # without re-canonicalizing.
+    # single seam: canonicalize URL (strip tracking, lowercase scheme+host) and attach config headers/params.
+    # kwargs branch (url=, params=) is the seen_today path — bronze is already canonical, don't re-canonicalize.
     def build_url(self, *args: Any, **kwargs: Any) -> HttpRequest:
         if "url" in kwargs:
             return HttpRequest(
