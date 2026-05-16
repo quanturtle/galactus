@@ -74,6 +74,10 @@ def main() -> int:
         return 2
 
     setup_logging(config.log_level)
+    logger.info(
+        "galactus starting (config=%s, stage=%s)",
+        args.config, args.stage or "all",
+    )
 
     # wire plugins and run pipeline
     try:
@@ -88,6 +92,7 @@ def main() -> int:
     except ValueError as exc:
         logger.error("bad argument: %s", exc)
         return 2
+    logger.info("galactus complete")
     return 0
 
 

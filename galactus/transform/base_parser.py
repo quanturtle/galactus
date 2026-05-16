@@ -45,6 +45,11 @@ class BaseParser(ABC):
         self.html_parser = self.make_html_parser()
         # populated in run(), inside the async with
         self.db: Database
+        logger.info(
+            "Parser initialized (source=%s, parser=%s, bronze_model=%s, silver_model=%s)",
+            self.source, type(self).__name__,
+            self.bronze_model.__name__, self.silver_model.__name__,
+        )
 
     def db_extras(self) -> dict[str, Any]:
         return {}
@@ -112,15 +117,37 @@ class BaseParser(ABC):
         """Lifecycle: open db; load unparsed bronze; decode + build + stamp; insert silver per bronze record."""
         async with self.make_database() as db:
             self.db = db
+            processed = 0
+            skipped = 0
+            silver_rows = 0
             try:
                 records = await self.load_records()
+                logger.info(
+                    "transform[%s]: parser run start (records=%s)",
+                    self.source, len(records),
+                )
                 for record in records:
                     try:
                         entities = self.process_record(record)
                     except ParserError as exc:
-                        logger.warning("%s", exc)
+                        skipped += 1
+                        logger.warning(
+                            "transform[%s]: skipping bronze_id=%s: %s",
+                            self.source, record.bronze_id, exc,
+                        )
                         continue
                     await self.db.insert(entities, model=self.silver_model)
+                    processed += 1
+                    silver_rows += len(entities)
+                    logger.info(
+                        "transform[%s]: inserted %s %s for bronze_id=%s",
+                        self.source, len(entities), self.silver_model.__name__,
+                        record.bronze_id,
+                    )
             except DatabaseError as exc:
                 raise ParserError(f"source {self.source!r}: bronze→silver failed") from exc
+        logger.info(
+            "transform[%s]: parser run complete (processed=%s, skipped=%s, silver_rows=%s)",
+            self.source, processed, skipped, silver_rows,
+        )
         return

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import ssl
 from collections.abc import Mapping
 from types import TracebackType
@@ -7,6 +8,8 @@ from typing import Any
 import httpx
 
 from galactus.core.errors import HttpError
+
+logger = logging.getLogger(__name__)
 
 
 class HttpRequest:
@@ -119,14 +122,20 @@ class HttpClient:
         )
         self.retries = retries
         self.retry_delay = retry_delay
+        logger.info(
+            "HttpClient initialized (timeout=%s, retries=%s, retry_delay=%s, pool_size=%s)",
+            timeout, retries, retry_delay, pool_size,
+        )
 
     async def get(self, request: HttpRequest) -> HttpResponse:
+        logger.info("GET %s", request.url)
         last_exc: Exception | None = None
         last_response: httpx.Response | None = None
 
         # retry loop: pass through on <500, retry on 5xx and transient transport
         # failures (connect errors, timeouts, mid-stream server disconnects)
         for attempt in range(self.retries + 1):
+            failure_reason: str | None = None
             try:
                 response = await self.client.get(
                     request.url,
@@ -135,14 +144,30 @@ class HttpClient:
                 )
                 last_response = response
                 if response.status_code < 500:
+                    logger.info("GET %s -> %s", request.url, response.status_code)
                     return HttpResponse(response, request)
+                failure_reason = f"status {response.status_code}"
             except httpx.TransportError as exc:
                 last_exc = exc
+                failure_reason = str(exc) or type(exc).__name__
 
             if attempt < self.retries:
+                logger.warning(
+                    "GET %s attempt %s/%s failed (%s), retrying in %ss",
+                    request.url, attempt + 1, self.retries + 1, failure_reason, self.retry_delay,
+                )
                 await asyncio.sleep(self.retry_delay)
 
         # exhausted retries — surface as HttpError
+        reason = (
+            f"status {last_response.status_code}"
+            if last_response is not None
+            else str(last_exc)
+        )
+        logger.warning(
+            "GET %s failed after %s attempts: %s",
+            request.url, self.retries + 1, reason,
+        )
         if last_response is not None:
             raise HttpError(
                 f"GET {request.url} returned {last_response.status_code} after {self.retries + 1} attempts"

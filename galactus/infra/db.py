@@ -1,9 +1,11 @@
+import logging
 from collections.abc import Iterable
 from types import TracebackType
 from typing import Any, TypeVar
 
 from sqlalchemy import func, insert, select
 from sqlalchemy.dialects import registry
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,6 +19,8 @@ from sql.base import Base
 
 # mirror migrations/env.py: route bare postgresql:// to psycopg3
 registry.register("postgresql", "sqlalchemy.dialects.postgresql.psycopg", "dialect")
+
+logger = logging.getLogger(__name__)
 
 
 M = TypeVar("M", bound=Base)
@@ -47,6 +51,12 @@ class Database:
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        # log host+db only — never user or password
+        url = make_url(database_url)
+        logger.info(
+            "Database initialized (host=%s, db=%s, pool_size=%s, max_overflow=%s)",
+            url.host, url.database, pool_size, max_overflow,
+        )
 
     async def open(self) -> None:
         # surface bad URLs / unreachable DB at startup, not lazily
@@ -55,6 +65,7 @@ class Database:
                 pass
         except SQLAlchemyError as exc:
             raise DatabaseError("cannot connect to database") from exc
+        logger.info("Database connection verified")
         return
 
     async def close(self) -> None:
@@ -94,6 +105,7 @@ class Database:
                 await session.commit()
         except SQLAlchemyError as exc:
             raise DatabaseError(f"{model.__name__} insert failed") from exc
+        logger.info("inserted %d %s rows", len(rows), model.__name__)
         return
 
     async def load_visited_requests(

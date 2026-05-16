@@ -85,6 +85,14 @@ class BaseScraper:
         # populated in run(), inside the async with
         self.http: HttpClient
         self.db: Database
+        # field order mirrors source yaml: scraper, base_url, max_pages, concurrency, timeout, retries, retry_delay, request_delay
+        logger.info(
+            "Scraper initialized (source=%s, scraper=%s, base_url=%s, max_pages=%s, "
+            "concurrency=%s, timeout_seconds=%s, retries=%s, retry_delay=%s, request_delay=%s)",
+            self.source, type(self).__name__, config.base_url, config.max_pages,
+            config.concurrency, config.timeout_seconds, config.retries, config.retry_delay,
+            config.request_delay,
+        )
 
     def http_extras(self) -> dict[str, Any]:
         return {}
@@ -227,6 +235,10 @@ class BaseScraper:
                 await self.db.insert(record, model=type(record))
             except DatabaseError as exc:
                 raise ScraperError(f"{self.source}: persisting {request.url} failed") from exc
+            logger.info(
+                "extract[%s]: persisted %s for %s",
+                self.source, type(record).__name__, request.url,
+            )
 
         return self.get_next_urls(response)
 
@@ -237,6 +249,7 @@ class BaseScraper:
             self.db = db
 
             seen: set[int] = await self.seen_today()
+            already_seen_today = len(seen)
             frontier: deque[HttpRequest] = deque()
             for seed in self.seed_urls():
                 key = hash(seed)
@@ -244,7 +257,12 @@ class BaseScraper:
                     continue
                 frontier.append(seed)
                 seen.add(key)
+            logger.info(
+                "extract[%s]: scraper run start (seed_count=%s, already_seen_today=%s)",
+                self.source, len(frontier), already_seen_today,
+            )
             dispatched = 0
+            skipped = 0
             max_pages = self.config.max_pages
             in_flight: set[asyncio.Task[HttpResponse]] = set()
 
@@ -275,7 +293,8 @@ class BaseScraper:
                         except asyncio.CancelledError:
                             raise
                         except Exception as exc:
-                            logger.warning("%s: skipping URL after error: %s", self.source, exc)
+                            skipped += 1
+                            logger.warning("extract[%s]: skipping after error: %s", self.source, exc)
                             continue
                         for next_request in next_requests:
                             key = hash(next_request)
@@ -291,4 +310,8 @@ class BaseScraper:
                     task.cancel()
                 if in_flight:
                     await asyncio.gather(*in_flight, return_exceptions=True)
+        logger.info(
+            "extract[%s]: scraper run complete (dispatched=%s, skipped=%s)",
+            self.source, dispatched, skipped,
+        )
         return

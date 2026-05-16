@@ -1,6 +1,9 @@
+import logging
 from abc import ABC, abstractmethod
 
 from galactus.core.errors import PipelineError
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineStage(ABC):
@@ -28,11 +31,17 @@ class Pipeline:
             raise PipelineError("pipeline needs at least one stage")
         if len(self._stage_index) != len(stages):
             raise PipelineError("duplicate stage names in pipeline")
+        logger.info(
+            "pipeline initialized with stages: [%s]",
+            ", ".join(s.name for s in stages),
+        )
 
     async def run(self, stage_name: str | None = None) -> None:
+        logger.info("pipeline run start (target=%s)", stage_name or "all")
         if stage_name is None:
             for stage in self.stages:
                 await stage.run()
+            logger.info("pipeline run complete")
             return
         try:
             stage = self._stage_index[stage_name]
@@ -40,4 +49,5 @@ class Pipeline:
             known = ", ".join(s.name for s in self.stages) or "<none>"
             raise PipelineError(f"unknown stage {stage_name!r}; available: {known}") from None
         await stage.run()
+        logger.info("pipeline run complete")
         return
