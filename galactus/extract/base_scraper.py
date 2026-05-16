@@ -101,6 +101,7 @@ class BaseScraper:
     def make_http_client(self) -> HttpClient:
         return HttpClient(
             timeout=self.config.timeout_seconds,
+            follow_redirects=self.config.follow_redirects,
             retries=self.config.retries,
             retry_delay=self.config.retry_delay,
             pool_size=self.config.concurrency,
