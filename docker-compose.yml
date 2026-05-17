@@ -6,6 +6,8 @@ x-airflow-common: &airflow-common
   environment:
     DATABASE_URL: postgresql://galactus:galactus_secret@db:5432/galactus
     AIRFLOW__CORE__DAGS_FOLDER: /home/airflow/dags
+    AIRFLOW__CORE__PARALLELISM: "3"
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
     AIRFLOW__LOGGING__BASE_LOG_FOLDER: /home/airflow/logs
     PYTHONWARNINGS: "ignore:section/key [core/sql_alchemy_conn] has been deprecated:FutureWarning"
   volumes:
