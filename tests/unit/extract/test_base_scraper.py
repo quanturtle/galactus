@@ -80,6 +80,16 @@ def test_extract_links_default_returns_a_hrefs_joined_with_response_url() -> Non
     ]
 
 
+def test_extract_links_bare_relative_resolves_against_base_url_not_response() -> None:
+    # bare-relative hrefs (no leading slash, no scheme) must resolve against base_url so
+    # `catalogo/foo` on `/catalogo/x` doesn't recurse into `/catalogo/catalogo/foo`.
+    scraper = make_scraper(BaseScraper)
+    html = '<a href="catalogo/foo-p1">foo</a>'
+    response = FakeHttpResponse(text=html, url="https://example.test/catalogo/x-p9")
+    links = scraper.extract_links(response)  # type: ignore[arg-type]
+    assert links == ["https://example.test/catalogo/foo-p1"]
+
+
 def test_should_enqueue_rejects_foreign_hosts_and_ignore_patterns() -> None:
     scraper = make_scraper(BaseScraper, ignore_patterns=[r"/private/"])
     assert scraper.should_enqueue(FakeHttpRequest(url="https://example.test/article/1"))
@@ -87,6 +97,18 @@ def test_should_enqueue_rejects_foreign_hosts_and_ignore_patterns() -> None:
     assert not scraper.should_enqueue(FakeHttpRequest(url="mailto:a@b.com"))
     assert not scraper.should_enqueue(FakeHttpRequest(url="https://example.test/private/secret"))
     assert not scraper.should_enqueue(FakeHttpRequest(url="https://example.test/file.pdf"))
+
+
+def test_should_enqueue_rejects_paths_with_repeated_segments() -> None:
+    scraper = make_scraper(BaseScraper)
+    assert not scraper.should_enqueue(
+        FakeHttpRequest(url="https://example.test/catalogo/catalogo/foo-p1")
+    )
+    assert not scraper.should_enqueue(
+        FakeHttpRequest(url="https://example.test/promociones/catalogo/promociones/foo-p1")
+    )
+    # unrelated repeated tokens between different segments are fine
+    assert scraper.should_enqueue(FakeHttpRequest(url="https://example.test/a/b/c"))
 
 
 def test_should_persist_gates_on_patterns() -> None:

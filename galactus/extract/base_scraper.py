@@ -125,12 +125,16 @@ class BaseScraper:
     # JSON bodies yield no matching tags, so API subclasses inherit a no-op default.
     def extract_links(self, response: HttpResponse) -> list[str]:
         soup = BeautifulSoup(response.text, "html.parser")
+        # bare-relative hrefs resolve against base_url, not response.url, so sites that
+        # link `catalogo/foo` from `/catalogo/...` pages don't stack `/catalogo/catalogo/...`.
+        root = self.config.base_url.rstrip("/") + "/"
         out: list[str] = []
         for tag in soup.select('a[href], link[rel~="next"][href]'):
             href = str(tag["href"]).strip()
             if not href:
                 continue
-            out.append(urljoin(response.url, href))
+            base = response.url if urlparse(href).scheme or href.startswith("/") else root
+            out.append(urljoin(base, href))
         return out
 
     # canonicalize: lowercase scheme+host, strip TRACKING_PARAMS, drop fragment, keep %20 (quote, not quote_plus).
@@ -170,6 +174,10 @@ class BaseScraper:
         if parsed.netloc not in self.config.allowed_domains:
             return False
         if Path(parsed.path).suffix.lower() in SKIP_EXTENSIONS:
+            return False
+        # reject paths with a repeated segment — symptom of bad relative-link resolution.
+        segments = [s for s in parsed.path.split("/") if s]
+        if len(segments) != len(set(segments)):
             return False
         return not any(p.search(request.url) for p in self.config.ignore_patterns)
 
