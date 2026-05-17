@@ -88,7 +88,7 @@ class BaseParser(ABC):
     # build_entity is contributed by the ArticleParser / ProductParser mixin via MRO.
 
     def stamp(self, entity: Base, record: Base) -> None:
-        entity.bronze_id = record.bronze_id
+        entity.bronze_id = record.id
         entity.created_at = record.created_at
         return
 
@@ -101,7 +101,7 @@ class BaseParser(ABC):
             raise
         except Exception as exc:
             raise ParserError(
-                f"source {self.source!r}: bronze_id {record.bronze_id} decode/build failed"
+                f"source {self.source!r}: bronze_id {record.id} decode/build failed"
             ) from exc
 
         # stamp bronze provenance: which bronze row this came from, and its snapshot time
@@ -136,7 +136,7 @@ class BaseParser(ABC):
                         logger.warning(
                             "transform[%s]: skipping bronze_id=%s: %s",
                             self.source,
-                            record.bronze_id,
+                            record.id,
                             exc,
                         )
                         continue
@@ -148,7 +148,7 @@ class BaseParser(ABC):
                         self.source,
                         len(entities),
                         self.silver_model.__name__,
-                        record.bronze_id,
+                        record.id,
                     )
                     if processed % batch_size == 0:
                         logger.info(

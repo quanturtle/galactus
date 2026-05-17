@@ -28,7 +28,7 @@ NO_PRODUCT_TITLE_HTML = "<html><body><h1>Categoría</h1><p>nope</p></body></html
 
 def _snapshot(html: str, url: str) -> HtmlSnapshot:
     return HtmlSnapshot(
-        bronze_id=1,
+        id=1,
         source="casarica",
         source_url=url,
         created_at=datetime(2026, 5, 14, 10, 0, 0),

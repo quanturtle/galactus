@@ -59,7 +59,7 @@ OG_FALLBACK_HTML = """
 
 def _snapshot(html: str, url: str) -> HtmlSnapshot:
     return HtmlSnapshot(
-        bronze_id=1,
+        id=1,
         source="superseis",
         source_url=url,
         created_at=datetime(2026, 5, 14, 10, 0, 0),

@@ -45,7 +45,7 @@ RESPONSE = [
 
 def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
-        bronze_id=1,
+        id=1,
         source="grutter",
         source_url="https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products?page=1",
         created_at=datetime(2026, 5, 14, 10, 0, 0),

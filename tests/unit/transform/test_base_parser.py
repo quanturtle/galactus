@@ -41,7 +41,7 @@ class _WiredStubParser(_StubParser):
 
 def _html_snapshot(html: str, bronze_id: int = 1) -> HtmlSnapshot:
     return HtmlSnapshot(
-        bronze_id=bronze_id,
+        id=bronze_id,
         source="testsrc",
         source_url="https://example.test/a",
         created_at=datetime(2026, 1, 1, 12, 0, 0),
@@ -55,7 +55,7 @@ def _html_snapshot(html: str, bronze_id: int = 1) -> HtmlSnapshot:
 
 def _api_snapshot(payload: Any, bronze_id: int = 1) -> ApiSnapshot:
     return ApiSnapshot(
-        bronze_id=bronze_id,
+        id=bronze_id,
         source="testsrc",
         source_url="https://example.test/api",
         created_at=datetime(2026, 1, 1, 12, 0, 0),

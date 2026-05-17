@@ -44,7 +44,7 @@ RESPONSE = [
 
 def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
-        bronze_id=1,
+        id=1,
         source="hoy",
         source_url="https://www.hoy.com.py/wp-json/wp/v2/posts?page=1",
         created_at=datetime(2026, 1, 2, 10, 0, 0),
@@ -89,7 +89,7 @@ def test_build_entities_maps_posts() -> None:
 def test_empty_array_returns_no_entities() -> None:
     parser = _parser()
     record = ApiSnapshot(
-        bronze_id=2,
+        id=2,
         source="hoy",
         source_url="https://www.hoy.com.py/wp-json/wp/v2/posts?page=999",
         created_at=datetime(2026, 1, 2, 10, 0, 0),

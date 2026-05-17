@@ -36,7 +36,7 @@ RESPONSE = {
 
 def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
-        bronze_id=1,
+        id=1,
         source="biggie",
         source_url="https://api.app.biggie.com.py/api/articles",
         created_at=datetime(2026, 1, 2, 10, 0, 0),

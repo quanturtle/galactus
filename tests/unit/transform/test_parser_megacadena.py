@@ -36,7 +36,7 @@ RESPONSE = [
 
 def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
-        bronze_id=1,
+        id=1,
         source="megacadena",
         source_url="https://megacadena.com.py/wp-json/wp/v2/posts?page=1",
         created_at=datetime(2026, 3, 4, 12, 0, 0),

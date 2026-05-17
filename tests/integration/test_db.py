@@ -49,13 +49,13 @@ def _html_snapshot(
 async def _bronze_ids(engine, table: str) -> list[int]:
     async with engine.connect() as conn:
         rows = (
-            await conn.execute(text(f"SELECT bronze_id FROM scratch.{table} ORDER BY bronze_id"))
+            await conn.execute(text(f"SELECT id FROM scratch.{table} ORDER BY id"))
         ).all()
-    return [r.bronze_id for r in rows]
+    return [r.id for r in rows]
 
 
 async def test_insert_bronze_html_records_each_fetch(db, engine) -> None:
-    # Each insert is its own bronze row: bronze_id and created_at are left unset,
+    # Each insert is its own bronze row: id and created_at are left unset,
     # so the DB fills a fresh surrogate id and timestamp per insert.
     rec = _html_snapshot()
     await db.insert(rec, ScratchHtmlSnapshot)
@@ -180,7 +180,7 @@ async def test_stream_unparsed_skips_rows_already_in_silver(db, engine) -> None:
 
     # nothing parsed yet -> both bronze rows are unparsed
     pending = [
-        r.bronze_id
+        r.id
         for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [first_id, second_id]
@@ -195,14 +195,14 @@ async def test_stream_unparsed_skips_rows_already_in_silver(db, engine) -> None:
 
     # only the still-unparsed bronze row is returned now
     pending = [
-        r.bronze_id
+        r.id
         for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [second_id]
 
 
 async def test_stream_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
-    # a silver row for a different source must not mask a bronze row that shares its bronze_id
+    # a silver row for a different source must not mask a bronze row that shares its id
     a = _html_snapshot(source="src_a", source_url="https://example.com/a")
     await db.insert(a, ScratchHtmlSnapshot)
     (bronze_id,) = await _bronze_ids(engine, "html_snapshots")
@@ -214,6 +214,6 @@ async def test_stream_unparsed_isolates_silver_rows_by_source(db, engine) -> Non
     )
 
     pending = [
-        r.bronze_id for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "src_a")
+        r.id for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "src_a")
     ]
     assert pending == [bronze_id]

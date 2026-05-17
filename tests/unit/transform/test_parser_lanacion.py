@@ -34,7 +34,7 @@ RESPONSE = {
 
 def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
-        bronze_id=1,
+        id=1,
         source="lanacion",
         source_url="https://www.lanacion.com.py/pf/api/v3/content/fetch/content-search-feed-full",
         created_at=datetime(2026, 4, 5, 13, 0, 0),

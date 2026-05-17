@@ -42,7 +42,7 @@ EMPTY_HTML = "<html><head></head><body><p>just some text</p></body></html>"
 
 def _snapshot(html: str) -> HtmlSnapshot:
     return HtmlSnapshot(
-        bronze_id=1,
+        id=1,
         source="ultimahora",
         source_url="https://www.ultimahora.com/gobierno-anuncia-nuevo-plan-economico",
         created_at=datetime(2026, 1, 2, 10, 0, 0),

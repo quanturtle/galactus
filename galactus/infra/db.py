@@ -166,7 +166,7 @@ class Database:
 
         A bronze row counts as parsed once any silver row carries its
         (source, bronze_id) — one bronze row may yield many silver entities.
-        Ordered by created_at then bronze_id. Rows are fetched from the server
+        Ordered by created_at then id. Rows are fetched from the server
         in chunks of `chunk_size`, so memory stays bounded regardless of how
         many bronze rows remain unparsed. Safe to re-run: bronze rows whose
         silver already committed are not returned on the next pass.
@@ -174,13 +174,13 @@ class Database:
         already_parsed = (
             select(silver_model.bronze_id)
             .where(silver_model.source == source)
-            .where(silver_model.bronze_id == bronze_model.bronze_id)
+            .where(silver_model.bronze_id == bronze_model.id)
             .exists()
         )
         stmt = (
             select(bronze_model)
             .where(bronze_model.source == source, ~already_parsed)
-            .order_by(bronze_model.created_at, bronze_model.bronze_id)
+            .order_by(bronze_model.created_at, bronze_model.id)
             .execution_options(yield_per=chunk_size)
         )
         try:

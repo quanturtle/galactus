@@ -14,7 +14,7 @@ class HtmlSnapshot(Base):
     __tablename__ = "html_snapshots"
     __table_args__ = {"schema": SCHEMA}
 
-    bronze_id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(index=True)
     source_url: Mapped[str] = mapped_column(index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)

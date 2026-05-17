@@ -27,7 +27,7 @@ NO_H1_HTML = "<html><body><div>not a product page</div></body></html>"
 
 def _snapshot(html: str, url: str) -> HtmlSnapshot:
     return HtmlSnapshot(
-        bronze_id=1,
+        id=1,
         source="arete",
         source_url=url,
         created_at=datetime(2026, 5, 14, 10, 0, 0),

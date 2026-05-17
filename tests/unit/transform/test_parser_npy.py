@@ -33,7 +33,7 @@ EMPTY_HTML = "<html><head></head><body><p>nope</p></body></html>"
 
 def _snapshot(html: str, url: str) -> HtmlSnapshot:
     return HtmlSnapshot(
-        bronze_id=1,
+        id=1,
         source="npy",
         source_url=url,
         created_at=datetime(2026, 5, 14, 11, 20, 0),

@@ -50,7 +50,7 @@ RESPONSE = {
 
 def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
-        bronze_id=1,
+        id=1,
         source="abc_color",
         source_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
         created_at=datetime(2026, 1, 2, 10, 0, 0),
@@ -119,7 +119,7 @@ def test_promo_image_is_fallback_when_no_inline_image() -> None:
         ]
     }
     record = ApiSnapshot(
-        bronze_id=3,
+        id=3,
         source="abc_color",
         source_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
         created_at=datetime(2026, 1, 2, 10, 0, 0),
@@ -138,7 +138,7 @@ def test_promo_image_is_fallback_when_no_inline_image() -> None:
 def test_empty_feed_returns_no_entities() -> None:
     parser = _parser()
     record = ApiSnapshot(
-        bronze_id=2,
+        id=2,
         source="abc_color",
         source_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
         created_at=datetime(2026, 1, 2, 10, 0, 0),

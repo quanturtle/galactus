@@ -30,7 +30,7 @@ RESPONSE = {
 def test_build_entities_maps_stories() -> None:
     parser = make_parser(Parser, source="latribuna")
     record = ApiSnapshot(
-        bronze_id=1,
+        id=1,
         source="latribuna",
         source_url="https://www.latribuna.com.py/pf/api/v3/content/fetch/story-feed-query",
         created_at=datetime(2026, 4, 6, 22, 0, 0),

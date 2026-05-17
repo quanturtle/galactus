@@ -44,7 +44,7 @@ EMPTY_HTML = "<html><head></head><body><p>just some text</p></body></html>"
 
 def _snapshot(html: str) -> HtmlSnapshot:
     return HtmlSnapshot(
-        bronze_id=1,
+        id=1,
         source="elnacional",
         source_url=(
             "https://elnacional.com.py/politica/defensa-funcionaria-afirma-nunca-estuvo-profuga-n105824"
