@@ -318,8 +318,6 @@ class BaseScraper:
                         try:
                             response = await task
                             next_requests = await self.process_response(response)
-                        except asyncio.CancelledError:
-                            raise
                         except (HttpError, DatabaseError, ScraperError) as exc:
                             skipped += 1
                             logger.warning(
