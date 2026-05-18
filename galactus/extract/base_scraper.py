@@ -142,7 +142,8 @@ class BaseScraper:
         # link `catalogo/foo` from `/catalogo/...` pages don't stack `/catalogo/catalogo/...`.
         root = self.config.base_url.rstrip("/") + "/"
         out: list[str] = []
-        for tag in soup.select('a[href], link[rel~="next"][href]'):
+        tags = [*soup.select("a[href]"), *soup.find_all("link", rel="next", href=True)]
+        for tag in tags:
             href = str(tag["href"]).strip()
             if not href:
                 continue
