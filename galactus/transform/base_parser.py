@@ -3,10 +3,11 @@ import logging
 from abc import ABC
 from typing import Any, ClassVar
 
+from bs4 import BeautifulSoup
+
 from galactus.config import TransformConfig
 from galactus.core.errors import DatabaseError, ParserError
 from galactus.infra.db import Database
-from galactus.transform.html_parser import HtmlParser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
@@ -42,7 +43,6 @@ class BaseParser(ABC):
     def __init__(self, config: TransformConfig) -> None:
         self.config = config
         self.source = config.source
-        self.html_parser = self.make_html_parser()
         # populated in run(), inside the async with
         self.db: Database
         logger.info(
@@ -63,20 +63,12 @@ class BaseParser(ABC):
             **self.db_extras(),
         )
 
-    # hook: override to provide code-level blocklist defaults per parser
-    def make_html_parser(self) -> HtmlParser:
-        return HtmlParser(
-            {
-                "blocklist_tags": self.config.blocklist_tags,
-                "blocklist_attributes": self.config.blocklist_attributes,
-            }
-        )
-
     # dispatch on bronze_model — subclasses set ApiSnapshot to swap the bronze record shape.
+    # bronze html is already cleaned at extract time, so decode just builds the tree.
     def decode(self, record: Base) -> Any:
         model = self.bronze_model
         if model is HtmlSnapshot:
-            return self.html_parser.run(self.db.decompress(record.html))
+            return BeautifulSoup(self.db.decompress(record.html), "lxml")
         if model is ApiSnapshot:
             return json.loads(self.db.decompress(record.body))
         raise ParserError(f"{self.source}: no decoder for {model}")

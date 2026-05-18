@@ -43,6 +43,8 @@ class ExtractConfig(BaseModel):
     ignore_patterns: list[re.Pattern[str]] = Field(default_factory=list)
     max_pages: int = Field(default=-1, ge=-1)
     request_delay: float = 0.0
+    blocklist_tags: list[str] = []
+    blocklist_attributes: list[str] = []
 
     @model_validator(mode="before")
     @classmethod
@@ -67,8 +69,6 @@ class TransformConfig(BaseModel):
     db_pool_size: int = Field(default=5, ge=1)
     parser: str
     batch_size: int = Field(default=100, ge=1)
-    blocklist_tags: list[str] = []
-    blocklist_attributes: list[str] = []
 
 
 class PipelineConfig(BaseModel):

@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 
 from galactus.config import ExtractConfig
 from galactus.core.errors import DatabaseError, ScraperError
+from galactus.extract.html_parser import HtmlParser
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
@@ -79,6 +80,7 @@ class BaseScraper:
         self.config = config
         self.source = config.source
         self.concurrency = config.concurrency
+        self.html_parser = self.make_html_parser()
         # populated in run(), inside the async with
         self.http: HttpClient
         self.db: Database
@@ -118,6 +120,14 @@ class BaseScraper:
             database_url=self.config.database_url,
             pool_size=self.config.db_pool_size,
             **self.db_extras(),
+        )
+
+    def make_html_parser(self) -> HtmlParser:
+        return HtmlParser(
+            {
+                "blocklist_tags": self.config.blocklist_tags,
+                "blocklist_attributes": self.config.blocklist_attributes,
+            }
         )
 
     def seed_urls(self) -> list[HttpRequest]:
@@ -220,7 +230,7 @@ class BaseScraper:
                     status_code=response.status_code,
                     content_type=response.headers.get("content-type", ""),
                     response_headers=dict(response.headers),
-                    html=self.db.compress(response.text),
+                    html=self.db.compress(self.html_parser.run(response.text)),
                     is_diff=False,
                 )
             elif model is ApiSnapshot:

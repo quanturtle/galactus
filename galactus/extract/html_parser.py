@@ -9,7 +9,7 @@ BASELINE_BLOCKLIST_TAGS: tuple[str, ...] = ("script", "style", "noscript")
 
 
 class HtmlParser:
-    """Applies ordered filter passes to an HTML document and returns the tree.
+    """Applies ordered filter passes to an HTML document and returns cleaned HTML.
 
     run() is the entrypoint. Phases run in declaration order:
       1. strip HTML comments
@@ -44,12 +44,12 @@ class HtmlParser:
             for attr in self.blocklist_attributes:
                 tag.attrs.pop(attr, None)
 
-    def run(self, text: str) -> BeautifulSoup:
-        """Build the tree and run filter phases in declaration order."""
+    def run(self, text: str) -> str:
+        """Build the tree, run filter phases in declaration order, return cleaned HTML."""
         soup = BeautifulSoup(text, "lxml")
 
         self.strip_comments(soup)
         self.decompose_blocklist_tags(soup)
         self.strip_blocklist_attributes(soup)
 
-        return soup
+        return str(soup)
