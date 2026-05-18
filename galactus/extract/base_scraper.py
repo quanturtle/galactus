@@ -283,6 +283,8 @@ class BaseScraper:
             dispatched = 0
             skipped = 0
             max_pages = self.config.max_pages
+            concurrency = self.concurrency
+            request_delay = self.config.request_delay
             in_flight: set[asyncio.Task[HttpResponse]] = set()
 
             # spawn-and-drain: top up to `concurrency` fetches, then drain on FIRST_COMPLETED.
@@ -291,7 +293,7 @@ class BaseScraper:
                 while frontier or in_flight:
                     while (
                         frontier
-                        and len(in_flight) < self.concurrency
+                        and len(in_flight) < concurrency
                         and (max_pages == -1 or dispatched < max_pages)
                     ):
                         request = frontier.popleft()
@@ -323,8 +325,8 @@ class BaseScraper:
                                 continue
                             seen.add(key)
                             frontier.append(next_request)
-                        if self.config.request_delay:
-                            await asyncio.sleep(self.config.request_delay)
+                        if request_delay:
+                            await asyncio.sleep(request_delay)
             finally:
                 # drain remaining fetches so a mid-run raise doesn't leak tasks to the loop
                 for task in in_flight:
