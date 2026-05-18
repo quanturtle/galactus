@@ -146,13 +146,15 @@ class HttpClient:
                     headers=request.headers,
                     params=request.params,
                 )
-                last_response = response
                 if response.status_code < 500:
                     logger.info("GET %s -> %s", request.url, response.status_code)
                     return HttpResponse(response, request)
+                last_response = response
+                last_exc = None
                 failure_reason = f"status {response.status_code}"
             except httpx.TransportError as exc:
                 last_exc = exc
+                last_response = None
                 failure_reason = str(exc) or type(exc).__name__
 
             if attempt < self.retries:
