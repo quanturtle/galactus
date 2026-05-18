@@ -33,8 +33,6 @@ class ExtractConfig(BaseModel):
             )
         }
     )
-    retries: int = 3
-    retry_delay: float = 2.0
     follow_redirects: bool = True
     concurrency: int = Field(default=5, ge=1)
     base_url: str

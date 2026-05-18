@@ -74,7 +74,7 @@ class BaseScraper:
     engine kwargs) live on the subclass via http_extras() / db_extras().
     """
 
-    snapshot_model: ClassVar[type[Base]] = HtmlSnapshot
+    bronze_model: ClassVar[type[Base]] = HtmlSnapshot
 
     def __init__(self, config: ExtractConfig) -> None:
         self.config = config
@@ -87,15 +87,13 @@ class BaseScraper:
         # field order mirrors source yaml
         logger.info(
             "Scraper initialized (source=%s, scraper=%s, base_url=%s, max_pages=%s, "
-            "concurrency=%s, timeout_seconds=%s, retries=%s, retry_delay=%s, request_delay=%s)",
+            "concurrency=%s, timeout_seconds=%s, request_delay=%s)",
             self.source,
             type(self).__name__,
             config.base_url,
             config.max_pages,
             config.concurrency,
             config.timeout_seconds,
-            config.retries,
-            config.retry_delay,
             config.request_delay,
         )
 
@@ -109,8 +107,6 @@ class BaseScraper:
         return HttpClient(
             timeout=self.config.timeout_seconds,
             follow_redirects=self.config.follow_redirects,
-            retries=self.config.retries,
-            retry_delay=self.config.retry_delay,
             pool_size=self.config.concurrency,
             **self.http_extras(),
         )
@@ -137,9 +133,11 @@ class BaseScraper:
         # exceptions propagate so the run loop can skip the failed URL instead of aborting the crawl.
         return await self.http.get(request)
 
-    # JSON bodies yield no matching tags, so API subclasses inherit a no-op default.
-    def extract_links(self, response: HttpResponse) -> list[str]:
-        soup = BeautifulSoup(response.text, "html.parser")
+    # JSON bodies yield no matching tags, so API subclasses inherit a no-op default
+    # and ignore `soup` (None on non-HTML responses).
+    def extract_links(self, response: HttpResponse, soup: BeautifulSoup | None) -> list[str]:
+        if soup is None:
+            return []
         # bare-relative hrefs resolve against base_url, not response.url, so sites that
         # link `catalogo/foo` from `/catalogo/...` pages don't stack `/catalogo/catalogo/...`.
         root = self.config.base_url.rstrip("/") + "/"
@@ -180,8 +178,10 @@ class BaseScraper:
             params=dict(params or {}),
         )
 
-    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        return [self.build_url(link) for link in self.extract_links(response)]
+    def get_next_urls(
+        self, response: HttpResponse, soup: BeautifulSoup | None = None
+    ) -> list[HttpRequest]:
+        return [self.build_url(link) for link in self.extract_links(response, soup)]
 
     # empty netloc on mailto:/tel:/javascript: makes them fall through to False.
     def should_enqueue(self, request: HttpRequest) -> bool:
@@ -213,24 +213,30 @@ class BaseScraper:
         and request_params (when present) carries the per-page differentiator.
         """
         rows = await self.db.load_visited_requests(
-            model=self.snapshot_model,
+            model=self.bronze_model,
             source=self.source,
         )
         return {hash(self.build_url(url=url, params=params)) for url, params in rows}
 
     async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
-        # dispatch on snapshot_model — subclasses set ApiSnapshot to swap the bronze record shape.
+        # dispatch on bronze_model — subclasses set ApiSnapshot to swap the bronze record shape.
         request = response.request
+        model = self.bronze_model
+
+        # parse HTML once and reuse the tree for cleaning and link extraction
+        soup = self.html_parser.parse(response.text) if model is HtmlSnapshot else None
+
         if self.should_persist(request):
-            model = self.snapshot_model
             if model is HtmlSnapshot:
+                assert soup is not None
+                cleaned = await self.html_parser.clean(soup)
                 record: Base = HtmlSnapshot(
                     source=self.source,
                     source_url=request.url,
                     status_code=response.status_code,
                     content_type=response.headers.get("content-type", ""),
                     response_headers=dict(response.headers),
-                    html=self.db.compress(self.html_parser.run(response.text)),
+                    html=self.db.compress(cleaned),
                     is_diff=False,
                 )
             elif model is ApiSnapshot:
@@ -257,7 +263,7 @@ class BaseScraper:
                 request.url,
             )
 
-        return self.get_next_urls(response)
+        return self.get_next_urls(response, soup)
 
     async def run(self) -> None:
         """Lifecycle: open clients; BFS over seed_urls(); fetch up to self.concurrency in parallel."""

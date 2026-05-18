@@ -5,6 +5,7 @@ Strategies shared by multiple scrapers are parametrized across the classes;
 strategies unique to one scraper get direct tests.
 """
 
+import asyncio
 import json
 
 import pytest
@@ -17,7 +18,7 @@ from galactus.extract.scrapers.noticias.megacadena import Scraper as MegacadenaS
 from galactus.extract.scrapers.supermercados.biggie import Scraper as BiggieScraper
 from galactus.extract.scrapers.supermercados.grutter import Scraper as GrutterScraper
 from galactus.infra.http import HttpRequest
-from tests.unit.fakes import FakeHttpRequest, FakeHttpResponse, make_scraper
+from tests.unit.fakes import FakeDatabase, FakeHttpRequest, FakeHttpResponse, make_scraper
 
 
 def _scraper(
@@ -125,12 +126,32 @@ def test_lanacion_emits_concurrency_offsets_on_full_page() -> None:
 
 
 def test_lanacion_empty_on_short_page() -> None:
+    # short page persists but stops pagination — the gate lives in process_response,
+    # which discards get_next_urls' return for the partial last page.
     scraper = _scraper(LaNacionScraper, LANACION_BASE_URL, concurrency=5)
     seed = scraper.seed_urls()[0]
     short = LaNacionScraper.FEED_SIZE // 2
     response = _response_for(seed, json_body={"content_elements": [{} for _ in range(short)]})
 
-    assert scraper.get_next_urls(response) == []  # type: ignore[arg-type]
+    next_urls = asyncio.run(scraper.process_response(response))  # type: ignore[arg-type]
+
+    assert next_urls == []
+    db: FakeDatabase = scraper.db  # type: ignore[assignment]
+    assert len(db.inserts) == 1
+    return
+
+
+def test_lanacion_empty_on_overshoot_page() -> None:
+    # overshoot pages (zero items past the natural end) skip persist and stop pagination
+    scraper = _scraper(LaNacionScraper, LANACION_BASE_URL, concurrency=5)
+    seed = scraper.seed_urls()[0]
+    response = _response_for(seed, json_body={"content_elements": []})
+
+    next_urls = asyncio.run(scraper.process_response(response))  # type: ignore[arg-type]
+
+    assert next_urls == []
+    db: FakeDatabase = scraper.db  # type: ignore[assignment]
+    assert db.inserts == []
     return
 
 

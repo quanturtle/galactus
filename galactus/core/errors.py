@@ -35,7 +35,7 @@ class InfraError(PipelineError):
 
 
 class HttpError(InfraError):
-    """An HTTP request failed: bad status after retries, or a transport error."""
+    """An HTTP request failed: bad status (>=500) or a transport error."""
 
 
 class DatabaseError(InfraError):

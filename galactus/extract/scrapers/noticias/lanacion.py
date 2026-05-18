@@ -9,7 +9,7 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 class Scraper(BaseScraper):
     """Scraper for lanacion — Arc Publishing feed, open-ended offset pagination into bronze.api_snapshots."""
 
-    snapshot_model = ApiSnapshot
+    bronze_model = ApiSnapshot
     WEBSITE = "lanacionpy"
     FEED_SIZE = 100
     # Arc's feed sits on Elasticsearch; ES rejects feedFrom+feedSize > index.max_result_window (default 10000).
@@ -52,7 +52,7 @@ class Scraper(BaseScraper):
             return []
         return await super().process_response(response)
 
-    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+    def get_next_urls(self, response: HttpResponse, soup: object = None) -> list[HttpRequest]:
         blob = json.loads(response.request.params["query"])
         current = int(blob["feedFrom"])
         # ES caps feedFrom+feedSize at MAX_RESULT_WINDOW; never queue a request that would 400.

@@ -9,7 +9,7 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 class Scraper(BaseScraper):
     """Scraper for abc_color — Arc Publishing sections-api, per-section pagination into bronze.api_snapshots."""
 
-    snapshot_model = ApiSnapshot
+    bronze_model = ApiSnapshot
     WEBSITE = "abc-color"
     LIMIT = 100
     SECTIONS = (
@@ -51,7 +51,7 @@ class Scraper(BaseScraper):
     def seed_urls(self) -> list[HttpRequest]:
         return [self.build_url(section, 0) for section in self.SECTIONS]
 
-    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+    def get_next_urls(self, response: HttpResponse, soup: object = None) -> list[HttpRequest]:
         # the API returns HTTP 400 with a non-JSON body once offset crosses its hard ceiling;
         # treat any non-JSON response as end-of-feed for the section.
         try:

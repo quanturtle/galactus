@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import ssl
 from collections.abc import Mapping
@@ -90,21 +89,20 @@ class HttpResponse:
 class HttpClient:
     """HTTP client used by scrapers. Backed by httpx.AsyncClient internally.
 
-    Concerns: opening connections and retrying transient failures. Per-request
-    headers and params arrive on the HttpRequest, not on the client. URL
-    construction (scheme, normalization) is the scraper's job, and so is fetch
-    concurrency — BaseScraper.run caps how many requests are in flight, so this
-    client carries no semaphore of its own (pool_size still bounds the underlying
-    socket pool). All terminal failures surface as HttpError; the scraper
-    re-raises them as ScraperError with source/URL context.
+    Concerns: opening connections. Per-request headers and params arrive on the
+    HttpRequest, not on the client. URL construction (scheme, normalization) is
+    the scraper's job, and so is fetch concurrency — BaseScraper.run caps how
+    many requests are in flight, so this client carries no semaphore of its own
+    (pool_size still bounds the underlying socket pool). Single-attempt: any
+    5xx response or transport error raises HttpError, which the run loop turns
+    into a per-URL skip; the scraper re-raises everything else as ScraperError
+    with source/URL context.
     """
 
     def __init__(
         self,
         timeout: float = 30.0,
         follow_redirects: bool = True,
-        retries: int = 3,
-        retry_delay: float = 2.0,
         pool_size: int = 100,
         **httpx_kwargs: Any,
     ) -> None:
@@ -121,68 +119,28 @@ class HttpClient:
             ),
             **httpx_kwargs,
         )
-        self.retries = retries
-        self.retry_delay = retry_delay
         logger.info(
-            "HttpClient initialized (timeout=%s, retries=%s, retry_delay=%s, pool_size=%s)",
+            "HttpClient initialized (timeout=%s, pool_size=%s)",
             timeout,
-            retries,
-            retry_delay,
             pool_size,
         )
 
     async def get(self, request: HttpRequest) -> HttpResponse:
         logger.info("GET %s", request.url)
-        last_exc: Exception | None = None
-        last_response: httpx.Response | None = None
-
-        # retry loop: pass through on <500, retry on 5xx and transient transport
-        # failures (connect errors, timeouts, mid-stream server disconnects)
-        for attempt in range(self.retries + 1):
-            failure_reason: str | None = None
-            try:
-                response = await self.client.get(
-                    request.url,
-                    headers=request.headers,
-                    params=request.params,
-                )
-                if response.status_code < 500:
-                    logger.info("GET %s -> %s", request.url, response.status_code)
-                    return HttpResponse(response, request)
-                last_response = response
-                last_exc = None
-                failure_reason = f"status {response.status_code}"
-            except httpx.TransportError as exc:
-                last_exc = exc
-                last_response = None
-                failure_reason = str(exc) or type(exc).__name__
-
-            if attempt < self.retries:
-                logger.warning(
-                    "GET %s attempt %s/%s failed (%s), retrying in %ss",
-                    request.url,
-                    attempt + 1,
-                    self.retries + 1,
-                    failure_reason,
-                    self.retry_delay,
-                )
-                await asyncio.sleep(self.retry_delay)
-
-        # exhausted retries — surface as HttpError
-        reason = (
-            f"status {last_response.status_code}" if last_response is not None else str(last_exc)
-        )
-        logger.warning(
-            "GET %s failed after %s attempts: %s",
-            request.url,
-            self.retries + 1,
-            reason,
-        )
-        if last_response is not None:
-            raise HttpError(
-                f"GET {request.url} returned {last_response.status_code} after {self.retries + 1} attempts"
+        try:
+            response = await self.client.get(
+                request.url,
+                headers=request.headers,
+                params=request.params,
             )
-        raise HttpError(f"GET {request.url} failed: {last_exc}") from last_exc
+        except httpx.TransportError as exc:
+            logger.warning("GET %s failed: %s", request.url, exc)
+            raise HttpError(f"GET {request.url} failed: {exc}") from exc
+        if response.status_code >= 500:
+            logger.warning("GET %s -> %s", request.url, response.status_code)
+            raise HttpError(f"GET {request.url} returned {response.status_code}")
+        logger.info("GET %s -> %s", request.url, response.status_code)
+        return HttpResponse(response, request)
 
     async def __aenter__(self) -> "HttpClient":
         return self

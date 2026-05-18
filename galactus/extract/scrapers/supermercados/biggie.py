@@ -9,7 +9,7 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 class Scraper(BaseScraper):
     """Scraper for biggie — products JSON API, offset-paginated into bronze.api_snapshots."""
 
-    snapshot_model = ApiSnapshot
+    bronze_model = ApiSnapshot
     TAKE = 50
 
     def build_url(
@@ -27,7 +27,7 @@ class Scraper(BaseScraper):
     def seed_urls(self) -> list[HttpRequest]:
         return [self.build_url(0)]
 
-    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+    def get_next_urls(self, response: HttpResponse, soup: object = None) -> list[HttpRequest]:
         # fan out the full offset list only from the seed; later responses already
         # carry offsets enqueued by the seed, so re-emitting them just wastes hashing.
         if response.request.params.get("skip") != "0":

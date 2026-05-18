@@ -9,7 +9,7 @@ from sql.a_bronze.api_snapshots import ApiSnapshot
 class Scraper(BaseScraper):
     """Scraper for latribuna — Arc Publishing feed, open-ended offset pagination into bronze.api_snapshots."""
 
-    snapshot_model = ApiSnapshot
+    bronze_model = ApiSnapshot
     SIZE = 100
 
     def build_url(
@@ -34,7 +34,7 @@ class Scraper(BaseScraper):
     def seed_urls(self) -> list[HttpRequest]:
         return [self.build_url(0)]
 
-    def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+    def get_next_urls(self, response: HttpResponse, soup: object = None) -> list[HttpRequest]:
         elements = response.json().get("content_elements", [])
         if len(elements) < self.SIZE:
             return []

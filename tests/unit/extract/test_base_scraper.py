@@ -73,7 +73,8 @@ def test_extract_links_default_returns_a_hrefs_joined_with_response_url() -> Non
         "</body></html>"
     )
     response = FakeHttpResponse(text=html, url="https://example.test/index")
-    links = scraper.extract_links(response)  # type: ignore[arg-type]
+    soup = scraper.html_parser.parse(html)
+    links = scraper.extract_links(response, soup)  # type: ignore[arg-type]
     assert links == [
         "https://example.test/about",
         "https://example.test/contact",
@@ -86,7 +87,8 @@ def test_extract_links_bare_relative_resolves_against_base_url_not_response() ->
     scraper = make_scraper(BaseScraper)
     html = '<a href="catalogo/foo-p1">foo</a>'
     response = FakeHttpResponse(text=html, url="https://example.test/catalogo/x-p9")
-    links = scraper.extract_links(response)  # type: ignore[arg-type]
+    soup = scraper.html_parser.parse(html)
+    links = scraper.extract_links(response, soup)  # type: ignore[arg-type]
     assert links == ["https://example.test/catalogo/foo-p1"]
 
 
@@ -138,9 +140,9 @@ def test_process_response_inserts_html_snapshot_for_html_default() -> None:
     assert record.source_url == "https://example.test/x"
 
 
-def test_process_response_inserts_api_snapshot_when_snapshot_model_is_api() -> None:
+def test_process_response_inserts_api_snapshot_when_bronze_model_is_api() -> None:
     class ApiScraper(BaseScraper):
-        snapshot_model = ApiSnapshot
+        bronze_model = ApiSnapshot
 
     scraper = make_scraper(ApiScraper)
     db: FakeDatabase = scraper.db  # type: ignore[assignment]
@@ -160,12 +162,12 @@ def test_process_response_inserts_api_snapshot_when_snapshot_model_is_api() -> N
     assert record.request_params == {"page": "1"}
 
 
-def test_process_response_raises_scrapererror_for_unknown_snapshot_model() -> None:
+def test_process_response_raises_scrapererror_for_unknown_bronze_model() -> None:
     class OtherRecord(Base):
         __abstract__ = True
 
     class WeirdScraper(BaseScraper):
-        snapshot_model = OtherRecord
+        bronze_model = OtherRecord
 
     scraper = make_scraper(WeirdScraper)
     request = FakeHttpRequest(url="https://example.test/x")
@@ -279,7 +281,7 @@ def test_run_skips_api_page_already_visited_today() -> None:
     base_url = "https://api.example.test/feed"
 
     class PagingApiScraper(BaseScraper):
-        snapshot_model = ApiSnapshot
+        bronze_model = ApiSnapshot
 
         def build_url(  # type: ignore[override]
             self,
