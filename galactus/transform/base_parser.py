@@ -125,10 +125,12 @@ class BaseParser(ABC):
                     except ParserError as exc:
                         skipped += 1
                         logger.warning(
-                            "transform[%s]: skipping bronze_id=%s: %s",
+                            "transform[%s]: skipping bronze_id=%s: %s: %s",
                             self.source,
                             record.id,
+                            type(exc).__name__,
                             exc,
+                            exc_info=True,
                         )
                         continue
                     await self.db.insert(entities, model=self.silver_model)
