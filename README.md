@@ -94,7 +94,7 @@ flowchart TD
     ES -->|owns for the run| DB1["Database"]
     ES -->|imports by config path| SC["Scraper<br/>(BaseScraper subclass)"]
     SC -->|fetch| WEB[("websites / APIs")]
-    SC -->|insert (skip-if-seen-today)| BRZ[("bronze schema")]
+    SC -->|"insert (skip-if-seen-today)"| BRZ[("bronze schema")]
 
     TS -->|owns for the run| DB2["Database"]
     TS -->|imports by config path| PR["Parser<br/>(BaseParser + ArticleParser/ProductParser mixin)"]
