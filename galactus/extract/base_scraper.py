@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlparse, urlspli
 from bs4 import BeautifulSoup
 
 from galactus.config import ExtractConfig
-from galactus.core.errors import DatabaseError, ScraperError
+from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.extract.html_parser import HtmlParser
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
@@ -320,7 +320,7 @@ class BaseScraper:
                             next_requests = await self.process_response(response)
                         except asyncio.CancelledError:
                             raise
-                        except Exception as exc:
+                        except (HttpError, DatabaseError, ScraperError) as exc:
                             skipped += 1
                             logger.warning(
                                 "extract[%s]: skipping after error: %s", self.source, exc

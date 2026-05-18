@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from bs4 import BeautifulSoup
 
 from galactus.core.errors import ScraperError
 from galactus.extract.base_scraper import BaseScraper
@@ -298,7 +299,9 @@ def test_run_skips_api_page_already_visited_today() -> None:
         def seed_urls(self) -> list[HttpRequest]:
             return [self.build_url(0), self.build_url(100)]
 
-        def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
+        def get_next_urls(
+            self, response: HttpResponse, soup: BeautifulSoup | None = None
+        ) -> list[HttpRequest]:
             return []
 
     http = FakeHttpClient(
