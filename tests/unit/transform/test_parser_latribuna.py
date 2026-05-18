@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from galactus.transform.html_parser import compress
+from galactus.infra.db import Database
 from galactus.transform.parsers.noticias.latribuna import Parser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.article import Article
@@ -38,7 +38,7 @@ def test_build_entities_maps_stories() -> None:
         request_params={"size": "100"},
         status_code=200,
         response_headers={},
-        body=compress(json.dumps(RESPONSE)),
+        body=Database.compress(json.dumps(RESPONSE)),
     )
 
     articles = parser.process_record(record)

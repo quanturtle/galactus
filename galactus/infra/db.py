@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator, Iterable
 from types import TracebackType
 from typing import Any, TypeVar
 
+import zstandard
 from sqlalchemy import func, insert, select
 from sqlalchemy.dialects import registry
 from sqlalchemy.engine.url import make_url
@@ -60,6 +61,16 @@ class Database:
             pool_size,
             max_overflow,
         )
+
+    @staticmethod
+    def compress(text: str) -> bytes:
+        """zstd-compress a UTF-8 string for BYTEA storage."""
+        return zstandard.ZstdCompressor(level=6).compress(text.encode("utf-8"))
+
+    @staticmethod
+    def decompress(blob: bytes) -> str:
+        """Decompress a zstd blob back to a UTF-8 string."""
+        return zstandard.ZstdDecompressor().decompress(blob).decode("utf-8")
 
     async def open(self) -> None:
         # surface bad URLs / unreachable DB at startup, not lazily

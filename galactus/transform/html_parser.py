@@ -1,51 +1,54 @@
-"""HTML parsing, compression helpers, and per-source filter configuration."""
+"""HtmlParser: ordered filter passes over an HTML document."""
 
-import zlib
 from typing import Any
 
 from bs4 import BeautifulSoup, Comment
 
 
-class HtmlParser:
-    """Applies ordered blocklist filter passes to an HTML document.
+# always-decomposed at every source; per-source blocklist_tags adds to this set
+BASELINE_BLOCKLIST_TAGS: tuple[str, ...] = ("script", "style", "noscript")
 
-    Filters run in declaration order:
+
+class HtmlParser:
+    """Applies ordered filter passes to an HTML document and returns the tree.
+
+    run() is the entrypoint. Phases run in declaration order:
       1. strip HTML comments
       2. blocklist_tags       — decompose these tags (and their subtree)
       3. blocklist_attributes — delete these attributes from every remaining tag
+
+    blocklist_tags is the union of BASELINE_BLOCKLIST_TAGS and any per-source
+    additions from config; <script type="application/ld+json"> is always
+    preserved so source-specific parsers can read structured data from it.
     """
 
     def __init__(self, options: dict[str, Any]) -> None:
-        self.blocklist_tags: tuple[str, ...] = tuple(options.get("blocklist_tags", ()))
+        extra = tuple(t for t in options.get("blocklist_tags", ()) if t not in BASELINE_BLOCKLIST_TAGS)
+        self.blocklist_tags: tuple[str, ...] = BASELINE_BLOCKLIST_TAGS + extra
         self.blocklist_attributes: tuple[str, ...] = tuple(options.get("blocklist_attributes", ()))
 
-    def _strip_comments(self, soup: BeautifulSoup) -> None:
+    def strip_comments(self, soup: BeautifulSoup) -> None:
         for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
             comment.extract()
 
-    def parse(self, html: str) -> BeautifulSoup:
-        """Apply all filters and return a BeautifulSoup tree."""
-        soup = BeautifulSoup(html, "lxml")
-
-        # strip comments, then apply blocklists in declaration order
-        self._strip_comments(soup)
-
+    def decompose_blocklist_tags(self, soup: BeautifulSoup) -> None:
         for tag_name in self.blocklist_tags:
             for tag in soup.find_all(tag_name):
+                if tag_name == "script" and tag.get("type") == "application/ld+json":
+                    continue
                 tag.decompose()
 
+    def strip_blocklist_attributes(self, soup: BeautifulSoup) -> None:
         for tag in soup.find_all(True):
             for attr in self.blocklist_attributes:
                 tag.attrs.pop(attr, None)
 
+    def run(self, text: str) -> BeautifulSoup:
+        """Build the tree and run filter phases in declaration order."""
+        soup = BeautifulSoup(text, "lxml")
+
+        self.strip_comments(soup)
+        self.decompose_blocklist_tags(soup)
+        self.strip_blocklist_attributes(soup)
+
         return soup
-
-
-def compress(text: str) -> bytes:
-    """zlib-compress a UTF-8 string for BYTEA storage."""
-    return zlib.compress(text.encode("utf-8"), level=6)
-
-
-def decompress(blob: bytes) -> str:
-    """Decompress a zlib blob back to a UTF-8 string."""
-    return zlib.decompress(blob).decode("utf-8")

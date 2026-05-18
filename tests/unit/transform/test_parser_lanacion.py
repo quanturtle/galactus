@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from galactus.transform.html_parser import compress
+from galactus.infra.db import Database
 from galactus.transform.parsers.noticias.lanacion import Parser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.article import Article
@@ -42,7 +42,7 @@ def _snapshot() -> ApiSnapshot:
         request_params={"feedSize": "100"},
         status_code=200,
         response_headers={},
-        body=compress(json.dumps(RESPONSE)),
+        body=Database.compress(json.dumps(RESPONSE)),
     )
 
 

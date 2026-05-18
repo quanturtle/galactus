@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from galactus.transform.html_parser import compress
+from galactus.infra.db import Database
 from galactus.transform.parsers.noticias.npy import Parser
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.article import Article
@@ -40,7 +40,7 @@ def _snapshot(html: str, url: str) -> HtmlSnapshot:
         status_code=200,
         content_type="text/html",
         response_headers={},
-        html=compress(html),
+        html=Database.compress(html),
     )
 
 

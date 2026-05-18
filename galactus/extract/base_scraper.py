@@ -11,7 +11,6 @@ from galactus.config import ExtractConfig
 from galactus.core.errors import DatabaseError, ScraperError
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
-from galactus.transform.html_parser import compress
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
@@ -215,7 +214,7 @@ class BaseScraper:
                     status_code=response.status_code,
                     content_type=response.headers.get("content-type", ""),
                     response_headers=dict(response.headers),
-                    html=compress(response.text),
+                    html=Database.compress(response.text),
                     is_diff=False,
                 )
             elif model is ApiSnapshot:
@@ -226,7 +225,7 @@ class BaseScraper:
                     request_params=request.params or {},
                     status_code=response.status_code,
                     response_headers=dict(response.headers),
-                    body=compress(response.text),
+                    body=Database.compress(response.text),
                 )
             else:
                 raise ScraperError(f"{self.source}: no snapshot builder for {model}")

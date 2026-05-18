@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from decimal import Decimal
 
-from galactus.transform.html_parser import compress
+from galactus.infra.db import Database
 from galactus.transform.parsers.supermercados.grutter import Parser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.product import Product
@@ -53,7 +53,7 @@ def _snapshot() -> ApiSnapshot:
         request_params={"page": "1", "per_page": "100"},
         status_code=200,
         response_headers={},
-        body=compress(json.dumps(RESPONSE)),
+        body=Database.compress(json.dumps(RESPONSE)),
     )
 
 
