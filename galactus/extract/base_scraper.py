@@ -138,8 +138,9 @@ class BaseScraper:
     def extract_links(self, response: HttpResponse, soup: BeautifulSoup | None) -> list[str]:
         if soup is None:
             return []
-        # bare-relative hrefs resolve against base_url, not response.url, so sites that
-        # link `catalogo/foo` from `/catalogo/...` pages don't stack `/catalogo/catalogo/...`.
+        # bare path-relative hrefs (`catalogo/foo`) resolve against base_url so they don't
+        # stack onto response.url's path. Query- and fragment-only hrefs (`?p=3`, `#x`)
+        # keep response.url per RFC 3986 so pagination anchors like `<a href="?p=3">` work.
         root = self.config.base_url.rstrip("/") + "/"
         out: list[str] = []
         tags = [*soup.select("a[href]"), *soup.find_all("link", rel="next", href=True)]
@@ -147,7 +148,7 @@ class BaseScraper:
             href = str(tag["href"]).strip()
             if not href:
                 continue
-            base = response.url if urlparse(href).scheme or href.startswith("/") else root
+            base = response.url if urlparse(href).scheme or href.startswith(("/", "?", "#")) else root
             out.append(urljoin(base, href))
         return out
 
