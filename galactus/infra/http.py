@@ -125,7 +125,10 @@ class HttpClient:
         self.retry_delay = retry_delay
         logger.info(
             "HttpClient initialized (timeout=%s, retries=%s, retry_delay=%s, pool_size=%s)",
-            timeout, retries, retry_delay, pool_size,
+            timeout,
+            retries,
+            retry_delay,
+            pool_size,
         )
 
     async def get(self, request: HttpRequest) -> HttpResponse:
@@ -155,19 +158,23 @@ class HttpClient:
             if attempt < self.retries:
                 logger.warning(
                     "GET %s attempt %s/%s failed (%s), retrying in %ss",
-                    request.url, attempt + 1, self.retries + 1, failure_reason, self.retry_delay,
+                    request.url,
+                    attempt + 1,
+                    self.retries + 1,
+                    failure_reason,
+                    self.retry_delay,
                 )
                 await asyncio.sleep(self.retry_delay)
 
         # exhausted retries — surface as HttpError
         reason = (
-            f"status {last_response.status_code}"
-            if last_response is not None
-            else str(last_exc)
+            f"status {last_response.status_code}" if last_response is not None else str(last_exc)
         )
         logger.warning(
             "GET %s failed after %s attempts: %s",
-            request.url, self.retries + 1, reason,
+            request.url,
+            self.retries + 1,
+            reason,
         )
         if last_response is not None:
             raise HttpError(

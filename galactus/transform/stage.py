@@ -24,7 +24,8 @@ class TransformStage(PipelineStage):
         parser_name = config.transform.parser if config.transform is not None else "none"
         logger.info(
             "TransformStage initialized (source=%s, parser=%s)",
-            config.name, parser_name,
+            config.name,
+            parser_name,
         )
 
     async def run(self) -> None:

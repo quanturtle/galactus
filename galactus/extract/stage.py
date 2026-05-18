@@ -25,7 +25,8 @@ class ExtractStage(PipelineStage):
         scraper_name = config.extract.scraper if config.extract is not None else "none"
         logger.info(
             "ExtractStage initialized (source=%s, scraper=%s)",
-            config.name, scraper_name,
+            config.name,
+            scraper_name,
         )
 
     async def run(self) -> None:

@@ -48,9 +48,7 @@ def _html_snapshot(
 
 async def _bronze_ids(engine, table: str) -> list[int]:
     async with engine.connect() as conn:
-        rows = (
-            await conn.execute(text(f"SELECT id FROM scratch.{table} ORDER BY id"))
-        ).all()
+        rows = (await conn.execute(text(f"SELECT id FROM scratch.{table} ORDER BY id"))).all()
     return [r.id for r in rows]
 
 
@@ -180,8 +178,7 @@ async def test_stream_unparsed_skips_rows_already_in_silver(db, engine) -> None:
 
     # nothing parsed yet -> both bronze rows are unparsed
     pending = [
-        r.id
-        for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
+        r.id for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [first_id, second_id]
 
@@ -195,8 +192,7 @@ async def test_stream_unparsed_skips_rows_already_in_silver(db, engine) -> None:
 
     # only the still-unparsed bronze row is returned now
     pending = [
-        r.id
-        for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
+        r.id for r in await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "test_source")
     ]
     assert pending == [second_id]
 

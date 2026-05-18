@@ -76,7 +76,8 @@ def main() -> int:
     setup_logging(config.log_level)
     logger.info(
         "galactus starting (config=%s, stage=%s)",
-        args.config, args.stage or "all",
+        args.config,
+        args.stage or "all",
     )
 
     # wire plugins and run pipeline
