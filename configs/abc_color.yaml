@@ -8,7 +8,7 @@ extract:
   scrape_patterns: []
   ignore_patterns: []
   max_pages: -1
-  concurrency: 5
+  concurrency: 2
   timeout_seconds: 30.0
 transform:
   parser: noticias.abc_color
