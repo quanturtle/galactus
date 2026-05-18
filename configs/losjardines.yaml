@@ -1,0 +1,27 @@
+name: losjardines
+log_level: INFO
+extract:
+  scraper: supermercados.losjardines
+  base_url: https://www.losjardinesonline.com.py
+  allowed_domains:
+  - www.losjardinesonline.com.py
+  - losjardinesonline.com.py
+  scrape_patterns:
+  - -p\d+(?:/|\?|#|$)
+  ignore_patterns:
+  - /login
+  - /cart
+  - /account
+  - /checkout
+  - /register
+  - /mi-cuenta
+  - /contacto
+  - /sucursales
+  - /preguntas-frecuentes
+  - /como-comprar
+  - \?(map|_q|filter)=
+  max_pages: -1
+  concurrency: 5
+  timeout_seconds: 30.0
+transform:
+  parser: supermercados.losjardines
