@@ -74,6 +74,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         include_schemas=True,
         include_name=include_name,
+        compare_server_default=True,
         version_table="galactus_alembic_version",
         version_table_schema="public",
     )
@@ -101,6 +102,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             include_schemas=True,
             include_name=include_name,
+            compare_server_default=True,
             version_table="galactus_alembic_version",
             version_table_schema="public",
         )

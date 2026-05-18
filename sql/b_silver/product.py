@@ -28,7 +28,7 @@ class Product(Base):
     name: Mapped[str]
     brand: Mapped[str | None] = mapped_column(default=None)
     price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), default=None)
-    currency: Mapped[str] = mapped_column(default="PYG")
+    currency: Mapped[str] = mapped_column(default="PYG", server_default="PYG")
     unit: Mapped[str | None] = mapped_column(default=None)
     image_urls: Mapped[list[str]] = mapped_column(ARRAY(String), server_default="{}")
     # the bronze snapshot's created_at, stamped at parse time
