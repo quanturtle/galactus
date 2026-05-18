@@ -1,5 +1,9 @@
 # galactus
 
+<p align="center">
+  <img src="img/logo.jpg" alt="galactus" width="320">
+</p>
+
 Async, staged web-scraping pipeline. One reusable package — `galactus` — drives **14 per-source pipelines** split across two domains: **noticias** (8 Paraguayan news sites) and **supermercados** (6 supermarket chains). Every run flows through three stages — **extract → transform → load** — feeding a **bronze → silver → gold** medallion data model in Postgres.
 
 ```
