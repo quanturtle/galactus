@@ -78,7 +78,6 @@ class BaseParser(ABC):
         return [decoded]
 
     # build_entity is contributed by the ArticleParser / ProductParser mixin via MRO.
-
     def stamp(self, entity: Base, record: Base) -> None:
         entity.bronze_id = record.id
         entity.created_at = record.created_at
