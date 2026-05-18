@@ -4,7 +4,7 @@
   <img src="img/logo.jpg" alt="galactus" width="320">
 </p>
 
-Async, staged web-scraping pipeline. One reusable package — `galactus` — drives **14 per-source pipelines** split across two domains: **noticias** (8 Paraguayan news sites) and **supermercados** (6 supermarket chains). Every run flows through three stages — **extract → transform → load** — feeding a **bronze → silver → gold** medallion data model in Postgres.
+Async, staged web-scraping pipeline. One reusable package — `galactus` — drives per-source pipelines across multiple domains (currently **noticias** — Paraguayan news sites — and **supermercados** — supermarket chains). Every run flows through three stages — **extract → transform → load** — feeding a **bronze → silver → gold** medallion data model in Postgres.
 
 ```
 internet ──▶ extract ──▶ bronze.{html,api}_snapshots ──▶ transform ──▶ silver.{articles,products} ──▶ load ──▶ gold.* (TBD)
@@ -68,7 +68,7 @@ galactus_v2/
 │   ├── b_silver/                   # article.py, product.py, schema.py — silver: per-domain entities
 │   └── c_gold/                     # schema.py only — gold layer is a stub
 ├── migrations/                     # Alembic (env.py: psycopg3 dialect, multi-schema, autogenerate)
-├── configs/<source>.yaml           # one YAML per source (14 of them)
+├── configs/<source>.yaml           # one YAML per source
 ├── airflow/
 │   ├── Dockerfile
 │   └── dags/<source>_pipeline.py   # one DAG per source: extract >> transform BashOperators
@@ -139,7 +139,7 @@ Each stage adapts a domain object to the `PipelineStage` contract: it opens the 
 Field-extraction mixins composed alongside `BaseParser` (`class Parser(BaseParser, ArticleParser): ...`). Each mixin owns `build_entity(item) -> Article | Product` and declares eight abstract `extract_*` hooks in the same order the columns appear in the silver model — so a parser file reads top-to-bottom against the silver schema. For `ArticleParser`: `source_url`, `title`, `body`, `authors`, `published_at`, `section`, `tags`, `image_urls`. For `ProductParser`: `source_url`, `sku`, `name`, `brand`, `price`, `currency`, `unit`, `image_urls`. Every silver field is optional, so the hooks return whatever they can find (or an empty value); `build_entity` does not filter. `ProductParser` also ships `parse_unit_from_name(name)` — an ordered regex list (`kg`, `l`, `ml`, `g`, `cc`, in match-priority order) that recovers the inline unit info embedded in ~80% of supermercado product names; concrete parsers delegate `extract_unit` to it when no structured field is available. `item` is whatever `BaseParser.build_item` yielded — typically a dict bundling the per-entity slice with any bronze-derived context the hooks need (e.g. `source_url` for HTML single-page parsers whose payload doesn't carry the URL).
 
 ### `extract/scrapers/<domain>/<source>.py`, `transform/parsers/<domain>/<source>.py` · *Strategy / plugin*
-Each module exports a single `Scraper` (or `Parser`) class subclassing the template-method base (parsers also mix in `ArticleParser` or `ProductParser`). The plugin is selected by **dotted path in the YAML** — `extract.scraper: noticias.lanacion` resolves to `galactus.extract.scrapers.noticias.lanacion.Scraper`. There is no registry; the CLI just imports the path and checks the class is there. Most HTML sources are one-liners (`snapshot_model = HtmlSnapshot`); API sources override `seed_urls()` / `get_next_urls()` and define their own paginating `build_url(...)` (e.g. `noticias/lanacion.py` walks an Arc Publishing feed by offset; `noticias/abc_color.py` walks twelve sections, each paginated). Parsers implement the eight `extract_*` hooks against the bronze payload — see `parsers/supermercados/superseis.py` (JSON-LD Product on every page) and `parsers/noticias/lanacion.py` (Arc PF feed items via `build_item`).
+Each module exports a single `Scraper` (or `Parser`) class subclassing the template-method base (parsers also mix in `ArticleParser` or `ProductParser`). The plugin is selected by **dotted path in the YAML** — `extract.scraper: noticias.lanacion` resolves to `galactus.extract.scrapers.noticias.lanacion.Scraper`. There is no registry; the CLI just imports the path and checks the class is there. Most HTML sources are one-liners (`snapshot_model = HtmlSnapshot`); API sources override `seed_urls()` / `get_next_urls()` and define their own paginating `build_url(...)` (e.g. `noticias/lanacion.py` walks an Arc Publishing feed by offset; `noticias/abc_color.py` walks each section, paginated). Parsers implement the eight `extract_*` hooks against the bronze payload — see `parsers/supermercados/superseis.py` (JSON-LD Product on every page) and `parsers/noticias/lanacion.py` (Arc PF feed items via `build_item`).
 
 ### `infra/http.py` — `HttpClient` / `HttpRequest` / `HttpResponse` · *Adapter + Retry*
 `HttpClient` wraps `httpx.AsyncClient` (connection-pool `Limits`, `follow_redirects=True`); fetch concurrency is `BaseScraper.run`'s job, not this client's. `get(request)` returns any response with status `< 500`, retries `5xx` and transient transport errors (connect errors, timeouts, mid-stream disconnects) up to `retries` times with `retry_delay` backoff, and raises `HttpError` once exhausted. `HttpRequest` is a hashable value object (`url`, `headers`, `params`) — `BaseScraper` uses `hash(request)` as the BFS `seen` key. `HttpResponse` exposes only `status_code` / `headers` / `content` / `text` / `json()` / `request` — scrapers never touch `httpx` directly.
@@ -198,10 +198,10 @@ Each source follows the **bronze/silver** medallion shape: capture raw bytes fir
 
 | Domain & source kind | bronze model | silver model | extract behavior |
 |---|---|---|---|
-| **noticias** — API sources (`lanacion`, `abc_color`, `hoy`, `latribuna`, `megacadena`) | `ApiSnapshot` | `Article` | paginated JSON feeds; pagination via `seed_urls()` / `get_next_urls()` overrides |
-| **noticias** — HTML sources (`ultimahora`, `npy`, `elnacional`) | `HtmlSnapshot` | `Article` | same-domain BFS, zstd-compressed HTML body |
-| **supermercados** — API sources (`biggie`, `grutter`, `stock`) | `ApiSnapshot` | `Product` | paginated JSON product catalogs |
-| **supermercados** — HTML sources (`superseis`, `arete`, `casarica`) | `HtmlSnapshot` | `Product` | same-domain BFS over `/product/`-style URLs |
+| **noticias** — API sources (e.g. `lanacion`, `abc_color`) | `ApiSnapshot` | `Article` | paginated JSON feeds; pagination via `seed_urls()` / `get_next_urls()` overrides |
+| **noticias** — HTML sources (e.g. `ultimahora`) | `HtmlSnapshot` | `Article` | same-domain BFS, zstd-compressed HTML body |
+| **supermercados** — API sources (e.g. `biggie`, `grutter`) | `ApiSnapshot` | `Product` | paginated JSON product catalogs |
+| **supermercados** — HTML sources (e.g. `superseis`) | `HtmlSnapshot` | `Product` | same-domain BFS over `/product/`-style URLs |
 
 Design decisions worth knowing:
 - **One silver row per (entity, bronze sighting).** Silver does no deduplication; collapsing repeated sightings of the same article/product is reserved for the gold layer (not yet built).
@@ -252,7 +252,7 @@ classDiagram
         +build_entity(item) Product
     }
     BaseScraper <|-- LanacionScraper : ApiSnapshot, paginates Arc feed
-    BaseScraper <|-- AbcColorScraper : ApiSnapshot, paginates 12 sections
+    BaseScraper <|-- AbcColorScraper : ApiSnapshot, paginates sections
     BaseScraper <|-- UltimahoraScraper : HtmlSnapshot, BFS
     BaseScraper <|-- SuperseisScraper : HtmlSnapshot, BFS over /product/
     BaseParser <|-- LanacionParser
