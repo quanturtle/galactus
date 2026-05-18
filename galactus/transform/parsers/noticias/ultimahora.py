@@ -166,6 +166,7 @@ class Parser(BaseParser, ArticleParser):
     def extract_image_urls(self, item: dict) -> list[str]:
         # collect http images inside the body, minus logos/icons/tracking pixels
         body_images: list[str] = []
+        seen: set[str] = set()
         container = item["soup"].select_one(self.BODY_CONTAINER_SELECTOR)
         if container is not None:
             for img in container.select("img[src]"):
@@ -174,8 +175,10 @@ class Parser(BaseParser, ArticleParser):
                     continue
                 if any(kw in src.lower() for kw in IMAGE_EXCLUDE):
                     continue
-                if src not in body_images:
-                    body_images.append(src)
+                if src in seen:
+                    continue
+                seen.add(src)
+                body_images.append(src)
 
         # pick a hero, refusing the publication logo and other non-editorial assets
         hero = _ld_image_url(item["json_ld"].get("image"))
