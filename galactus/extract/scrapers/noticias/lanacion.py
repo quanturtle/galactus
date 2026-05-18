@@ -42,14 +42,17 @@ class Scraper(BaseScraper):
         # non-200 bodies aren't JSON; bail before .json() crashes the run
         if response.status_code != 200:
             return []
+        items = response.json().get("content_elements", [])
         # skip overshoot pages from in-flight fetches past the natural end — don't persist empty bronze rows
-        if not response.json().get("content_elements", []):
+        if not items:
+            return []
+        # partial last page: persist, but don't queue more pages (get_next_urls' return is discarded)
+        if len(items) < self.FEED_SIZE:
+            await super().process_response(response)
             return []
         return await super().process_response(response)
 
     def get_next_urls(self, response: HttpResponse) -> list[HttpRequest]:
-        if len(response.json().get("content_elements", [])) < self.FEED_SIZE:
-            return []
         blob = json.loads(response.request.params["query"])
         current = int(blob["feedFrom"])
         # ES caps feedFrom+feedSize at MAX_RESULT_WINDOW; never queue a request that would 400.
