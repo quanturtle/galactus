@@ -1,11 +1,10 @@
 import json
 from datetime import datetime
 
-from galactus.infra.db import Database
 from galactus.transform.parsers.noticias.lanacion import Parser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.article import Article
-from tests.unit.fakes import make_parser
+from tests.unit.fakes import FakeDatabase, make_parser
 
 RESPONSE = {
     "content_elements": [
@@ -42,7 +41,7 @@ def _snapshot() -> ApiSnapshot:
         request_params={"feedSize": "100"},
         status_code=200,
         response_headers={},
-        body=Database.compress(json.dumps(RESPONSE)),
+        body=FakeDatabase().compress(json.dumps(RESPONSE)),
     )
 
 

@@ -16,6 +16,7 @@ dependencies = [
     "python-dateutil",
     "aioboto3",
     "python-dotenv>=1.2.2",
+    "zstandard>=0.25.0",
 ]
 
 [project.optional-dependencies]

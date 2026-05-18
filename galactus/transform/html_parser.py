@@ -4,7 +4,6 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Comment
 
-
 # always-decomposed at every source; per-source blocklist_tags adds to this set
 BASELINE_BLOCKLIST_TAGS: tuple[str, ...] = ("script", "style", "noscript")
 
@@ -23,7 +22,9 @@ class HtmlParser:
     """
 
     def __init__(self, options: dict[str, Any]) -> None:
-        extra = tuple(t for t in options.get("blocklist_tags", ()) if t not in BASELINE_BLOCKLIST_TAGS)
+        extra = tuple(
+            t for t in options.get("blocklist_tags", ()) if t not in BASELINE_BLOCKLIST_TAGS
+        )
         self.blocklist_tags: tuple[str, ...] = BASELINE_BLOCKLIST_TAGS + extra
         self.blocklist_attributes: tuple[str, ...] = tuple(options.get("blocklist_attributes", ()))
 

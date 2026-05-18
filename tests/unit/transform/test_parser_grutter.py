@@ -2,11 +2,10 @@ import json
 from datetime import datetime
 from decimal import Decimal
 
-from galactus.infra.db import Database
 from galactus.transform.parsers.supermercados.grutter import Parser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.product import Product
-from tests.unit.fakes import make_parser
+from tests.unit.fakes import FakeDatabase, make_parser
 
 RESPONSE = [
     {
@@ -53,7 +52,7 @@ def _snapshot() -> ApiSnapshot:
         request_params={"page": "1", "per_page": "100"},
         status_code=200,
         response_headers={},
-        body=Database.compress(json.dumps(RESPONSE)),
+        body=FakeDatabase().compress(json.dumps(RESPONSE)),
     )
 
 

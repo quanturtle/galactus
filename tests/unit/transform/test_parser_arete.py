@@ -1,11 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
-from galactus.infra.db import Database
 from galactus.transform.parsers.supermercados.arete import Parser
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.product import Product
-from tests.unit.fakes import make_parser
+from tests.unit.fakes import FakeDatabase, make_parser
 
 PRODUCT_HTML = """
 <!DOCTYPE html>
@@ -34,7 +33,7 @@ def _snapshot(html: str, url: str) -> HtmlSnapshot:
         status_code=200,
         content_type="text/html",
         response_headers={},
-        html=Database.compress(html),
+        html=FakeDatabase().compress(html),
     )
 
 

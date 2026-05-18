@@ -86,8 +86,14 @@ class BaseScraper:
         logger.info(
             "Scraper initialized (source=%s, scraper=%s, base_url=%s, max_pages=%s, "
             "concurrency=%s, timeout_seconds=%s, retries=%s, retry_delay=%s, request_delay=%s)",
-            self.source, type(self).__name__, config.base_url, config.max_pages,
-            config.concurrency, config.timeout_seconds, config.retries, config.retry_delay,
+            self.source,
+            type(self).__name__,
+            config.base_url,
+            config.max_pages,
+            config.concurrency,
+            config.timeout_seconds,
+            config.retries,
+            config.retry_delay,
             config.request_delay,
         )
 
@@ -214,7 +220,7 @@ class BaseScraper:
                     status_code=response.status_code,
                     content_type=response.headers.get("content-type", ""),
                     response_headers=dict(response.headers),
-                    html=Database.compress(response.text),
+                    html=self.db.compress(response.text),
                     is_diff=False,
                 )
             elif model is ApiSnapshot:
@@ -225,7 +231,7 @@ class BaseScraper:
                     request_params=request.params or {},
                     status_code=response.status_code,
                     response_headers=dict(response.headers),
-                    body=Database.compress(response.text),
+                    body=self.db.compress(response.text),
                 )
             else:
                 raise ScraperError(f"{self.source}: no snapshot builder for {model}")
@@ -236,7 +242,9 @@ class BaseScraper:
                 raise ScraperError(f"{self.source}: persisting {request.url} failed") from exc
             logger.info(
                 "extract[%s]: persisted %s for %s",
-                self.source, type(record).__name__, request.url,
+                self.source,
+                type(record).__name__,
+                request.url,
             )
 
         return self.get_next_urls(response)
@@ -258,7 +266,9 @@ class BaseScraper:
                 seen.add(key)
             logger.info(
                 "extract[%s]: scraper run start (seed_count=%s, already_seen_today=%s)",
-                self.source, len(frontier), already_seen_today,
+                self.source,
+                len(frontier),
+                already_seen_today,
             )
             dispatched = 0
             skipped = 0
@@ -293,7 +303,9 @@ class BaseScraper:
                             raise
                         except Exception as exc:
                             skipped += 1
-                            logger.warning("extract[%s]: skipping after error: %s", self.source, exc)
+                            logger.warning(
+                                "extract[%s]: skipping after error: %s", self.source, exc
+                            )
                             continue
                         for next_request in next_requests:
                             key = hash(next_request)
@@ -311,6 +323,8 @@ class BaseScraper:
                     await asyncio.gather(*in_flight, return_exceptions=True)
         logger.info(
             "extract[%s]: scraper run complete (dispatched=%s, skipped=%s)",
-            self.source, dispatched, skipped,
+            self.source,
+            dispatched,
+            skipped,
         )
         return

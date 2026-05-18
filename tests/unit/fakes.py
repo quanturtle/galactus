@@ -8,6 +8,8 @@ hooks without real HTTP or DB.
 from collections.abc import AsyncIterator, Iterable
 from typing import Any
 
+from zstandard import ZstdCompressor, ZstdDecompressor
+
 from galactus.config import ExtractConfig, TransformConfig
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpRequest
@@ -96,6 +98,14 @@ class FakeDatabase:
         self._load_visited_results = load_visited_results or []
         self._load_raises = load_raises
         self._insert_raises = insert_raises
+        self.compressor = ZstdCompressor(level=6)
+        self.decompressor = ZstdDecompressor()
+
+    def compress(self, text: str) -> bytes:
+        return self.compressor.compress(text.encode("utf-8"))
+
+    def decompress(self, blob: bytes) -> str:
+        return self.decompressor.decompress(blob).decode("utf-8")
 
     async def insert(self, records: Base | Iterable[Base], model: type[Base]) -> None:
         self.insert_call_count += 1

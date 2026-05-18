@@ -76,9 +76,9 @@ class BaseParser(ABC):
     def decode(self, record: Base) -> Any:
         model = self.bronze_model
         if model is HtmlSnapshot:
-            return self.html_parser.run(Database.decompress(record.html))
+            return self.html_parser.run(self.db.decompress(record.html))
         if model is ApiSnapshot:
-            return json.loads(Database.decompress(record.body))
+            return json.loads(self.db.decompress(record.body))
         raise ParserError(f"{self.source}: no decoder for {model}")
 
     # default: decoded payload is one item. override when a bronze record packs many entities.

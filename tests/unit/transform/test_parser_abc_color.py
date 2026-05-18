@@ -1,11 +1,10 @@
 import json
 from datetime import datetime
 
-from galactus.infra.db import Database
 from galactus.transform.parsers.noticias.abc_color import Parser
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.b_silver.article import Article
-from tests.unit.fakes import make_parser
+from tests.unit.fakes import FakeDatabase, make_parser
 
 RESPONSE = {
     "content_elements": [
@@ -58,7 +57,7 @@ def _snapshot() -> ApiSnapshot:
         request_params={"_website": "abc-color"},
         status_code=200,
         response_headers={},
-        body=Database.compress(json.dumps(RESPONSE)),
+        body=FakeDatabase().compress(json.dumps(RESPONSE)),
     )
 
 
@@ -127,7 +126,7 @@ def test_promo_image_is_fallback_when_no_inline_image() -> None:
         request_params={},
         status_code=200,
         response_headers={},
-        body=Database.compress(json.dumps(payload)),
+        body=FakeDatabase().compress(json.dumps(payload)),
     )
 
     articles = parser.process_record(record)
@@ -146,7 +145,7 @@ def test_empty_feed_returns_no_entities() -> None:
         request_params={},
         status_code=200,
         response_headers={},
-        body=Database.compress(json.dumps({"content_elements": []})),
+        body=FakeDatabase().compress(json.dumps({"content_elements": []})),
     )
 
     assert parser.process_record(record) == []

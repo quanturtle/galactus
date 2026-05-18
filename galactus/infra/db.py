@@ -3,7 +3,6 @@ from collections.abc import AsyncIterator, Iterable
 from types import TracebackType
 from typing import Any, TypeVar
 
-import zstandard
 from sqlalchemy import func, insert, select
 from sqlalchemy.dialects import registry
 from sqlalchemy.engine.url import make_url
@@ -14,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from zstandard import ZstdCompressor, ZstdDecompressor
 
 from galactus.core.errors import DatabaseError
 from sql.base import Base
@@ -52,6 +52,8 @@ class Database:
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        self.compressor = ZstdCompressor(level=6)
+        self.decompressor = ZstdDecompressor()
         # log host+db only — never user or password
         url = make_url(database_url)
         logger.info(
@@ -62,15 +64,13 @@ class Database:
             max_overflow,
         )
 
-    @staticmethod
-    def compress(text: str) -> bytes:
+    def compress(self, text: str) -> bytes:
         """zstd-compress a UTF-8 string for BYTEA storage."""
-        return zstandard.ZstdCompressor(level=6).compress(text.encode("utf-8"))
+        return self.compressor.compress(text.encode("utf-8"))
 
-    @staticmethod
-    def decompress(blob: bytes) -> str:
+    def decompress(self, blob: bytes) -> str:
         """Decompress a zstd blob back to a UTF-8 string."""
-        return zstandard.ZstdDecompressor().decompress(blob).decode("utf-8")
+        return self.decompressor.decompress(blob).decode("utf-8")
 
     async def open(self) -> None:
         # surface bad URLs / unreachable DB at startup, not lazily

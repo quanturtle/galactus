@@ -8,7 +8,6 @@ from bs4 import BeautifulSoup
 
 from galactus.core.errors import DatabaseError, ParserError
 from galactus.transform.base_parser import BaseParser
-from galactus.infra.db import Database
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.article import Article
@@ -48,7 +47,7 @@ def _html_snapshot(html: str, bronze_id: int = 1) -> HtmlSnapshot:
         status_code=200,
         content_type="text/html",
         response_headers={},
-        html=Database.compress(html),
+        html=FakeDatabase().compress(html),
         is_diff=False,
     )
 
@@ -63,7 +62,7 @@ def _api_snapshot(payload: Any, bronze_id: int = 1) -> ApiSnapshot:
         request_params={"p": 1},
         status_code=200,
         response_headers={},
-        body=Database.compress(json.dumps(payload)),
+        body=FakeDatabase().compress(json.dumps(payload)),
     )
 
 
