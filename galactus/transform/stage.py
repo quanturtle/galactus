@@ -2,7 +2,7 @@ import importlib
 import logging
 
 from galactus.config import PipelineConfig
-from galactus.core.errors import TransformError
+from galactus.core.errors import ParserError, TransformError
 from galactus.core.pipeline import PipelineStage
 from galactus.transform.base_parser import BaseParser
 
@@ -41,7 +41,7 @@ class TransformStage(PipelineStage):
         # run the parser lifecycle
         try:
             await parser.run()
-        except Exception as exc:
+        except ParserError as exc:
             raise TransformError(f"source {self.config.name!r} aborted: {exc}") from exc
         logger.info("transform[%s]: stage complete", self.config.name)
         return

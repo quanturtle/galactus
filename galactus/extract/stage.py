@@ -2,7 +2,7 @@ import importlib
 import logging
 
 from galactus.config import PipelineConfig
-from galactus.core.errors import ExtractError
+from galactus.core.errors import ExtractError, ScraperError
 from galactus.core.pipeline import PipelineStage
 from galactus.extract.base_scraper import BaseScraper
 
@@ -42,7 +42,7 @@ class ExtractStage(PipelineStage):
         # run the scraper lifecycle
         try:
             await scraper.run()
-        except Exception as exc:
+        except ScraperError as exc:
             raise ExtractError(f"source {self.config.name!r} aborted: {exc}") from exc
         logger.info("extract[%s]: stage complete", self.config.name)
         return
