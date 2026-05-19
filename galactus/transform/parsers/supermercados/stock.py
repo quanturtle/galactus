@@ -33,7 +33,7 @@ class Parser(BaseParser, ProductParser):
     CURRENCY = "PYG"
 
     def decode(self, record: Base) -> dict:
-        return {"soup": super().decode(record), "source_url": record.source_url}
+        return {"soup": super().decode(record), "source_url": record.request_url}
 
     def extract_source_url(self, item: dict) -> str:
         return item["source_url"]

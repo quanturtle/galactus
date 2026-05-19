@@ -29,12 +29,14 @@ def _snapshot(html: str, url: str) -> HtmlSnapshot:
     return HtmlSnapshot(
         id=1,
         source="casarica",
-        source_url=url,
-        created_at=datetime(2026, 5, 14, 10, 0, 0),
+        request_url=url,
+        request_headers={},
+        request_params={},
         status_code=200,
-        content_type="text/html",
         response_headers={},
-        html=FakeDatabase().compress(html),
+        content_type="text/html",
+        body=FakeDatabase().compress(html),
+        created_at=datetime(2026, 5, 14, 10, 0, 0),
     )
 
 
@@ -55,7 +57,7 @@ def test_process_record_extracts_product() -> None:
     product = products[0]
     assert isinstance(product, Product)
     assert product.source == "casarica"
-    assert product.source_url == record.source_url
+    assert product.source_url == record.request_url
     assert product.name == "LECHE LA SERENISIMA ENTERA UAT 1LT"
     assert product.sku == "7790742363008"
     assert product.price == Decimal("10600")

@@ -46,13 +46,14 @@ def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
         id=1,
         source="grutter",
-        source_url="https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products?page=1",
-        created_at=datetime(2026, 5, 14, 10, 0, 0),
         request_url="https://grutteronline.casagrutter.com.py/wp-json/wc/store/v1/products?page=1",
+        request_headers={},
         request_params={"page": "1", "per_page": "100"},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(RESPONSE)),
+        created_at=datetime(2026, 5, 14, 10, 0, 0),
     )
 
 

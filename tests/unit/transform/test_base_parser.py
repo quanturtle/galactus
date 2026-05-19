@@ -42,13 +42,14 @@ def _html_snapshot(html: str, bronze_id: int = 1) -> HtmlSnapshot:
     return HtmlSnapshot(
         id=bronze_id,
         source="testsrc",
-        source_url="https://example.test/a",
-        created_at=datetime(2026, 1, 1, 12, 0, 0),
+        request_url="https://example.test/a",
+        request_headers={},
+        request_params={},
         status_code=200,
-        content_type="text/html",
         response_headers={},
-        html=FakeDatabase().compress(html),
-        is_diff=False,
+        content_type="text/html",
+        body=FakeDatabase().compress(html),
+        created_at=datetime(2026, 1, 1, 12, 0, 0),
     )
 
 
@@ -56,13 +57,14 @@ def _api_snapshot(payload: Any, bronze_id: int = 1) -> ApiSnapshot:
     return ApiSnapshot(
         id=bronze_id,
         source="testsrc",
-        source_url="https://example.test/api",
-        created_at=datetime(2026, 1, 1, 12, 0, 0),
         request_url="https://example.test/api?p=1",
+        request_headers={},
         request_params={"p": 1},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(payload)),
+        created_at=datetime(2026, 1, 1, 12, 0, 0),
     )
 
 

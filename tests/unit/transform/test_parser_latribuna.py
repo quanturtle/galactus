@@ -31,13 +31,14 @@ def test_build_entities_maps_stories() -> None:
     record = ApiSnapshot(
         id=1,
         source="latribuna",
-        source_url="https://www.latribuna.com.py/pf/api/v3/content/fetch/story-feed-query",
-        created_at=datetime(2026, 4, 6, 22, 0, 0),
         request_url="https://www.latribuna.com.py/pf/api/v3/content/fetch/story-feed-query",
+        request_headers={},
         request_params={"size": "100"},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(RESPONSE)),
+        created_at=datetime(2026, 4, 6, 22, 0, 0),
     )
 
     articles = parser.process_record(record)

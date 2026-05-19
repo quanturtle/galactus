@@ -9,12 +9,14 @@ def _snapshot(html: str) -> HtmlSnapshot:
     return HtmlSnapshot(
         id=1,
         source="stock",
-        source_url="https://www.stock.com.py/products/139380-desodorante-rexona-men-50gr.aspx",
-        created_at=datetime(2026, 5, 14, 10, 0, 0),
+        request_url="https://www.stock.com.py/products/139380-desodorante-rexona-men-50gr.aspx",
+        request_headers={},
+        request_params={},
         status_code=200,
-        content_type="text/html",
         response_headers={},
-        html=FakeDatabase().compress(html),
+        content_type="text/html",
+        body=FakeDatabase().compress(html),
+        created_at=datetime(2026, 5, 14, 10, 0, 0),
     )
 
 

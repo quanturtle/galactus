@@ -35,13 +35,14 @@ def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
         id=1,
         source="lanacion",
-        source_url="https://www.lanacion.com.py/pf/api/v3/content/fetch/content-search-feed-full",
-        created_at=datetime(2026, 4, 5, 13, 0, 0),
         request_url="https://www.lanacion.com.py/pf/api/v3/content/fetch/content-search-feed-full",
+        request_headers={},
         request_params={"feedSize": "100"},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(RESPONSE)),
+        created_at=datetime(2026, 4, 5, 13, 0, 0),
     )
 
 

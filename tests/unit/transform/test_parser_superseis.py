@@ -60,12 +60,14 @@ def _snapshot(html: str, url: str) -> HtmlSnapshot:
     return HtmlSnapshot(
         id=1,
         source="superseis",
-        source_url=url,
-        created_at=datetime(2026, 5, 14, 10, 0, 0),
+        request_url=url,
+        request_headers={},
+        request_params={},
         status_code=200,
-        content_type="text/html",
         response_headers={},
-        html=FakeDatabase().compress(html),
+        content_type="text/html",
+        body=FakeDatabase().compress(html),
+        created_at=datetime(2026, 5, 14, 10, 0, 0),
     )
 
 
@@ -86,7 +88,7 @@ def test_process_record_from_json_ld() -> None:
     product = products[0]
     assert isinstance(product, Product)
     assert product.source == "superseis"
-    assert product.source_url == record.source_url
+    assert product.source_url == record.request_url
     assert product.name == "Entraña gruesa por kilo"
     assert product.sku == "378956"
     assert product.brand == "TRAZABEEF"

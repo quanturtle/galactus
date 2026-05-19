@@ -37,13 +37,14 @@ def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
         id=1,
         source="megacadena",
-        source_url="https://megacadena.com.py/wp-json/wp/v2/posts?page=1",
-        created_at=datetime(2026, 3, 4, 12, 0, 0),
         request_url="https://megacadena.com.py/wp-json/wp/v2/posts?page=1",
+        request_headers={},
         request_params={"page": "1", "per_page": "100"},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(RESPONSE)),
+        created_at=datetime(2026, 3, 4, 12, 0, 0),
     )
 
 

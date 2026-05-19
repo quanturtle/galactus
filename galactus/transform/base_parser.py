@@ -63,15 +63,13 @@ class BaseParser(ABC):
             **self.db_extras(),
         )
 
-    # dispatch on bronze_model — subclasses set ApiSnapshot to swap the bronze record shape.
     # bronze html is already cleaned at extract time, so decode just builds the tree.
     def decode(self, record: Base) -> Any:
-        model = self.bronze_model
-        if model is HtmlSnapshot:
-            return BeautifulSoup(self.db.decompress(record.html), "lxml")
-        if model is ApiSnapshot:
+        if isinstance(record, HtmlSnapshot):
+            return BeautifulSoup(self.db.decompress(record.body), "lxml")
+        if isinstance(record, ApiSnapshot):
             return json.loads(self.db.decompress(record.body))
-        raise ParserError(f"{self.source}: no decoder for {model}")
+        raise ParserError(f"{self.source}: no decoder for {type(record).__name__}")
 
     # default: decoded payload is one item. override when a bronze record packs many entities.
     def build_item(self, decoded: Any) -> list[Any]:

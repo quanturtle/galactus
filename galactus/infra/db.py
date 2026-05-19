@@ -127,25 +127,15 @@ class Database:
         model: type[M],
         source: str,
     ) -> list[tuple[str, dict[str, Any]]]:
-        """Return (source_url, params) for `source` captured since UTC midnight (2xx).
-
-        For models that store request_params (api_snapshots), the params dict
-        carries the per-page query so paginated requests hash distinctly even
-        though they share a base URL. For models without request_params
-        (html_snapshots), the params are baked into source_url and the
-        returned dict is empty.
+        """Return (request_url, request_params) for `source` captured since UTC midnight (2xx).
 
         Restricted to 2xx responses — a 4xx/5xx from earlier today should be
         retried on the next run, not treated as "already visited". The cutoff
         is computed server-side so client clock drift doesn't matter.
         """
         today_start = func.date_trunc("day", func.timezone("UTC", func.now()))
-        has_params = hasattr(model, "request_params")
-        columns: list[Any] = [model.source_url]
-        if has_params:
-            columns.append(model.request_params)
         stmt = (
-            select(*columns)
+            select(model.request_url, model.request_params)
             .where(
                 model.source == source,
                 model.created_at >= today_start,
@@ -162,9 +152,7 @@ class Database:
             raise DatabaseError(
                 f"loading visited requests for {model.__name__} source {source!r} failed"
             ) from exc
-        if has_params:
-            return [(row[0], dict(row[1] or {})) for row in rows]
-        return [(row[0], {}) for row in rows]
+        return [(row[0], dict(row[1] or {})) for row in rows]
 
     async def stream_unparsed(
         self,

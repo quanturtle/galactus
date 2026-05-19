@@ -19,30 +19,33 @@ from tests.integration.conftest import (
 
 def _api_snapshot(
     source: str = "test_source",
-    source_url: str = "https://example.com/api/1",
+    request_url: str = "https://example.com/api/1?page=1",
 ) -> ScratchApiSnapshot:
     return ScratchApiSnapshot(
         source=source,
-        source_url=source_url,
-        request_url="https://example.com/api/1?page=1",
+        request_url=request_url,
+        request_headers={"accept": "application/json"},
         request_params={"page": 1, "size": 10},
         status_code=200,
         response_headers={"content-type": "application/json"},
+        content_type="application/json",
         body=b'{"items": []}',
     )
 
 
 def _html_snapshot(
     source: str = "test_source",
-    source_url: str = "https://example.com/article-1",
+    request_url: str = "https://example.com/article-1",
 ) -> ScratchHtmlSnapshot:
     return ScratchHtmlSnapshot(
         source=source,
-        source_url=source_url,
+        request_url=request_url,
+        request_headers={"accept": "text/html"},
+        request_params={},
         status_code=200,
-        content_type="text/html; charset=utf-8",
         response_headers={"content-type": "text/html"},
-        html=b"<html><body>hello</body></html>",
+        content_type="text/html; charset=utf-8",
+        body=b"<html><body>hello</body></html>",
     )
 
 
@@ -80,9 +83,9 @@ async def test_insert_bronze_api_records_each_fetch(db, engine) -> None:
 
 
 async def test_insert_accepts_single_or_iterable(db, engine) -> None:
-    one = _html_snapshot(source_url="https://example.com/a")
-    two = _html_snapshot(source_url="https://example.com/b")
-    three = _html_snapshot(source_url="https://example.com/c")
+    one = _html_snapshot(request_url="https://example.com/a")
+    two = _html_snapshot(request_url="https://example.com/b")
+    three = _html_snapshot(request_url="https://example.com/c")
     await db.insert(one, ScratchHtmlSnapshot)
     await db.insert([two, three], ScratchHtmlSnapshot)
     async with engine.connect() as conn:
@@ -159,8 +162,8 @@ async def _drain_unparsed(db, bronze_model, silver_model, source):
 
 
 async def test_stream_unparsed_filters_by_source(db, engine) -> None:
-    a = _html_snapshot(source="src_a", source_url="https://example.com/a")
-    b = _html_snapshot(source="src_b", source_url="https://example.com/b")
+    a = _html_snapshot(source="src_a", request_url="https://example.com/a")
+    b = _html_snapshot(source="src_b", request_url="https://example.com/b")
     await db.insert([a, b], ScratchHtmlSnapshot)
 
     loaded = await _drain_unparsed(db, ScratchHtmlSnapshot, ScratchArticle, "src_b")
@@ -171,8 +174,8 @@ async def test_stream_unparsed_filters_by_source(db, engine) -> None:
 
 
 async def test_stream_unparsed_skips_rows_already_in_silver(db, engine) -> None:
-    one = _html_snapshot(source_url="https://example.com/a")
-    two = _html_snapshot(source_url="https://example.com/b")
+    one = _html_snapshot(request_url="https://example.com/a")
+    two = _html_snapshot(request_url="https://example.com/b")
     await db.insert([one, two], ScratchHtmlSnapshot)
     first_id, second_id = await _bronze_ids(engine, "html_snapshots")
 
@@ -199,7 +202,7 @@ async def test_stream_unparsed_skips_rows_already_in_silver(db, engine) -> None:
 
 async def test_stream_unparsed_isolates_silver_rows_by_source(db, engine) -> None:
     # a silver row for a different source must not mask a bronze row that shares its id
-    a = _html_snapshot(source="src_a", source_url="https://example.com/a")
+    a = _html_snapshot(source="src_a", request_url="https://example.com/a")
     await db.insert(a, ScratchHtmlSnapshot)
     (bronze_id,) = await _bronze_ids(engine, "html_snapshots")
     await db.insert(

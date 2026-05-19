@@ -51,13 +51,14 @@ def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
         id=1,
         source="abc_color",
-        source_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
-        created_at=datetime(2026, 1, 2, 10, 0, 0),
         request_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
+        request_headers={},
         request_params={"_website": "abc-color"},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(RESPONSE)),
+        created_at=datetime(2026, 1, 2, 10, 0, 0),
     )
 
 
@@ -120,13 +121,14 @@ def test_promo_image_is_fallback_when_no_inline_image() -> None:
     record = ApiSnapshot(
         id=3,
         source="abc_color",
-        source_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
-        created_at=datetime(2026, 1, 2, 10, 0, 0),
         request_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
+        request_headers={},
         request_params={},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(payload)),
+        created_at=datetime(2026, 1, 2, 10, 0, 0),
     )
 
     articles = parser.process_record(record)
@@ -139,13 +141,14 @@ def test_empty_feed_returns_no_entities() -> None:
     record = ApiSnapshot(
         id=2,
         source="abc_color",
-        source_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
-        created_at=datetime(2026, 1, 2, 10, 0, 0),
         request_url="https://www.abc.com.py/pf/api/v3/content/fetch/sections-api",
+        request_headers={},
         request_params={},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps({"content_elements": []})),
+        created_at=datetime(2026, 1, 2, 10, 0, 0),
     )
 
     assert parser.process_record(record) == []

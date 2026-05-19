@@ -43,12 +43,14 @@ def _snapshot(html: str) -> HtmlSnapshot:
     return HtmlSnapshot(
         id=1,
         source="ultimahora",
-        source_url="https://www.ultimahora.com/gobierno-anuncia-nuevo-plan-economico",
-        created_at=datetime(2026, 1, 2, 10, 0, 0),
+        request_url="https://www.ultimahora.com/gobierno-anuncia-nuevo-plan-economico",
+        request_headers={},
+        request_params={},
         status_code=200,
-        content_type="text/html",
         response_headers={},
-        html=FakeDatabase().compress(html),
+        content_type="text/html",
+        body=FakeDatabase().compress(html),
+        created_at=datetime(2026, 1, 2, 10, 0, 0),
     )
 
 
@@ -66,7 +68,7 @@ def test_build_entities_from_json_ld() -> None:
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "ultimahora"
-    assert article.source_url == record.source_url
+    assert article.source_url == record.request_url
     assert article.title == "Gobierno anuncia nuevo plan económico"
     assert article.authors == ["Juana Pérez"]
     assert isinstance(article.published_at, datetime)

@@ -37,13 +37,14 @@ def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
         id=1,
         source="biggie",
-        source_url="https://api.app.biggie.com.py/api/articles",
-        created_at=datetime(2026, 1, 2, 10, 0, 0),
         request_url="https://api.app.biggie.com.py/api/articles?take=100&skip=0",
+        request_headers={},
         request_params={"take": 100, "skip": 0},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(RESPONSE)),
+        created_at=datetime(2026, 1, 2, 10, 0, 0),
     )
 
 

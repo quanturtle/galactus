@@ -61,7 +61,7 @@ class Parser(BaseParser, ProductParser):
             if og_image:
                 product = {**product, "image": og_image}
 
-        return {"product": product, "source_url": record.source_url}
+        return {"product": product, "source_url": record.request_url}
 
     def extract_source_url(self, item: dict) -> str:
         return item["source_url"]

@@ -45,13 +45,14 @@ def _snapshot() -> ApiSnapshot:
     return ApiSnapshot(
         id=1,
         source="hoy",
-        source_url="https://www.hoy.com.py/wp-json/wp/v2/posts?page=1",
-        created_at=datetime(2026, 1, 2, 10, 0, 0),
         request_url="https://www.hoy.com.py/wp-json/wp/v2/posts?page=1",
+        request_headers={},
         request_params={"page": "1", "per_page": "100"},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps(RESPONSE)),
+        created_at=datetime(2026, 1, 2, 10, 0, 0),
     )
 
 
@@ -90,12 +91,12 @@ def test_empty_array_returns_no_entities() -> None:
     record = ApiSnapshot(
         id=2,
         source="hoy",
-        source_url="https://www.hoy.com.py/wp-json/wp/v2/posts?page=999",
-        created_at=datetime(2026, 1, 2, 10, 0, 0),
         request_url="https://www.hoy.com.py/wp-json/wp/v2/posts?page=999",
+        request_headers={},
         request_params={"page": "999"},
         status_code=200,
         response_headers={},
+        content_type="application/json",
         body=FakeDatabase().compress(json.dumps([])),
     )
 

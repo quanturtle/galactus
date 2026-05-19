@@ -12,7 +12,6 @@ from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.extract.html_parser import HtmlParser
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
-from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
 
@@ -211,8 +210,8 @@ class BaseScraper:
         Each hash is produced via build_url so the keys match what BFS expansion
         produces for in-flight requests. Paginating subclasses override build_url
         with non-URL signatures, so we go through the keyword path (url=, params=)
-        that every build_url accepts; the stored source_url is already canonical
-        and request_params (when present) carries the per-page differentiator.
+        that every build_url accepts; the stored request_url is already canonical
+        and request_params carries the per-page differentiator when paginated.
         """
         rows = await self.db.load_visited_requests(
             model=self.bronze_model,
@@ -220,48 +219,41 @@ class BaseScraper:
         )
         return {hash(self.build_url(url=url, params=params)) for url, params in rows}
 
+    async def extract_body(self, response: HttpResponse, soup: BeautifulSoup | None) -> str:
+        # JSON path (no soup parsed): persist the raw response text.
+        # HTML path: emit the cleaned soup tree.
+        if soup is None:
+            return response.text
+        return await self.html_parser.clean(soup)
+
     async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
-        # dispatch on bronze_model — subclasses set ApiSnapshot to swap the bronze record shape.
         request = response.request
         model = self.bronze_model
 
-        # parse HTML once and reuse the tree for cleaning and link extraction
+        # parse HTML once and reuse the tree for cleaning and link extraction.
+        # API subclasses set bronze_model = ApiSnapshot and skip the parse.
         soup = self.html_parser.parse(response.text) if model is HtmlSnapshot else None
 
         if self.should_persist(request):
-            if model is HtmlSnapshot:
-                assert soup is not None
-                cleaned = await self.html_parser.clean(soup)
-                record: Base = HtmlSnapshot(
-                    source=self.source,
-                    source_url=request.url,
-                    status_code=response.status_code,
-                    content_type=response.headers.get("content-type", ""),
-                    response_headers=dict(response.headers),
-                    html=self.db.compress(cleaned),
-                    is_diff=False,
-                )
-            elif model is ApiSnapshot:
-                record = ApiSnapshot(
-                    source=self.source,
-                    source_url=request.url,
-                    request_url=request.url,
-                    request_params=request.params or {},
-                    status_code=response.status_code,
-                    response_headers=dict(response.headers),
-                    body=self.db.compress(response.text),
-                )
-            else:
-                raise ScraperError(f"{self.source}: no snapshot builder for {model}")
-
+            body = await self.extract_body(response, soup)
+            record = model(
+                source=self.source,
+                request_url=request.url,
+                request_headers=dict(request.headers),
+                request_params=request.params or {},
+                status_code=response.status_code,
+                content_type=response.headers.get("content-type", ""),
+                response_headers=dict(response.headers),
+                body=self.db.compress(body),
+            )
             try:
-                await self.db.insert(record, model=type(record))
+                await self.db.insert(record, model=model)
             except DatabaseError as exc:
                 raise ScraperError(f"{self.source}: persisting {request.url} failed") from exc
             logger.info(
                 "extract[%s]: persisted %s for %s",
                 self.source,
-                type(record).__name__,
+                model.__name__,
                 request.url,
             )
 

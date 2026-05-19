@@ -32,34 +32,28 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 SCRATCH_SCHEMA = "scratch"
 
 
-class ScratchApiSnapshot(Base):
-    __tablename__ = "api_snapshots"
+class ScratchSnapshot(Base):
+    __abstract__ = True
     __table_args__ = {"schema": SCRATCH_SCHEMA}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(index=True)
-    source_url: Mapped[str] = mapped_column(index=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
-    request_url: Mapped[str]
+    request_url: Mapped[str] = mapped_column(index=True)
+    request_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
     request_params: Mapped[dict[str, Any]] = mapped_column(JSONB)
     status_code: Mapped[int]
     response_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
-    body: Mapped[bytes] = mapped_column(LargeBinary)
-
-
-class ScratchHtmlSnapshot(Base):
-    __tablename__ = "html_snapshots"
-    __table_args__ = {"schema": SCRATCH_SCHEMA}
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    source: Mapped[str] = mapped_column(index=True)
-    source_url: Mapped[str] = mapped_column(index=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
-    status_code: Mapped[int]
     content_type: Mapped[str]
-    response_headers: Mapped[dict[str, str]] = mapped_column(JSONB)
-    html: Mapped[bytes] = mapped_column(LargeBinary)
-    is_diff: Mapped[bool] = mapped_column(default=False)
+    body: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)
+
+
+class ScratchApiSnapshot(ScratchSnapshot):
+    __tablename__ = "api_snapshots"
+
+
+class ScratchHtmlSnapshot(ScratchSnapshot):
+    __tablename__ = "html_snapshots"
 
 
 class ScratchArticle(Base):

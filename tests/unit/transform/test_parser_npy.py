@@ -34,12 +34,14 @@ def _snapshot(html: str, url: str) -> HtmlSnapshot:
     return HtmlSnapshot(
         id=1,
         source="npy",
-        source_url=url,
-        created_at=datetime(2026, 5, 14, 11, 20, 0),
+        request_url=url,
+        request_headers={},
+        request_params={},
         status_code=200,
-        content_type="text/html",
         response_headers={},
-        html=FakeDatabase().compress(html),
+        content_type="text/html",
+        body=FakeDatabase().compress(html),
+        created_at=datetime(2026, 5, 14, 11, 20, 0),
     )
 
 
@@ -60,7 +62,7 @@ def test_build_entities_extracts_fields() -> None:
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "npy"
-    assert article.source_url == record.source_url
+    assert article.source_url == record.request_url
     assert article.title == (
         "Tres selecciones oficializan las primeras listas para el Mundial 2026"
     )

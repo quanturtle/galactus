@@ -1,14 +1,11 @@
 import asyncio
 
-import pytest
 from bs4 import BeautifulSoup
 
-from galactus.core.errors import ScraperError
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpRequest, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
-from sql.base import Base
 from tests.unit.fakes import (
     FakeDatabase,
     FakeHttpClient,
@@ -138,7 +135,9 @@ def test_process_response_inserts_html_snapshot_for_html_default() -> None:
     record, model = db.inserts[0]
     assert model is HtmlSnapshot
     assert isinstance(record, HtmlSnapshot)
-    assert record.source_url == "https://example.test/x"
+    assert record.request_url == "https://example.test/x"
+    assert record.request_headers == {}
+    assert record.request_params == {}
 
 
 def test_process_response_inserts_api_snapshot_when_bronze_model_is_api() -> None:
@@ -159,22 +158,8 @@ def test_process_response_inserts_api_snapshot_when_bronze_model_is_api() -> Non
     record, model = db.inserts[0]
     assert model is ApiSnapshot
     assert isinstance(record, ApiSnapshot)
-    assert record.source_url == "https://example.test/api"
+    assert record.request_url == "https://example.test/api"
     assert record.request_params == {"page": "1"}
-
-
-def test_process_response_raises_scrapererror_for_unknown_bronze_model() -> None:
-    class OtherRecord(Base):
-        __abstract__ = True
-
-    class WeirdScraper(BaseScraper):
-        bronze_model = OtherRecord
-
-    scraper = make_scraper(WeirdScraper)
-    request = FakeHttpRequest(url="https://example.test/x")
-    response = FakeHttpResponse(url="https://example.test/x", request=request)
-    with pytest.raises(ScraperError):
-        asyncio.run(scraper.process_response(response))  # type: ignore[arg-type]
 
 
 def test_run_hard_caps_at_max_pages_under_concurrency() -> None:

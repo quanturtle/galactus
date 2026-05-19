@@ -45,14 +45,16 @@ def _snapshot(html: str) -> HtmlSnapshot:
     return HtmlSnapshot(
         id=1,
         source="elnacional",
-        source_url=(
+        request_url=(
             "https://elnacional.com.py/politica/defensa-funcionaria-afirma-nunca-estuvo-profuga-n105824"
         ),
-        created_at=datetime(2026, 5, 14, 11, 20, 0),
+        request_headers={},
+        request_params={},
         status_code=200,
-        content_type="text/html",
         response_headers={},
-        html=FakeDatabase().compress(html),
+        content_type="text/html",
+        body=FakeDatabase().compress(html),
+        created_at=datetime(2026, 5, 14, 11, 20, 0),
     )
 
 
@@ -70,7 +72,7 @@ def test_build_entities_from_json_ld() -> None:
     article = articles[0]
     assert isinstance(article, Article)
     assert article.source == "elnacional"
-    assert article.source_url == record.source_url
+    assert article.source_url == record.request_url
     assert article.title == "Defensa de funcionaria afirma que nunca estuvo prófuga"
     assert article.authors == ["El Nacional"]
     assert article.section == "Política"

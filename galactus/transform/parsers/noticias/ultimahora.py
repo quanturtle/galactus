@@ -95,7 +95,7 @@ class Parser(BaseParser, ArticleParser):
         soup: BeautifulSoup = super().decode(record)
         return {
             "soup": soup,
-            "source_url": record.source_url,
+            "source_url": record.request_url,
             "json_ld": _find_json_ld(soup),
         }
 

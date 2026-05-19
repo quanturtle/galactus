@@ -31,7 +31,7 @@ class Parser(BaseParser, ProductParser):
         soup = super().decode(record)
         cart = soup.select_one("button#lnk-add-to-cart[data-product_id]")
         attrs = dict(cart.attrs) if cart else {}
-        return {"soup": soup, "attrs": attrs, "source_url": record.source_url}
+        return {"soup": soup, "attrs": attrs, "source_url": record.request_url}
 
     def extract_source_url(self, item: dict) -> str:
         return item["source_url"]
