@@ -20,6 +20,7 @@ extract:
   - /preguntas-frecuentes
   - /como-comprar
   - \?(map|_q|filter)=
+  - -c\d+m\d+
   max_pages: -1
   concurrency: 5
   timeout_seconds: 30.0
