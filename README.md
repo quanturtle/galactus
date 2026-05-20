@@ -17,7 +17,7 @@ internet ──▶ extract ──▶ bronze.{html,api}_snapshots ──▶ trans
 # 1. Environment — set DATABASE_URL (a dev .env is checked in for local use)
 #    DATABASE_URL=postgresql://galactus:galactus_secret@localhost:5432/galactus
 
-# 2. Postgres 16 + Airflow (init, scheduler, webserver) + a one-shot `galactus-migrate` service
+# 2. Postgres 16 + Airflow (init, scheduler, dag-processor, api-server) + a one-shot `galactus-migrate` service
 docker compose up -d
 
 # 3. Install the package (Python >= 3.12)
@@ -72,7 +72,7 @@ galactus_v2/
 ├── airflow/
 │   ├── Dockerfile
 │   └── dags/<source>_pipeline.py   # one DAG per source: extract >> transform BashOperators
-├── docker-compose.yml              # Postgres 16 + airflow-init + galactus-migrate + scheduler + webserver
+├── docker-compose.yml              # Postgres 16 + airflow-init + galactus-migrate + scheduler + dag-processor + api-server
 ├── pyproject.toml                  # name=galactus, v0.2.0, script: galactus = galactus.cli:main
 ├── alembic.ini
 └── tests/{unit,integration}/
@@ -266,7 +266,7 @@ uv run alembic history                                            # show the rev
 uv run alembic downgrade -1                                        # roll back one step
 ```
 
-`migrations/env.py` registers the psycopg3 dialect (DATABASE_URL stays `postgresql://`, no rewriting), creates the `bronze` / `silver` / `gold` schemas before migrating, restricts autogenerate to those schemas (Airflow shares the DB and owns `public`), and tracks state in a `galactus_alembic_version` table in `public`. Under Docker, the one-shot `galactus-migrate` service runs `alembic upgrade head` before the scheduler/webserver start.
+`migrations/env.py` registers the psycopg3 dialect (DATABASE_URL stays `postgresql://`, no rewriting), creates the `bronze` / `silver` / `gold` schemas before migrating, restricts autogenerate to those schemas (Airflow shares the DB and owns `public`), and tracks state in a `galactus_alembic_version` table in `public`. Under Docker, the one-shot `galactus-migrate` service runs `alembic upgrade head` before the scheduler/api-server start.
 
 ## Adding a new source
 
@@ -279,7 +279,7 @@ A *source* is one website or API within a domain (`noticias` or `supermercados`)
 
 ## Orchestration (Airflow)
 
-`docker-compose.yml` runs the whole stack: `db` (Postgres 16, healthchecked), `airflow-init` (one-shot: `airflow db migrate` + create the `admin`/`admin` user), `galactus-migrate` (one-shot: invokes `/home/airflow/galactus/.venv/bin/alembic upgrade head` directly), `airflow-scheduler`, and `airflow-webserver` on `http://localhost:8080`. The galactus source, configs, and migrations are **bind-mounted** into the Airflow containers at `/home/airflow/galactus` (the DAGs `cd` there before running the CLI), and `airflow/dags/` is mounted too — so editing a DAG is picked up on the next scheduler scan, no rebuild.
+`docker-compose.yml` runs the whole stack: `db` (Postgres 16, healthchecked), `airflow-init` (one-shot: `airflow db migrate` + create the `admin`/`admin` user), `galactus-migrate` (one-shot: invokes `/home/airflow/galactus/.venv/bin/alembic upgrade head` directly), `airflow-scheduler`, `airflow-dag-processor` (parses DAG files — a standalone component in Airflow 3), and `airflow-apiserver` on `http://localhost:8080`. The galactus source, configs, and migrations are **bind-mounted** into the Airflow containers at `/home/airflow/galactus` (the DAGs `cd` there before running the CLI), and `airflow/dags/` is mounted too — so editing a DAG is picked up on the next scheduler scan, no rebuild.
 
 Parallelism is capped on purpose: `AIRFLOW__CORE__PARALLELISM=3` (at most three task instances run concurrently across the whole scheduler) and `AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=1` (one active run per source DAG at a time), so concurrent scrapers don't overwhelm the local Postgres or trip per-site rate limits.
 
