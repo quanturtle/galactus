@@ -16,7 +16,8 @@ extract:
   - /contacto-uh
   - /codigo-etico
   max_pages: -1
-  concurrency: 5
+  concurrency: 2
+  request_delay: 5
   timeout_seconds: 30.0
 transform:
   parser: noticias.ultimahora
