@@ -177,6 +177,13 @@ Design decisions worth knowing:
 - **Same-day re-runs are idempotent.** `seen_today()` pre-loads the BFS `seen` set from bronze rows captured (2xx) since UTC midnight, so re-scraping today re-fetches the seeds (to discover new content) but skips any request already in bronze; re-transforming skips bronze rows already referenced by silver. Re-runs on a later day re-fetch — each calendar day produces its own snapshot in bronze.
 - **Scheduling and run identity live outside the pipeline.** The CLI takes no `--run-id`; Airflow's metadata DB owns the run ledger.
 
+## Known data peculiarities
+
+Real-world capture artifacts that are *correct* bronze/silver behavior, not pipeline bugs:
+
+- **hoy — epoch publish dates.** ~12,054 `silver.articles` rows for `hoy` carry a `published_at` of `1970-01-01` (stored as `1970-01-01 04:00:00`, the Unix epoch in Paraguay's −04:00 offset). Confirmed against bronze: hoy.com.py's WordPress API itself returns the epoch in *every* date field (`date`, `date_gmt`, `modified`, `modified_gmt`) for these posts, so `extract_published_at` (which reads `date_gmt or date`) faithfully parses what it was given — there is no real date to recover from bronze. The affected posts cluster under the site's `radio-970` section.
+- **arete / casarica / grutter — no structured brand.** Unlike `losjardines` (whose Dattamax breadcrumb carries a `marca` crumb), these three sources expose no brand field anywhere in the page or API payload — the brand is only embedded in the product `name`. Their `extract_brand` returns `None`; populating brand for them requires deriving it from `name`.
+
 ## Scrapers & parsers
 
 ```mermaid
