@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 from galactus.transform.base_parser import BaseParser
@@ -47,7 +48,12 @@ class Parser(BaseParser, ProductParser):
         h1 = item["soup"].select_one("h1.product_title")
         return h1.get_text(" ", strip=True) if h1 else ""
 
+    # brand is the breadcrumb "marca" crumb — its href ends in -m<id>
+    # (category crumbs end in -c<id>, the product crumb in -p<id>)
     def extract_brand(self, item: dict) -> str | None:
+        for crumb in item["soup"].select("nav.ecommercepro-breadcrumb a[href]"):
+            if re.search(r"-m\d+/?$", crumb["href"]):
+                return crumb.get_text(" ", strip=True) or None
         return None
 
     # data-product_price is an integer string in PYG (e.g. "15900") — no separators to strip
