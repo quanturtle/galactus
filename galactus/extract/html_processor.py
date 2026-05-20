@@ -1,4 +1,4 @@
-"""HtmlParser: ordered filter passes over an HTML document."""
+"""HtmlProcessor: ordered filter passes over an HTML document."""
 
 import asyncio
 from typing import Any
@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup, Comment
 BASELINE_BLOCKLIST_TAGS: tuple[str, ...] = ("script", "style", "noscript")
 
 
-class HtmlParser:
+class HtmlProcessor:
     """Builds an HTML tree once with lxml and applies ordered cleaning passes.
 
     parse(text) returns the BeautifulSoup tree so the scraper can reuse it

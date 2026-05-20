@@ -71,7 +71,7 @@ def test_extract_links_default_returns_a_hrefs_joined_with_response_url() -> Non
         "</body></html>"
     )
     response = FakeHttpResponse(text=html, url="https://example.test/index")
-    soup = scraper.html_parser.parse(html)
+    soup = scraper.html_processor.parse(html)
     links = scraper.extract_links(response, soup)  # type: ignore[arg-type]
     assert links == [
         "https://example.test/about",
@@ -85,7 +85,7 @@ def test_extract_links_bare_relative_resolves_against_base_url_not_response() ->
     scraper = make_scraper(BaseScraper)
     html = '<a href="catalogo/foo-p1">foo</a>'
     response = FakeHttpResponse(text=html, url="https://example.test/catalogo/x-p9")
-    soup = scraper.html_parser.parse(html)
+    soup = scraper.html_processor.parse(html)
     links = scraper.extract_links(response, soup)  # type: ignore[arg-type]
     assert links == ["https://example.test/catalogo/foo-p1"]
 

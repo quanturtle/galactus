@@ -48,7 +48,7 @@ galactus_v2/
 │   │   └── errors.py               # exception hierarchy: PipelineError -> Extract/Transform/Load/Infra/Config
 │   ├── extract/
 │   │   ├── base_scraper.py         # BaseScraper — async BFS crawler with a small public hook surface
-│   │   ├── html_parser.py          # HtmlParser — ordered cleaning passes; runs at extract time before bronze insert
+│   │   ├── html_processor.py       # HtmlProcessor — ordered cleaning passes; runs at extract time before bronze insert
 │   │   ├── stage.py                # ExtractStage — adapts a Scraper into a PipelineStage
 │   │   └── scrapers/{noticias,supermercados}/<source>.py   # per-source Scraper subclasses
 │   ├── transform/
@@ -94,7 +94,7 @@ flowchart TD
     ES -->|owns for the run| DB1["Database"]
     ES -->|imports by config path| SC["Scraper<br/>(BaseScraper subclass)"]
     SC -->|fetch| WEB[("websites / APIs")]
-    SC -->|"clean HTML via HtmlParser, then insert (skip-if-seen-today)"| BRZ[("bronze schema")]
+    SC -->|"clean HTML via HtmlProcessor, then insert (skip-if-seen-today)"| BRZ[("bronze schema")]
 
     TS -->|owns for the run| DB2["Database"]
     TS -->|imports by config path| PR["Parser<br/>(BaseParser + ArticleParser/ProductParser mixin)"]
@@ -120,8 +120,8 @@ Each module is built around a named pattern; per-class lifecycle details live in
   ```
   Infra adapters raise `HttpError`/`DatabaseError`; plugin code re-raises as `ScraperError`/`ParserError` with source + URL context; stages wrap escapes as their `*Error`; only the CLI catches.
 - **`extract|transform|load/stage.py` — `*Stage`** · *Adapter.* Each stage opens the infra context managers it needs (`HttpClient` + `Database` for extract; `Database` for transform), `importlib`-resolves the configured plugin (`galactus.extract.scrapers.<dotted.path>`), instantiates it, awaits its `run()`, and re-raises failures as the stage's error type. `LoadStage` is a no-op stub today.
-- **`extract/base_scraper.py` — `BaseScraper`** · *Template Method.* Fixes the crawl lifecycle: pre-load `seen` via `seen_today()`, BFS the frontier with spawn-and-drain bounded by `concurrency` and `max_pages` (hard cap, counted at spawn), per-URL `process_response` → `should_persist` → `extract_body` → `Database.insert`, then `get_next_urls` folded back via `should_enqueue`. HTML responses are parsed once with `self.html_parser` and the soup is reused for cleaning and link extraction. Per-URL try/except so one fetch/persist/next-url failure logs and skips instead of aborting the source. Hook surface: `seed_urls`, `fetch`, `extract_links`, `build_url`, `get_next_urls`, `should_enqueue`, `should_persist`, `extract_body`, `process_response`, plus `http_extras` / `db_extras` / `make_html_parser`. Defaults are keyed on `bronze_model` (`HtmlSnapshot` ⇒ scrape every `<a href>` and store zstd-compressed cleaned HTML; `ApiSnapshot` ⇒ store the zstd-compressed raw body). `build_url(url, params=None)` canonicalizes outgoing requests (lowercase scheme + host, strip `TRACKING_PARAMS`, drop fragment); paginated APIs override with a pagination signature called from their own `seed_urls()` / `get_next_urls()` — keep the `url=` / `params=` keyword path so `seen_today` can re-hash captured requests. There is no separate `BaseApiScraper`.
-- **`extract/html_parser.py` — `HtmlParser`** · *Pipeline of filters.* `parse(text)` builds an `lxml` soup; `clean(soup)` is async (`asyncio.to_thread`, so the asyncio loop is not blocked while CPU-heavy cleaning runs) and applies three ordered passes — strip comments, decompose `blocklist_tags` (tag + subtree), strip `blocklist_attributes` from every remaining tag. `BASELINE_BLOCKLIST_TAGS = ("script", "style", "noscript")` is always applied; `<script type="application/ld+json">` is always preserved so source parsers can read structured data from it. **Cleaning runs at extract time**, so bronze stores already-cleaned HTML.
+- **`extract/base_scraper.py` — `BaseScraper`** · *Template Method.* Fixes the crawl lifecycle: pre-load `seen` via `seen_today()`, BFS the frontier with spawn-and-drain bounded by `concurrency` and `max_pages` (hard cap, counted at spawn), per-URL `process_response` → `should_persist` → `extract_body` → `Database.insert`, then `get_next_urls` folded back via `should_enqueue`. HTML responses are parsed once with `self.html_processor` when present (`None` on API scrapers) and the soup is reused for cleaning and link extraction. Per-URL try/except so one fetch/persist/next-url failure logs and skips instead of aborting the source. Hook surface: `seed_urls`, `fetch`, `extract_links`, `build_url`, `get_next_urls`, `should_enqueue`, `should_persist`, `extract_body`, `process_response`, plus `http_extras` / `db_extras` / `make_html_processor`. Defaults are keyed on `bronze_model` (`HtmlSnapshot` ⇒ scrape every `<a href>`, build an `HtmlProcessor`, and store zstd-compressed cleaned HTML; `ApiSnapshot` ⇒ no processor, store the zstd-compressed raw body). `build_url(url, params=None)` canonicalizes outgoing requests (lowercase scheme + host, strip `TRACKING_PARAMS`, drop fragment); paginated APIs override with a pagination signature called from their own `seed_urls()` / `get_next_urls()` — keep the `url=` / `params=` keyword path so `seen_today` can re-hash captured requests. There is no separate `BaseApiScraper`.
+- **`extract/html_processor.py` — `HtmlProcessor`** · *Pipeline of filters.* `parse(text)` builds an `lxml` soup; `clean(soup)` is async (`asyncio.to_thread`, so the asyncio loop is not blocked while CPU-heavy cleaning runs) and applies three ordered passes — strip comments, decompose `blocklist_tags` (tag + subtree), strip `blocklist_attributes` from every remaining tag. `BASELINE_BLOCKLIST_TAGS = ("script", "style", "noscript")` is always applied; `<script type="application/ld+json">` is always preserved so source parsers can read structured data from it. **Cleaning runs at extract time**, so bronze stores already-cleaned HTML.
 - **`transform/base_parser.py` — `BaseParser`** · *Template Method.* `run()` streams `Database.stream_unparsed(...)` and per record runs `decode → build_item → build_entity → stamp`, inserting silver per record. `decode()` defaults: `HtmlSnapshot` → `BeautifulSoup(self.db.decompress(record.body), "lxml")`; `ApiSnapshot` → `json.loads(self.db.decompress(record.body))`. `build_item(decoded)` defaults to `[decoded]` — override only for listing-style payloads. `stamp(entity, record)` carries `(bronze_id, created_at)`. A decode/build failure logs and skips the row; silver does not commit, so the next run retries it through `stream_unparsed`. Concrete parsers must set `silver_model` and mix in `ArticleParser` or `ProductParser`; `bronze_model` defaults to `HtmlSnapshot`. No dedup here — one silver row per `(entity, bronze sighting)`; collapsing across sightings is the gold layer's job.
 - **`transform/article_parser.py`, `transform/product_parser.py`** · *Mixin (role contribution).* Each owns `build_entity(item) → Article | Product` and declares eight abstract `extract_*` hooks in silver-column order so a parser file reads top-to-bottom against the schema. Every silver field is optional, so the hooks return whatever they can find and `build_entity` does not filter. `ArticleParser` hooks: `source_url`, `title`, `body`, `authors`, `published_at`, `section`, `tags`, `image_urls`. `ProductParser` hooks: `source_url`, `sku`, `name`, `brand`, `price`, `currency`, `unit`, `image_urls` — plus `parse_unit_from_name(name)`, an ordered regex list (kg, l, ml, g, cc) for the inline unit info embedded in most supermercado product names.
 - **`infra/http.py` — `HttpClient` / `HttpRequest` / `HttpResponse`** · *Adapter.* `httpx.AsyncClient` wrapper with pooling and `follow_redirects=True`; fetch concurrency lives in `BaseScraper.run`, not here. `get(request)` is single-attempt — returns any `< 500` response and raises `HttpError` on 5xx/transport failures (connect errors, timeouts, mid-stream disconnects); `BaseScraper.run` turns that into a per-URL skip and same-day reruns self-heal via `seen_today`. `HttpRequest` is a hashable value object — `hash(request)` is the BFS `seen` key. `HttpResponse` exposes only `status_code`/`headers`/`content`/`text`/`json()`/`request` — scrapers never touch `httpx` directly.
@@ -140,7 +140,7 @@ Each module is built around a named pattern; per-class lifecycle details live in
 | Mixin (role contribution) | `transform/article_parser.py` `ArticleParser`, `transform/product_parser.py` `ProductParser` | contribute `build_entity` + eight `extract_*` hooks per silver entity, composed with `BaseParser` via MRO |
 | Adapter | `extract/stage.py` / `transform/stage.py` / `load/stage.py`; `infra/http.py` `HttpClient` / `HttpRequest` / `HttpResponse` | bridge domain objects & httpx to the pipeline / scraper contracts |
 | Repository / data-access | `infra/db.py` `Database` | one configurable persistence gateway (`insert`, `load_visited_requests`, `stream_unparsed`; zstd `compress`/`decompress`) |
-| Pipeline of filters | `extract/html_parser.py` `HtmlParser` | ordered HTML-cleaning passes, applied at extract time before bronze insert |
+| Pipeline of filters | `extract/html_processor.py` `HtmlProcessor` | ordered HTML-cleaning passes, applied at extract time before bronze insert |
 | Configuration object (edges-only) | `config.py` `PipelineConfig` + `load_config()` | one typed, frozen read at startup |
 | Layered exception hierarchy | `core/errors.py` | categorize failures by layer; translate to exit codes only at the CLI boundary |
 | ORM declarative base + DDL hook | `sql/base.py`, `sql/*/schema.py`; `sql/a_bronze/snapshot.py` | shared model base; abstract `Snapshot` is the bronze shape; auto-create the layer schemas |
@@ -152,7 +152,7 @@ Each module is built around a named pattern; per-class lifecycle details live in
 ```mermaid
 flowchart LR
     SRC[("website / API")] -->|"Scraper.run() — BFS / paginated fetch"| EX[extract]
-    EX -->|"HtmlParser.clean (HTML only), insert (skip-if-seen-today)"| BR{{"bronze.html_snapshots<br/>bronze.api_snapshots<br/>(raw captures, id PK + zstd-compressed body)"}}
+    EX -->|"HtmlProcessor.clean (HTML only), insert (skip-if-seen-today)"| BR{{"bronze.html_snapshots<br/>bronze.api_snapshots<br/>(raw captures, id PK + zstd-compressed body)"}}
     BR -->|"stream_unparsed → decode → build_item → build_entity"| TR[transform]
     TR -->|"insert per record, stamped with (source, bronze_id, created_at)"| SV{{"silver.articles<br/>silver.products<br/>(normalized entities + provenance)"}}
     SV -.->|"aggregate / dedup across sightings — TBD"| LD[load]
@@ -193,7 +193,7 @@ classDiagram
         +should_persist(request) bool
         +extract_body(response, soup) str
         +process_response(response) list~HttpRequest~
-        +make_html_parser() HtmlParser
+        +make_html_processor() HtmlProcessor | None
         +seen_today() set~int~
         +run()
     }

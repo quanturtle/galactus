@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 from galactus.config import ExtractConfig
 from galactus.core.errors import DatabaseError, HttpError, ScraperError
-from galactus.extract.html_parser import HtmlParser
+from galactus.extract.html_processor import HtmlProcessor
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
 from sql.a_bronze.html_snapshots import HtmlSnapshot
@@ -79,7 +79,7 @@ class BaseScraper:
         self.config = config
         self.source = config.source
         self.concurrency = config.concurrency
-        self.html_parser = self.make_html_parser()
+        self.html_processor: HtmlProcessor | None = self.make_html_processor()
         # populated in run(), inside the async with
         self.http: HttpClient
         self.db: Database
@@ -117,8 +117,11 @@ class BaseScraper:
             **self.db_extras(),
         )
 
-    def make_html_parser(self) -> HtmlParser:
-        return HtmlParser(
+    def make_html_processor(self) -> HtmlProcessor | None:
+        # API snapshots persist the raw body; only HTML snapshots need cleaning passes.
+        if self.bronze_model is not HtmlSnapshot:
+            return None
+        return HtmlProcessor(
             {
                 "blocklist_tags": self.config.blocklist_tags,
                 "blocklist_attributes": self.config.blocklist_attributes,
@@ -224,15 +227,15 @@ class BaseScraper:
         # HTML path: emit the cleaned soup tree.
         if soup is None:
             return response.text
-        return await self.html_parser.clean(soup)
+        return await self.html_processor.clean(soup)
 
     async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
         request = response.request
         model = self.bronze_model
 
         # parse HTML once and reuse the tree for cleaning and link extraction.
-        # API subclasses set bronze_model = ApiSnapshot and skip the parse.
-        soup = self.html_parser.parse(response.text) if model is HtmlSnapshot else None
+        # API subclasses set bronze_model = ApiSnapshot, so html_processor is None.
+        soup = self.html_processor.parse(response.text) if self.html_processor else None
 
         if self.should_persist(request):
             body = await self.extract_body(response, soup)
