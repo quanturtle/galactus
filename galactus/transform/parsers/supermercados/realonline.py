@@ -37,10 +37,7 @@ class Parser(BaseParser, ProductParser):
     # promotionPricePerSubUnit is the per-unit promo price (same basis as price); it wins when set
     def extract_price(self, item: dict) -> Decimal | None:
         promotion_price = item.get("promotionPricePerSubUnit")
-        if promotion_price is not None:
-            raw = promotion_price
-        else:
-            raw = item.get("price")
+        raw = promotion_price if promotion_price is not None else item.get("price")
         if raw is None:
             return None
         try:
