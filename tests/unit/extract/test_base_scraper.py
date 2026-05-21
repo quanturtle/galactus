@@ -1,5 +1,6 @@
 import asyncio
 
+import pytest
 from bs4 import BeautifulSoup
 
 from galactus.extract.base_scraper import BaseScraper
@@ -182,6 +183,48 @@ def test_run_hard_caps_at_max_pages_under_concurrency() -> None:
 
     assert len(http.calls) == 10
     assert len(db.inserts) == 10
+    return
+
+
+def test_run_request_delay_overlaps_across_concurrent_fetches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # request_delay pauses inside each fetch task, not on the run loop: with
+    # concurrency 3 the three leaf fetches should sit in their delay at once.
+    fanout_html = "<html>" + "".join(f'<a href="/p{i}">p{i}</a>' for i in range(3)) + "</html>"
+    leaf_html = "<html>leaf</html>"
+    responses: dict[str, FakeHttpResponse] = {
+        "https://example.test": FakeHttpResponse(text=fanout_html, url="https://example.test"),
+    }
+    for i in range(3):
+        url = f"https://example.test/p{i}"
+        responses[url] = FakeHttpResponse(text=leaf_html, url=url)
+
+    # track how many fetch tasks are inside request_delay simultaneously
+    active = 0
+    max_active = 0
+    real_sleep = asyncio.sleep
+
+    async def tracking_sleep(delay: float) -> None:
+        nonlocal active, max_active
+        if delay <= 0:
+            await real_sleep(delay)
+            return
+        active += 1
+        max_active = max(max_active, active)
+        await real_sleep(0)
+        active -= 1
+        return
+
+    monkeypatch.setattr(asyncio, "sleep", tracking_sleep)
+
+    scraper = WiredScraper(make_extract_config(concurrency=3, request_delay=5))
+    scraper.wired_http = FakeHttpClient(responses=responses)
+    scraper.wired_db = FakeDatabase()
+    asyncio.run(scraper.run())
+
+    # a delay serialized on the run loop would never let two fetches sleep at once
+    assert max_active >= 2
     return
 
 

@@ -79,6 +79,7 @@ class BaseScraper:
         self.config = config
         self.source = config.source
         self.concurrency = config.concurrency
+        self.request_delay = config.request_delay
         self.html_processor: HtmlProcessor | None = self.make_html_processor()
         # populated in run(), inside the async with
         self.http: HttpClient
@@ -132,7 +133,10 @@ class BaseScraper:
         return [self.build_url(self.config.base_url)]
 
     async def fetch(self, request: HttpRequest) -> HttpResponse:
+        # per-fetch politeness pause; runs in each fetch task so it overlaps under concurrency.
         # exceptions propagate so the run loop can skip the failed URL instead of aborting the crawl.
+        if self.request_delay:
+            await asyncio.sleep(self.request_delay)
         return await self.http.get(request)
 
     # JSON bodies yield no matching tags, so API subclasses inherit a no-op default
@@ -287,7 +291,6 @@ class BaseScraper:
             skipped = 0
             max_pages = self.config.max_pages
             concurrency = self.concurrency
-            request_delay = self.config.request_delay
             in_flight: set[asyncio.Task[HttpResponse]] = set()
 
             # spawn-and-drain: top up to `concurrency` fetches, then drain on FIRST_COMPLETED.
@@ -326,8 +329,6 @@ class BaseScraper:
                                 continue
                             seen.add(key)
                             frontier.append(next_request)
-                        if request_delay:
-                            await asyncio.sleep(request_delay)
             finally:
                 # drain remaining fetches so a mid-run raise doesn't leak tasks to the loop
                 for task in in_flight:
