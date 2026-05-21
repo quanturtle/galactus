@@ -6,8 +6,6 @@ from typing import Any
 
 import httpx
 
-from galactus.core.errors import HttpError
-
 logger = logging.getLogger(__name__)
 
 
@@ -93,10 +91,9 @@ class HttpClient:
     HttpRequest, not on the client. URL construction (scheme, normalization) is
     the scraper's job, and so is fetch concurrency — BaseScraper.run caps how
     many requests are in flight, so this client carries no semaphore of its own
-    (pool_size still bounds the underlying socket pool). Single-attempt: any
-    5xx response or transport error raises HttpError, which the run loop turns
-    into a per-URL skip; the scraper re-raises everything else as ScraperError
-    with source/URL context.
+    (pool_size still bounds the underlying socket pool). Single-attempt: every
+    outcome — transport error (status 0), 4xx, 5xx, 2xx — is returned as an
+    HttpResponse; the scraper routes failures to bronze.failed_snapshots.
     """
 
     def __init__(
@@ -135,11 +132,9 @@ class HttpClient:
             )
         except httpx.TransportError as exc:
             logger.warning("GET %s failed: %s", request.url, exc)
-            raise HttpError(f"GET {request.url} failed: {exc}") from exc
-        if response.status_code >= 500:
-            logger.warning("GET %s -> %s", request.url, response.status_code)
-            raise HttpError(f"GET {request.url} returned {response.status_code}")
-        logger.info("GET %s -> %s", request.url, response.status_code)
+            return HttpResponse(httpx.Response(status_code=0, text=str(exc)), request)
+        log = logger.info if 200 <= response.status_code < 300 else logger.warning
+        log("GET %s -> %s", request.url, response.status_code)
         return HttpResponse(response, request)
 
     async def __aenter__(self) -> "HttpClient":
