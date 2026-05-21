@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from galactus.extract.base_scraper import BaseScraper
 from galactus.infra.http import HttpRequest, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
+from sql.a_bronze.failed_snapshots import FailedSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from tests.unit.fakes import (
     FakeDatabase,
@@ -161,6 +162,60 @@ def test_process_response_inserts_api_snapshot_when_bronze_model_is_api() -> Non
     assert isinstance(record, ApiSnapshot)
     assert record.request_url == "https://example.test/api"
     assert record.request_params == {"page": "1"}
+
+
+def test_snapshot_model_routes_by_status_and_persist_gate() -> None:
+    scraper = make_scraper(BaseScraper, scrape_patterns=[r"/article/"])
+
+    ok = FakeHttpResponse(
+        status_code=200, request=FakeHttpRequest(url="https://example.test/article/1")
+    )
+    server_error = FakeHttpResponse(
+        status_code=503, request=FakeHttpRequest(url="https://example.test/article/2")
+    )
+    transport_error = FakeHttpResponse(
+        status_code=0, request=FakeHttpRequest(url="https://example.test/article/3")
+    )
+    unmatched = FakeHttpResponse(
+        status_code=200, request=FakeHttpRequest(url="https://example.test/about")
+    )
+
+    # 2xx -> bronze_model; non-2xx (incl. the status-0 transport sentinel) -> FailedSnapshot
+    assert scraper.snapshot_model(ok) is HtmlSnapshot  # type: ignore[arg-type]
+    assert scraper.snapshot_model(server_error) is FailedSnapshot  # type: ignore[arg-type]
+    assert scraper.snapshot_model(transport_error) is FailedSnapshot  # type: ignore[arg-type]
+    # a URL outside scrape_patterns is discarded regardless of status
+    assert scraper.snapshot_model(unmatched) is None  # type: ignore[arg-type]
+
+
+def test_process_response_routes_error_to_failed_snapshots_without_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scraper = make_scraper(BaseScraper)
+    db: FakeDatabase = scraper.db  # type: ignore[assignment]
+
+    # the error path must skip parsing entirely — record any parse call to prove it
+    parse_calls: list[str] = []
+    monkeypatch.setattr(scraper.html_processor, "parse", lambda text: parse_calls.append(text))
+
+    request = FakeHttpRequest(url="https://example.test/blocked")
+    response = FakeHttpResponse(
+        text="<html><body>403 Forbidden</body></html>",
+        status_code=403,
+        headers={"content-type": "text/html"},
+        url="https://example.test/blocked",
+        request=request,
+    )
+    next_urls = asyncio.run(scraper.process_response(response))  # type: ignore[arg-type]
+
+    assert next_urls == []
+    assert parse_calls == []
+    assert len(db.inserts) == 1
+    record, model = db.inserts[0]
+    assert model is FailedSnapshot
+    assert isinstance(record, FailedSnapshot)
+    assert record.status_code == 403
+    assert record.request_url == "https://example.test/blocked"
 
 
 def test_run_hard_caps_at_max_pages_under_concurrency() -> None:

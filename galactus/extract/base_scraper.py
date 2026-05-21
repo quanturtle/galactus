@@ -12,6 +12,7 @@ from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.extract.html_processor import HtmlProcessor
 from galactus.infra.db import Database
 from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
+from sql.a_bronze.failed_snapshots import FailedSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
 
@@ -233,37 +234,55 @@ class BaseScraper:
             return response.text
         return await self.html_processor.clean(soup)
 
-    async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
-        request = response.request
-        model = self.bronze_model
+    def is_success(self, response: HttpResponse) -> bool:
+        return 200 <= response.status_code < 300
 
-        # parse HTML once and reuse the tree for cleaning and link extraction.
+    def snapshot_model(self, response: HttpResponse) -> type[Base] | None:
+        """The table this response belongs in: the bronze model for a successful
+        request worth persisting, FailedSnapshot for a failed one, None to discard."""
+        if not self.should_persist(response.request):
+            return None
+        return self.bronze_model if self.is_success(response) else FailedSnapshot
+
+    async def store_snapshot(self, response: HttpResponse, model: type[Base], body: str) -> None:
+        """Build a snapshot row (same columns for every table) and insert it."""
+        request = response.request
+        record = model(
+            source=self.source,
+            request_url=request.url,
+            request_headers=dict(request.headers),
+            request_params=request.params or {},
+            status_code=response.status_code,
+            content_type=response.headers.get("content-type", ""),
+            response_headers=dict(response.headers),
+            body=self.db.compress(body),
+        )
+        try:
+            await self.db.insert(record, model=model)
+        except DatabaseError as exc:
+            raise ScraperError(f"{self.source}: persisting {request.url} failed") from exc
+        logger.info(
+            "extract[%s]: persisted %s for %s",
+            self.source,
+            model.__name__,
+            request.url,
+        )
+        return
+
+    async def process_response(self, response: HttpResponse) -> list[HttpRequest]:
+        model = self.snapshot_model(response)
+
+        # an error response is recorded as-is — never parsed, never expanded
+        if not self.is_success(response):
+            if model is not None:
+                await self.store_snapshot(response, model, response.text)
+            return []
+
+        # a successful response is parsed, persisted if eligible, then expanded.
         # API subclasses set bronze_model = ApiSnapshot, so html_processor is None.
         soup = self.html_processor.parse(response.text) if self.html_processor else None
-
-        if self.should_persist(request):
-            body = await self.extract_body(response, soup)
-            record = model(
-                source=self.source,
-                request_url=request.url,
-                request_headers=dict(request.headers),
-                request_params=request.params or {},
-                status_code=response.status_code,
-                content_type=response.headers.get("content-type", ""),
-                response_headers=dict(response.headers),
-                body=self.db.compress(body),
-            )
-            try:
-                await self.db.insert(record, model=model)
-            except DatabaseError as exc:
-                raise ScraperError(f"{self.source}: persisting {request.url} failed") from exc
-            logger.info(
-                "extract[%s]: persisted %s for %s",
-                self.source,
-                model.__name__,
-                request.url,
-            )
-
+        if model is not None:
+            await self.store_snapshot(response, model, await self.extract_body(response, soup))
         return self.get_next_urls(response, soup)
 
     async def run(self) -> None:
