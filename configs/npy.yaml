@@ -9,8 +9,8 @@ extract:
   - npy\.com\.py/noticias/.+/[^/]+-[^/]+-[^/]+-[^/]+
   ignore_patterns: []
   max_pages: -1
-  concurrency: 1
-  request_delay: 10
+  concurrency: 3
+  request_delay: 5
   timeout_seconds: 30.0
 transform:
   parser: noticias.npy

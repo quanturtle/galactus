@@ -16,7 +16,7 @@ extract:
   - /contacto-uh
   - /codigo-etico
   max_pages: -1
-  concurrency: 2
+  concurrency: 3
   request_delay: 5
   timeout_seconds: 30.0
 transform:
