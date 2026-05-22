@@ -39,7 +39,7 @@ The CLI takes exactly two flags: `--config <path>` (required) and `--stage <name
 ## Project structure
 
 ```
-galactus_v2/
+galactus/
 ├── galactus/                       # the package — domain-agnostic pipeline core
 │   ├── cli.py                      # entrypoint: parse --config/--stage, validate plugins, build & run Pipeline
 │   ├── config.py                   # Pydantic frozen config; load_config() reads YAML + injects DATABASE_URL
