@@ -5,6 +5,7 @@ from typing import Any, TypeVar
 
 from sqlalchemy import func, insert, select
 from sqlalchemy.dialects import registry
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
@@ -191,3 +192,50 @@ class Database:
             raise DatabaseError(
                 f"streaming unparsed {bronze_model.__name__} for source {source!r} failed"
             ) from exc
+
+    async def upsert(
+        self,
+        records: M | Iterable[M],
+        model: type[M],
+        index_elements: list[str],
+        update_columns: list[str] | None = None,
+    ) -> None:
+        """Bulk idempotent insert of one or many records of `model`.
+
+        On conflict over index_elements, refresh update_columns from the proposed
+        row, or do nothing when update_columns is None. Like insert(), columns left
+        unset on every record are dropped so the database fills its own defaults.
+        """
+        if isinstance(records, Base):
+            records = [records]
+        rows = [r.to_dict() for r in records]
+        if not rows:
+            return
+        unset = {k for k in rows[0] if all(row[k] is None for row in rows)}
+        rows = [{k: v for k, v in row.items() if k not in unset} for row in rows]
+        stmt = pg_insert(model).values(rows)
+        if update_columns:
+            stmt = stmt.on_conflict_do_update(
+                index_elements=index_elements,
+                set_={c: getattr(stmt.excluded, c) for c in update_columns},
+            )
+        else:
+            stmt = stmt.on_conflict_do_nothing(index_elements=index_elements)
+        try:
+            async with self._sessionmaker() as session:
+                await session.execute(stmt)
+                await session.commit()
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"{model.__name__} upsert failed") from exc
+        logger.info("upserted %d %s rows", len(rows), model.__name__)
+        return
+
+    async def fetch(self, model: type[M], **filters: Any) -> list[M]:
+        """Return all rows of `model` matching the equality filters (None means IS NULL)."""
+        stmt = select(model).filter_by(**filters)
+        try:
+            async with self._sessionmaker() as session:
+                result = await session.scalars(stmt)
+                return list(result.all())
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"fetching {model.__name__} rows failed") from exc
