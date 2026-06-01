@@ -73,7 +73,7 @@ class Database:
         """Decompress a zstd blob back to a UTF-8 string."""
         return self.decompressor.decompress(blob).decode("utf-8")
 
-    async def open(self) -> None:
+    async def __aenter__(self) -> "Database":
         # surface bad URLs / unreachable DB at startup, not lazily
         try:
             async with self._engine.connect():
@@ -81,14 +81,6 @@ class Database:
         except SQLAlchemyError as exc:
             raise DatabaseError("cannot connect to database") from exc
         logger.info("Database connection verified")
-        return
-
-    async def close(self) -> None:
-        await self._engine.dispose()
-        return
-
-    async def __aenter__(self) -> "Database":
-        await self.open()
         return self
 
     async def __aexit__(
@@ -97,7 +89,7 @@ class Database:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        await self.close()
+        await self._engine.dispose()
         return
 
     async def insert(self, records: M | Iterable[M], model: type[M]) -> None:

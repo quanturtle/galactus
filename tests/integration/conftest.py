@@ -126,12 +126,8 @@ async def engine() -> AsyncEngine:
 @pytest_asyncio.fixture
 async def db(engine) -> Database:
     """Database instance bound to the same DSN as the engine fixture."""
-    instance = Database(DATABASE_URL)
-    await instance.open()
-    try:
+    async with Database(DATABASE_URL) as instance:
         yield instance
-    finally:
-        await instance.close()
 
 
 @pytest_asyncio.fixture(autouse=True)
