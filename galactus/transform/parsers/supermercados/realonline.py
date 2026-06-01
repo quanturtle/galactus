@@ -58,4 +58,6 @@ class Parser(BaseParser, ProductParser):
     def build_item(self, decoded: Any) -> list[dict]:
         result = (decoded.get("data") or {}).get("getProductsByCategory") or {}
         category = result.get("category") or {}
-        return [product for product in (category.get("products") or []) if isinstance(product, dict)]
+        return [
+            product for product in (category.get("products") or []) if isinstance(product, dict)
+        ]

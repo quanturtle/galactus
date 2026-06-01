@@ -7,7 +7,9 @@ from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.b_silver.product import Product
 from sql.base import Base
 
-CDN_IMAGE_TEMPLATE = "https://losjardines.cdn1.dattamax.com/userfiles/images/productos/600/{sku}.jpg"
+CDN_IMAGE_TEMPLATE = (
+    "https://losjardines.cdn1.dattamax.com/userfiles/images/productos/600/{sku}.jpg"
+)
 
 
 class Parser(BaseParser, ProductParser):
