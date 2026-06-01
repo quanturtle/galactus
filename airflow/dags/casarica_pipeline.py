@@ -21,4 +21,9 @@ with DAG(
         cwd=PROJECT_DIR,
         bash_command=f"galactus --config configs/{SOURCE}.yaml --stage transform",
     )
-    extract >> transform
+    load = BashOperator(
+        task_id="load",
+        cwd=PROJECT_DIR,
+        bash_command=f"galactus --config configs/{SOURCE}.yaml --stage load",
+    )
+    extract >> transform >> load
