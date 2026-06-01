@@ -78,6 +78,7 @@ class LoadConfig(BaseModel):
     database_url: str
     db_pool_size: int = Field(default=5, ge=1)
     builder: str
+    batch_size: int = Field(default=100, ge=1)
 
 
 class PipelineConfig(BaseModel):

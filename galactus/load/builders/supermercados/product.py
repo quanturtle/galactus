@@ -5,6 +5,7 @@ from decimal import Decimal
 from galactus.config import LoadConfig
 from galactus.infra.db import Database
 from sql.b_silver.product import Product
+from sql.base import Base
 from sql.c_gold.dim_product import DimProduct
 from sql.c_gold.fact_price import FactPrice
 
@@ -67,6 +68,24 @@ class Builder:
             )
         return dims
 
+    async def upsert_chunked(
+        self,
+        records: list[Base],
+        model: type[Base],
+        index_elements: list[str],
+        update_columns: list[str] | None = None,
+        chunk_size: int = 100,
+    ) -> None:
+        """Upsert records in chunks so one INSERT stays under Postgres' 65535-param ceiling."""
+        for start in range(0, len(records), chunk_size):
+            await self.db.upsert(
+                records[start : start + chunk_size],
+                model=model,
+                index_elements=index_elements,
+                update_columns=update_columns,
+            )
+        return
+
     def build_price_changes(
         self, products: list[Product], product_key_by_sku: dict[str, int]
     ) -> list[FactPrice]:
@@ -100,26 +119,29 @@ class Builder:
         """Lifecycle: open db; read silver; upsert the dim; key the facts; upsert them."""
         async with self.make_database() as db:
             self.db = db
+            batch_size = self.config.batch_size
 
             # read silver and collapse it into the product dimension
             products = await self.db.fetch(Product, source=self.source)
             skipped = sum(1 for product in products if product.sku is None)
             dims = self.build_dim_products(products)
-            await self.db.upsert(
+            await self.upsert_chunked(
                 dims,
                 model=DimProduct,
                 index_elements=["source", "sku"],
                 update_columns=DIM_UPDATE_COLUMNS,
+                chunk_size=batch_size,
             )
 
             # resolve surrogate keys, then write the price change-points
             stored = await self.db.fetch(DimProduct, source=self.source)
             product_key_by_sku = {dim.sku: dim.product_key for dim in stored}
             facts = self.build_price_changes(products, product_key_by_sku)
-            await self.db.upsert(
+            await self.upsert_chunked(
                 facts,
                 model=FactPrice,
                 index_elements=["product_key", "observed_at"],
+                chunk_size=batch_size,
             )
         logger.info(
             "load[%s]: complete (%s products, %s null-sku skipped, %s price change-points)",
