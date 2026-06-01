@@ -40,6 +40,12 @@ def validate_plugins(config: PipelineConfig) -> None:
                 raise ConfigError(
                     f"plugin {config.transform.parser!r} for {config.name!r} does not export a Parser class"
                 )
+        if config.load is not None:
+            mod = importlib.import_module(f"galactus.load.builders.{config.load.builder}")
+            if not hasattr(mod, "Builder"):
+                raise ConfigError(
+                    f"plugin {config.load.builder!r} for {config.name!r} does not export a Builder class"
+                )
     except ImportError as exc:
         raise ConfigError(f"plugin load failed for {config.name!r}: {exc}") from exc
     return
