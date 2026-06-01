@@ -12,7 +12,7 @@ from galactus.core.errors import ConfigError
 # trickled into each child sub-dict listed in INHERITED_CHILDREN; "source"
 # is renamed from the parent's "name", the rest carry their name across.
 INHERITED_FIELDS: tuple[str, ...] = ("source", "database_url", "db_pool_size")
-INHERITED_CHILDREN: tuple[str, ...] = ("extract", "transform")
+INHERITED_CHILDREN: tuple[str, ...] = ("extract", "transform", "load")
 
 
 class ExtractConfig(BaseModel):
@@ -69,6 +69,17 @@ class TransformConfig(BaseModel):
     batch_size: int = Field(default=100, ge=1)
 
 
+class LoadConfig(BaseModel):
+    """Load block: builder plugin that aggregates silver into gold dims and facts."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source: str
+    database_url: str
+    db_pool_size: int = Field(default=5, ge=1)
+    builder: str
+
+
 class PipelineConfig(BaseModel):
     """One source, fully configured for one pipeline run."""
 
@@ -80,6 +91,7 @@ class PipelineConfig(BaseModel):
     db_pool_size: int = Field(default=5, ge=1)
     extract: ExtractConfig | None = None
     transform: TransformConfig | None = None
+    load: LoadConfig | None = None
 
     @model_validator(mode="before")
     @classmethod
