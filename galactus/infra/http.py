@@ -54,6 +54,35 @@ class HttpRequest:
         return f"HttpRequest(url={self.url!r}, headers={self.headers!r}, params={self.params!r})"
 
 
+class HttpRequestBuilder:
+    """Fluent builder for HttpRequest — layer the url, headers, and params in any
+    order, then build() freezes them into an HttpRequest. set_headers/set_params
+    merge into what's already staged, so a base set can be extended per request.
+    """
+
+    __slots__ = ("_url", "_headers", "_params")
+
+    def __init__(self) -> None:
+        self._url: str = ""
+        self._headers: dict[str, str] = {}
+        self._params: dict[str, str] = {}
+
+    def set_url(self, url: str) -> "HttpRequestBuilder":
+        self._url = url
+        return self
+
+    def set_headers(self, headers: Mapping[str, str]) -> "HttpRequestBuilder":
+        self._headers.update(headers)
+        return self
+
+    def set_params(self, params: Mapping[str, str]) -> "HttpRequestBuilder":
+        self._params.update(params)
+        return self
+
+    def build(self) -> "HttpRequest":
+        return HttpRequest(self._url, self._headers, self._params)
+
+
 class HttpResponse:
     """Adapter exposing the fields scrapers read from an httpx.Response."""
 
@@ -148,3 +177,43 @@ class HttpClient:
     ) -> None:
         await self.client.aclose()
         return
+
+
+class HttpClientBuilder:
+    """Fluent builder for HttpClient — set transport knobs piecewise, then build()
+    opens the client. Defaults mirror HttpClient's own, so only the knobs a given
+    pipeline cares about need to be set.
+    """
+
+    __slots__ = ("_timeout", "_follow_redirects", "_pool_size", "_ssl_ciphers")
+
+    def __init__(self) -> None:
+        self._timeout: float = 30.0
+        self._follow_redirects: bool = True
+        self._pool_size: int = 100
+        self._ssl_ciphers: str | None = None
+
+    def set_timeout(self, seconds: float) -> "HttpClientBuilder":
+        self._timeout = seconds
+        return self
+
+    def set_follow_redirects(self, enabled: bool) -> "HttpClientBuilder":
+        self._follow_redirects = enabled
+        return self
+
+    def set_pool_size(self, size: int) -> "HttpClientBuilder":
+        self._pool_size = size
+        return self
+
+    def set_ssl_ciphers(self, ciphers: str) -> "HttpClientBuilder":
+        self._ssl_ciphers = ciphers
+        return self
+
+    def build(self) -> HttpClient:
+        extras = {} if self._ssl_ciphers is None else {"ssl_ciphers": self._ssl_ciphers}
+        return HttpClient(
+            timeout=self._timeout,
+            follow_redirects=self._follow_redirects,
+            pool_size=self._pool_size,
+            **extras,
+        )

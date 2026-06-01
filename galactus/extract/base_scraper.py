@@ -11,7 +11,13 @@ from galactus.config import ExtractConfig
 from galactus.core.errors import DatabaseError, HttpError, ScraperError
 from galactus.extract.html_processor import HtmlProcessor
 from galactus.infra.db import Database
-from galactus.infra.http import HttpClient, HttpRequest, HttpResponse
+from galactus.infra.http import (
+    HttpClient,
+    HttpClientBuilder,
+    HttpRequest,
+    HttpRequestBuilder,
+    HttpResponse,
+)
 from sql.a_bronze.failed_snapshots import FailedSnapshot
 from sql.a_bronze.html_snapshots import HtmlSnapshot
 from sql.base import Base
@@ -71,7 +77,7 @@ class BaseScraper:
     seed_urls(): fetch, persist if eligible, expand the frontier with each
     page's next URLs. Subclasses override the hooks below; every hook ships
     a usable default. Per-site transport tweaks (legacy ciphers, custom DB
-    engine kwargs) live on the subclass via http_extras() / db_extras().
+    engine kwargs) live on the subclass via make_http_client() / db_extras().
     """
 
     bronze_model: ClassVar[type[Base]] = HtmlSnapshot
@@ -98,18 +104,16 @@ class BaseScraper:
             config.request_delay,
         )
 
-    def http_extras(self) -> dict[str, Any]:
-        return {}
-
     def db_extras(self) -> dict[str, Any]:
         return {}
 
     def make_http_client(self) -> HttpClient:
-        return HttpClient(
-            timeout=self.config.timeout_seconds,
-            follow_redirects=self.config.follow_redirects,
-            pool_size=self.config.concurrency,
-            **self.http_extras(),
+        return (
+            HttpClientBuilder()
+            .set_timeout(self.config.timeout_seconds)
+            .set_follow_redirects(self.config.follow_redirects)
+            .set_pool_size(self.config.concurrency)
+            .build()
         )
 
     def make_database(self) -> Database:
@@ -155,7 +159,9 @@ class BaseScraper:
             href = str(tag["href"]).strip()
             if not href:
                 continue
-            base = response.url if urlparse(href).scheme or href.startswith(("/", "?", "#")) else root
+            base = (
+                response.url if urlparse(href).scheme or href.startswith(("/", "?", "#")) else root
+            )
             out.append(urljoin(base, href))
         return out
 
@@ -181,10 +187,12 @@ class BaseScraper:
                 "",
             )
         )
-        return HttpRequest(
-            url=canonical,
-            headers=dict(self.config.headers),
-            params=dict(params or {}),
+        return (
+            HttpRequestBuilder()
+            .set_url(canonical)
+            .set_headers(self.config.headers)
+            .set_params(params or {})
+            .build()
         )
 
     def get_next_urls(

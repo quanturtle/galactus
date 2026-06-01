@@ -2,7 +2,7 @@ from typing import Any
 
 from galactus.core.errors import ScraperError
 from galactus.extract.base_scraper import BaseScraper
-from galactus.infra.http import HttpRequest, HttpResponse
+from galactus.infra.http import HttpRequest, HttpRequestBuilder, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
 
@@ -18,17 +18,21 @@ class Scraper(BaseScraper):
         url: str | None = None,
         params: dict[str, Any] | None = None,
     ) -> HttpRequest:
-        return HttpRequest(
-            url=url if url is not None else self.config.base_url,
-            headers=dict(self.config.headers),
-            params=params
-            if params is not None
-            else {
-                "per_page": str(self.PER_PAGE),
-                "orderby": "date",
-                "order": "desc",
-                "page": str(page),
-            },
+        return (
+            HttpRequestBuilder()
+            .set_url(url if url is not None else self.config.base_url)
+            .set_headers(self.config.headers)
+            .set_params(
+                params
+                if params is not None
+                else {
+                    "per_page": str(self.PER_PAGE),
+                    "orderby": "date",
+                    "order": "desc",
+                    "page": str(page),
+                }
+            )
+            .build()
         )
 
     def seed_urls(self) -> list[HttpRequest]:

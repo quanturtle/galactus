@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from galactus.extract.base_scraper import BaseScraper
-from galactus.infra.http import HttpRequest, HttpResponse
+from galactus.infra.http import HttpRequest, HttpRequestBuilder, HttpResponse
 from sql.a_bronze.api_snapshots import ApiSnapshot
 
 
@@ -42,10 +42,14 @@ class Scraper(BaseScraper):
                 "offset": str(offset),
             }
         )
-        return HttpRequest(
-            url=url if url is not None else self.config.base_url,
-            headers=dict(self.config.headers),
-            params=params if params is not None else {"_website": self.WEBSITE, "query": query},
+        return (
+            HttpRequestBuilder()
+            .set_url(url if url is not None else self.config.base_url)
+            .set_headers(self.config.headers)
+            .set_params(
+                params if params is not None else {"_website": self.WEBSITE, "query": query}
+            )
+            .build()
         )
 
     def seed_urls(self) -> list[HttpRequest]:
