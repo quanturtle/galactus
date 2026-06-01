@@ -15,7 +15,7 @@ extract:
   - /redaccion-uh
   - /contacto-uh
   - /codigo-etico
-  max_pages: -1
+  max_pages: 20000
   concurrency: 5
   request_delay: 2.5
   timeout_seconds: 30.0
