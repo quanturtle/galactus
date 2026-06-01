@@ -24,3 +24,5 @@ extract:
   timeout_seconds: 30.0
 transform:
   parser: supermercados.arete
+load:
+  builder: supermercados.product

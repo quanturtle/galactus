@@ -26,3 +26,5 @@ extract:
   timeout_seconds: 30.0
 transform:
   parser: supermercados.losjardines
+load:
+  builder: supermercados.product

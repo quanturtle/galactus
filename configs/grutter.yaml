@@ -13,3 +13,5 @@ extract:
   request_delay: 1.0
 transform:
   parser: supermercados.grutter
+load:
+  builder: supermercados.product

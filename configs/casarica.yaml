@@ -25,3 +25,5 @@ extract:
   timeout_seconds: 30.0
 transform:
   parser: supermercados.casarica
+load:
+  builder: supermercados.product

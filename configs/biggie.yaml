@@ -13,3 +13,5 @@ extract:
   request_delay: 0.5
 transform:
   parser: supermercados.biggie
+load:
+  builder: supermercados.product

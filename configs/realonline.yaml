@@ -16,3 +16,5 @@ extract:
     Apikey: a7c861b2-91f5-4105-a423-6b84f35247de
 transform:
   parser: supermercados.realonline
+load:
+  builder: supermercados.product
